@@ -1,0 +1,91 @@
+import { prisma } from "@/lib/prisma";
+import Link from "next/link";
+import { redirect } from "next/navigation";
+import { getUniqueActiveProfiles } from "@/lib/profileUtils";
+
+export default async function EditarPersonalPage({ params }: { params: Promise<{ id: string }> }) {
+  const { id } = await params;
+  const empId = parseInt(id);
+
+  const empleado = await prisma.employee.findUnique({
+    where: { id: empId },
+    include: { jobProfile: true }
+  });
+
+  if (!empleado) {
+    return <div>Empleado no encontrado</div>;
+  }
+
+  const sectores = await prisma.sector.findMany({ orderBy: { name: 'asc' } });
+  const perfiles = await getUniqueActiveProfiles();
+
+  async function updateEmpleado(formData: FormData) {
+    "use server"
+    const name = formData.get("name") as string;
+    const legajo = formData.get("legajo") as string;
+    const sectorId = parseInt(formData.get("sectorId") as string);
+    const jobProfileId = formData.get("jobProfileId") ? parseInt(formData.get("jobProfileId") as string) : null;
+
+    await prisma.employee.update({
+      where: { id: empId },
+      data: {
+        name,
+        legajo,
+        sectorId,
+        jobProfileId
+      }
+    });
+
+    redirect('/personal');
+  }
+
+  return (
+    <div>
+      <div className="page-header">
+        <h1 className="page-title">Modificar Empleado</h1>
+        <Link href="/personal" className="btn btn-secondary">
+          Volver a la Nómina
+        </Link>
+      </div>
+
+      <div className="card" style={{ maxWidth: '600px' }}>
+        <form action={updateEmpleado} style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+          
+          <div className="form-group">
+            <label className="form-label">Nombre Completo</label>
+            <input type="text" name="name" className="form-input" defaultValue={empleado.name} required />
+          </div>
+
+          <div className="form-group">
+            <label className="form-label">Legajo</label>
+            <input type="text" name="legajo" className="form-input" defaultValue={empleado.legajo} required />
+          </div>
+
+          <div className="form-group">
+            <label className="form-label">Sector / Gerencia</label>
+            <select name="sectorId" className="form-input" defaultValue={empleado.sectorId} required>
+              {sectores.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
+            </select>
+          </div>
+
+          <div className="form-group" style={{ padding: '1rem', backgroundColor: '#f8fafc', borderRadius: '4px', border: '1px solid #e2e8f0' }}>
+            <label className="form-label" style={{ color: 'var(--primary-color)' }}>Asignar Perfil de Puesto</label>
+            <p style={{ fontSize: '0.875rem', color: 'var(--text-secondary)', marginBottom: '0.5rem' }}>
+              Si cambias el perfil de puesto, podrás ir a la pestaña "Evaluación y Brechas" para ver qué capacitaciones le faltan de su nuevo perfil.
+            </p>
+            <select name="jobProfileId" className="form-input" defaultValue={empleado.jobProfileId || ''}>
+              <option value="">-- Sin perfil asignado --</option>
+              {perfiles.map(p => <option key={p.id} value={p.id}>{p.title}</option>)}
+            </select>
+          </div>
+
+          <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '1rem' }}>
+            <button type="submit" className="btn btn-primary">
+              Guardar Cambios
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+}

@@ -1,66 +1,67 @@
-import Image from "next/image";
-import styles from "./page.module.css";
+import { prisma } from "@/lib/prisma";
+import { getCurrentRole, isSectorRole, getSectorIdFromRole } from "@/lib/auth";
+import DashboardClient from "@/components/DashboardClient";
 
-export default function Home() {
+import { getUniqueActiveProfiles } from "@/lib/profileUtils";
+
+export default async function Home() {
+  const role = await getCurrentRole();
+  const isSector = await isSectorRole(role);
+  const sectorRoleId = await getSectorIdFromRole(role);
+
+  // Fetch all sectors and profiles for filter dropdowns
+  const sectors = await prisma.sector.findMany({ orderBy: { name: 'asc' } });
+  const profiles = await getUniqueActiveProfiles();
+
+  // Filter records based on role (Admin sees all, Sector sees only their sector)
+  const whereClause = (isSector && sectorRoleId) 
+    ? { employee: { sectorId: sectorRoleId } } 
+    : {};
+
+  // Fetch training records
+  const rawRecords = await prisma.employeeTrainingRecord.findMany({
+    where: whereClause,
+    include: {
+      employee: {
+        include: {
+          sector: true,
+          jobProfile: true
+        }
+      }
+    }
+  });
+
+  // Flatten the records for the client component
+  const dashboardData = rawRecords.map(record => {
+    let dateToUse = record.completedAt || record.rescheduledDate || record.scheduledDate;
+    
+    return {
+      id: record.id,
+      status: record.status, // "COMPLETED", "IN_PLAN", "GAP"
+      effectiveness: record.effectiveness, // "PENDING", "EFFECTIVE", "INEFFECTIVE"
+      trainingName: record.trainingName,
+      date: dateToUse ? dateToUse.toISOString() : null,
+      employeeName: record.employee.name,
+      employeeId: record.employee.id,
+      sectorId: record.employee.sector.id,
+      sectorName: record.employee.sector.name,
+      profileId: record.employee.jobProfile?.id || null,
+      profileTitle: record.employee.jobProfile?.title || 'Sin Perfil'
+    };
+  });
+
   return (
-    <div className={styles.page}>
-      <main className={styles.main}>
-        <Image
-          className={styles.logo}
-          src="/next.svg"
-          alt="Next.js logo"
-          width={100}
-          height={20}
-          priority
-        />
-        <div className={styles.intro}>
-          <h1>To get started, edit the page.tsx file.</h1>
-          <p>
-            Looking for a starting point or more instructions? Head over to{" "}
-            <a
-              href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              target="_blank"
-              rel="noopener noreferrer"
-            >
-              Templates
-            </a>{" "}
-            or the{" "}
-            <a
-              href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              target="_blank"
-              rel="noopener noreferrer"
-            >
-              Learning
-            </a>{" "}
-            center.
-          </p>
-        </div>
-        <div className={styles.ctas}>
-          <a
-            className={styles.primary}
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className={styles.logo}
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={16}
-              height={16}
-            />
-            Deploy Now
-          </a>
-          <a
-            className={styles.secondary}
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Documentation
-          </a>
-        </div>
-      </main>
+    <div>
+      <div className="page-header">
+        <h1 className="page-title">Panel de Control General</h1>
+      </div>
+      
+      <DashboardClient 
+        data={dashboardData} 
+        sectors={sectors} 
+        profiles={profiles} 
+        isSector={isSector} 
+      />
     </div>
   );
 }

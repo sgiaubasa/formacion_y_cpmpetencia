@@ -1,0 +1,142 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+model Sector {
+  id        Int        @id @default(autoincrement())
+  name      String     @unique
+  password  String
+  role      String
+  mail      String?
+  employees Employee[]
+  pendingTransfers PendingTransfer[]
+}
+
+model JobProfile {
+  id                 Int           @id @default(autoincrement())
+  title              String
+  gerencia           String?
+  reporta            String?
+  supervisa          String?
+  objetivo           String?
+  educacion          String?
+  orientacionTecnica String?
+  idiomasRequiere    Boolean       @default(false)
+  idiomasAclaracion  String?
+  tecnologias        String?
+  conocimientosEsp   String?
+  turnos             Boolean       @default(false)
+  experienciaReq     Boolean       @default(false)
+  experienciaAnios   String?
+  adminPersonal      String?
+  aspectos           String?
+  vigencia           String?
+  status             String        @default("VIGENTE") // BORRADOR, PENDIENTE_SECTOR, VIGENTE
+  controlCambios     String?
+  otrosConocimientos String?
+  revision           String?       @default("01")
+  fechaRevision      String?
+  isActive           Boolean       @default(true)
+  previousVersionId  Int?
+  previousVersion    JobProfile?   @relation("ProfileHistory", fields: [previousVersionId], references: [id])
+  nextVersions       JobProfile[]  @relation("ProfileHistory")
+  requirements       Requirement[]
+  employees          Employee[]
+  pendingTransfers   PendingTransfer[]
+}
+
+model Requirement {
+  id           Int        @id @default(autoincrement())
+  jobProfileId Int
+  jobProfile   JobProfile @relation(fields: [jobProfileId], references: [id])
+  trainingId   Int
+  training     Training   @relation(fields: [trainingId], references: [id])
+}
+
+model Employee {
+  id           Int        @id @default(autoincrement())
+  legajo       String     @unique
+  name         String
+  isActive     Boolean    @default(true)
+  sectorId     Int
+  sector       Sector     @relation(fields: [sectorId], references: [id])
+  jobProfileId Int?
+  jobProfile   JobProfile? @relation(fields: [jobProfileId], references: [id])
+  attendances      Attendance[]
+  trainingRecords  EmployeeTrainingRecord[]
+  pendingTransfers PendingTransfer[]
+}
+
+model EmployeeTrainingRecord {
+  id            Int       @id @default(autoincrement())
+  employeeId    Int
+  employee      Employee  @relation(fields: [employeeId], references: [id])
+  trainingName  String    // El nombre textual de la capacitación extraído del perfil
+  objective     String?   // Objetivo de la capacitación
+  status        String    // "COMPLETED", "GAP", "IN_PLAN"
+  completedAt   DateTime? // Cuándo realizó/firmó la capacitación
+  evidencePath  String?   // Ruta al archivo de examen/evidencia subido
+  employeeSignature String? // Firma digital del capacitado (Base64)
+  instructorName    String? // Nombre del instructor
+  instructorSignature String? // Firma digital del instructor (Base64)
+  effectiveness String?   // "PENDING", "EFFECTIVE", "INEFFECTIVE"
+  evaluatedAt   DateTime?
+  scheduledDate DateTime? // Fecha de programación en el Plan Anual
+  rescheduledDate DateTime? // Fecha de reprogramación
+}
+
+model Training {
+  id           Int           @id @default(autoincrement())
+  title        String
+  objective    String?
+  isMandatory  Boolean       @default(false)
+  requirements Requirement[]
+  sessions     TrainingSession[]
+}
+
+model TrainingSession {
+  id           Int          @id @default(autoincrement())
+  trainingId   Int
+  training     Training     @relation(fields: [trainingId], references: [id])
+  date         DateTime
+  instructor   String?
+  attendances  Attendance[]
+}
+
+model Attendance {
+  id           Int          @id @default(autoincrement())
+  employeeId   Int
+  employee     Employee     @relation(fields: [employeeId], references: [id])
+  sessionId    Int
+  session      TrainingSession @relation(fields: [sessionId], references: [id])
+  signatureUrl String?
+  signedAt     DateTime     @default(now())
+  effectiveness EffectivenessEvaluation?
+}
+
+model EffectivenessEvaluation {
+  id           Int          @id @default(autoincrement())
+  attendanceId Int          @unique
+  attendance   Attendance   @relation(fields: [attendanceId], references: [id])
+  status       String       @default("PENDING") // PENDING, APPROVED, REJECTED
+  score        Int?
+  evaluatedAt  DateTime?
+}
+
+model PendingTransfer {
+  id              Int      @id @default(autoincrement())
+  employeeId      Int
+  employee        Employee @relation(fields: [employeeId], references: [id])
+  targetProfileId Int
+  targetProfile   JobProfile @relation(fields: [targetProfileId], references: [id])
+  targetSectorId  Int
+  targetSector    Sector @relation(fields: [targetSectorId], references: [id])
+  gaps            String // JSON array of gaps (stringified)
+  createdAt       DateTime @default(now())
+}

@@ -9,16 +9,34 @@
     "lint": "eslint"
   },
   "dependencies": {
+    "@supabase/supabase-js": "^2.110.2",
+    "@types/js-cookie": "^3.0.6",
+    "@types/netlify-identity-widget": "^1.9.7",
+    "@types/react-signature-canvas": "^1.0.7",
+    "better-sqlite3": "^12.11.1",
+    "js-cookie": "^3.0.8",
+    "netlify-identity-widget": "^2.0.3",
     "next": "16.2.10",
+    "nodemailer": "^9.0.3",
     "react": "19.2.4",
-    "react-dom": "19.2.4"
+    "react-dom": "19.2.4",
+    "react-signature-canvas": "^1.1.0-alpha.2",
+    "recharts": "^3.9.2",
+    "xlsx": "^0.18.5"
   },
   "devDependencies": {
+    "@prisma/client": "^5.22.0",
     "@types/node": "^20",
+    "@types/nodemailer": "^8.0.1",
     "@types/react": "^19",
     "@types/react-dom": "^19",
     "eslint": "^9",
     "eslint-config-next": "16.2.10",
+    "prisma": "^5.22.0",
+    "tsx": "^4.23.0",
     "typescript": "^5"
+  },
+  "prisma": {
+    "seed": "tsx prisma/seed.ts"
   }
 }
