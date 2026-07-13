@@ -43,7 +43,6 @@ export default async function EditarPerfilPage({ params }: { params: Promise<{ i
     const controlCambios = formData.get("controlCambios") as string;
     const otrosConocimientos = formData.get("otrosConocimientos") as string;
     const revision = formData.get("revision") as string || "01";
-    const fechaRevision = formData.get("fechaRevision") as string;
 
     const oldId = parseInt(id);
     let newId = oldId;
@@ -62,7 +61,7 @@ export default async function EditarPerfilPage({ params }: { params: Promise<{ i
           idiomasRequiere, idiomasAclaracion, tecnologias, conocimientosEsp, turnos,
           experienciaReq, experienciaAnios, adminPersonal, aspectos,
           vigencia, controlCambios, otrosConocimientos,
-          revision, fechaRevision,
+          revision,
           isActive: true,
           previousVersionId: oldId,
           status: newStatus
@@ -113,11 +112,6 @@ export default async function EditarPerfilPage({ params }: { params: Promise<{ i
           <div className="form-group">
             <label className="form-label">Número de Revisión</label>
             <input type="text" name="revision" className="form-input" defaultValue={perfil.revision || '01'} />
-          </div>
-
-          <div className="form-group">
-            <label className="form-label">Fecha de Revisión</label>
-            <input type="date" name="fechaRevision" className="form-input" defaultValue={perfil.fechaRevision || ''} />
           </div>
 
           <div className="form-group">
