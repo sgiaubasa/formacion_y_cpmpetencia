@@ -12,13 +12,23 @@ export async function addAccess(formData: FormData) {
   const sectorId = sectorIdStr ? parseInt(sectorIdStr) : null;
   const cleanEmail = email.toLowerCase().trim();
 
-  await prisma.appUser.create({
-    data: {
-      email: cleanEmail,
-      role,
-      sectorId: role === "SECTOR" ? sectorId : null
-    }
-  });
+  try {
+    await prisma.appUser.upsert({
+      where: { email: cleanEmail },
+      update: {
+        role,
+        sectorId: role === "SECTOR" ? sectorId : null
+      },
+      create: {
+        email: cleanEmail,
+        role,
+        sectorId: role === "SECTOR" ? sectorId : null
+      }
+    });
+  } catch (error) {
+    console.error("Error al guardar usuario en base de datos:", error);
+    return; // Evitar que rompa la pagina
+  }
 
   // Enviar invitación oficial por correo vía Supabase Admin
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
@@ -42,9 +52,13 @@ export async function addAccess(formData: FormData) {
 export async function removeAccess(formData: FormData) {
   const id = parseInt(formData.get("id") as string);
   
-  await prisma.appUser.delete({
-    where: { id }
-  });
+  try {
+    await prisma.appUser.delete({
+      where: { id }
+    });
+  } catch (error) {
+    console.error("Error al borrar:", error);
+  }
 
   revalidatePath('/accesos');
 }
