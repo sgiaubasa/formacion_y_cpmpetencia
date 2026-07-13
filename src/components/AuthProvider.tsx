@@ -17,6 +17,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [isLoggingIn, setIsLoggingIn] = useState(false);
   const router = useRouter();
 
+  const [isRecovery, setIsRecovery] = useState(false);
+  const [newPassword, setNewPassword] = useState("");
+
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
       if (session?.user) {
@@ -31,7 +34,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       setLoading(false);
     });
 
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+      if (event === 'PASSWORD_RECOVERY') {
+        setIsRecovery(true);
+      }
+      
       if (session?.user) {
         setUser(session.user);
         updateUserRoleCookie(session.user.email!);
@@ -49,7 +56,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     let inactivityTimer: NodeJS.Timeout;
     const resetTimer = () => {
       clearTimeout(inactivityTimer);
-      if (user) {
+      if (user && !isRecovery) {
         inactivityTimer = setTimeout(() => {
           supabase.auth.signOut();
           alert("Tu sesión ha expirado por seguridad (2 horas de inactividad).");
@@ -63,7 +70,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       clearTimeout(inactivityTimer);
       events.forEach(event => document.removeEventListener(event, resetTimer));
     };
-  }, [user]);
+  }, [user, isRecovery]);
 
   const updateUserRoleCookie = async (email: string) => {
     const { role } = await getRoleForEmail(email);
@@ -99,10 +106,61 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setIsLoggingIn(false);
   };
 
+  const handleSetNewPassword = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (newPassword.length < 6) {
+      setError("La contraseña debe tener al menos 6 caracteres");
+      return;
+    }
+    setIsLoggingIn(true);
+    setError("");
+    const { error } = await supabase.auth.updateUser({ password: newPassword });
+    if (error) {
+      setError(error.message);
+    } else {
+      alert("Contraseña establecida con éxito. Ya puedes usar el sistema.");
+      setIsRecovery(false);
+      setMsg("");
+    }
+    setIsLoggingIn(false);
+  };
+
   if (loading) {
     return (
       <div style={{ display: 'flex', height: '100vh', justifyContent: 'center', alignItems: 'center', backgroundColor: '#f0f2f5' }}>
         <h2 style={{ color: 'var(--teal-color)' }}>Cargando sistema...</h2>
+      </div>
+    );
+  }
+
+  if (isRecovery) {
+    return (
+      <div style={{ display: 'flex', height: '100vh', backgroundColor: '#f0f2f5', alignItems: 'center', justifyContent: 'center', margin: 0, padding: 0 }}>
+        <div style={{ background: 'white', padding: '3rem', borderRadius: '12px', boxShadow: '0 8px 24px rgba(0,0,0,0.1)', width: '100%', maxWidth: '400px' }}>
+          <div style={{ textAlign: 'center', marginBottom: '2rem' }}>
+            <img src="/logo.png" alt="AUBASA Logo" style={{ width: '100%', maxWidth: '200px', height: 'auto', objectFit: 'contain' }} />
+            <h2 style={{ marginTop: '1.5rem', color: 'var(--teal-color)', fontSize: '1.25rem' }}>Establecer Contraseña</h2>
+            <p style={{ fontSize: '0.875rem', color: '#6b7280', marginTop: '0.5rem' }}>Por favor, ingresa tu nueva contraseña para acceder al sistema.</p>
+          </div>
+          <form onSubmit={handleSetNewPassword}>
+            <div style={{ marginBottom: '1.5rem' }}>
+              <label style={{ display: 'block', marginBottom: '0.5rem', fontSize: '0.875rem', fontWeight: 600 }}>Nueva Contraseña</label>
+              <input 
+                type="password" 
+                value={newPassword} 
+                onChange={(e) => setNewPassword(e.target.value)} 
+                required
+                placeholder="••••••••"
+                style={{ width: '100%', padding: '0.75rem', border: '1px solid #d1d5db', borderRadius: '6px', fontSize: '1rem' }}
+              />
+            </div>
+            {error && <div style={{ backgroundColor: '#fee2e2', color: '#dc2626', padding: '0.75rem', borderRadius: '6px', marginBottom: '1rem', fontSize: '0.875rem', textAlign: 'center' }}>{error}</div>}
+            
+            <button type="submit" disabled={isLoggingIn} className="btn btn-primary" style={{ padding: '0.875rem', width: '100%', fontSize: '1rem', fontWeight: 'bold', justifyContent: 'center' }}>
+              {isLoggingIn ? "Guardando..." : "Guardar Contraseña"}
+            </button>
+          </form>
+        </div>
       </div>
     );
   }
