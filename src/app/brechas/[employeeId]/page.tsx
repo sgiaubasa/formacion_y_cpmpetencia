@@ -7,11 +7,11 @@ import { getUniqueActiveProfiles } from "@/lib/profileUtils";
 
 export default async function SimuladorCambioPuestoPage({ params, searchParams }: { params: Promise<{ employeeId: string }>, searchParams: Promise<{ targetProfileId?: string }> }) {
   const role = await getCurrentRole();
-  if (role !== "ADMIN" && role !== "RRHH") {
+  if (role !== "ADMIN" && role !== "RRHH" && role !== "SGI") {
     return (
       <div className="card" style={{ padding: '2rem', textAlign: 'center', marginTop: '2rem' }}>
         <h1 style={{ color: 'var(--text-secondary)' }}>Acceso Denegado</h1>
-        <p>Solo RRHH o Administradores pueden realizar simulaciones de cambio de puesto.</p>
+        <p>Solo RRHH, Administradores y SGI pueden realizar simulaciones de cambio de puesto.</p>
       </div>
     );
   }

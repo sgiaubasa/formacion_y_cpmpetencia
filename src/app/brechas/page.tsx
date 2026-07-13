@@ -4,11 +4,11 @@ import { getCurrentRole } from "@/lib/auth";
 
 export default async function BrechasPage({ searchParams }: { searchParams: Promise<{ sectorId?: string }> }) {
   const role = await getCurrentRole();
-  if (role !== "ADMIN" && role !== "RRHH") {
+  if (role !== "ADMIN" && role !== "RRHH" && role !== "SGI") {
     return (
       <div className="card" style={{ padding: '2rem', textAlign: 'center', marginTop: '2rem' }}>
         <h1 style={{ color: 'var(--text-secondary)' }}>Acceso Denegado</h1>
-        <p>La Evaluación Inicial y el Simulador de Brechas están restringidos a los roles de ADMIN y RRHH.</p>
+        <p>La Evaluación Inicial y el Simulador de Brechas están restringidos a los roles de ADMIN, RRHH y SGI.</p>
         <p>Por favor, dirígete a la pestaña <b>Plan Anual</b> para planificar las capacitaciones de tu sector.</p>
       </div>
     );
