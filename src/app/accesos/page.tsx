@@ -83,9 +83,7 @@ export default async function AccesosPage() {
                 <td>
                   <form action={removeAccess}>
                     <input type="hidden" name="id" value={u.id} />
-                    <button type="submit" className="btn btn-secondary" style={{ padding: '0.4rem 0.8rem', color: '#dc2626', borderColor: '#fecaca', background: '#fef2f2' }} onClick={(e) => {
-                      if(!confirm('¿Estás seguro de que quieres quitarle el acceso a este usuario?')) e.preventDefault();
-                    }}>
+                    <button type="submit" className="btn btn-secondary" style={{ padding: '0.4rem 0.8rem', color: '#dc2626', borderColor: '#fecaca', background: '#fef2f2' }}>
                       Quitar Acceso
                     </button>
                   </form>
