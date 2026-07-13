@@ -4,19 +4,21 @@ import { redirect } from "next/navigation";
 import { addAccess, removeAccess } from "./actions";
 
 export default async function AccesosPage() {
-  const currentRole = await getCurrentRole();
-  if (currentRole !== "SGI") {
-    redirect("/"); // Solo SGI puede ver esta página
-  }
+  try {
+    const currentRole = await getCurrentRole();
+    if (currentRole !== "SGI") {
+      redirect("/"); // Solo SGI puede ver esta página
+    }
 
-  const users = await prisma.appUser.findMany({
-    include: { sector: true },
-    orderBy: { email: 'asc' }
-  });
+    const users = await prisma.appUser.findMany({
+      include: { sector: true },
+      orderBy: { email: 'asc' }
+    });
 
-  const sectores = await prisma.sector.findMany({
-    orderBy: { name: 'asc' }
-  });
+    const sectores = await prisma.sector.findMany({
+      orderBy: { name: 'asc' }
+    });
+
 
   return (
     <div>
@@ -93,6 +95,19 @@ export default async function AccesosPage() {
           </tbody>
         </table>
       </div>
+      </div>
     </div>
   );
+  } catch (error: any) {
+    if (error.message === 'NEXT_REDIRECT') {
+      throw error; // Let Next.js handle the redirect
+    }
+    return (
+      <div style={{ padding: '2rem', color: 'red' }}>
+        <h1>Error Interno (Debug)</h1>
+        <pre>{error.message}</pre>
+        <pre>{error.stack}</pre>
+      </div>
+    );
+  }
 }
