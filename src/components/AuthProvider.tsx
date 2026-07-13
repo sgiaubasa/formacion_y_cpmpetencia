@@ -81,7 +81,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const updateUserRoleCookie = async (email: string) => {
     const { role } = await getRoleForEmail(email);
-    Cookies.set("activeRole", role, { expires: 7 });
+    if (role === "VIEWER") {
+      // El usuario no está en la base de datos o le quitaron el acceso
+      await supabase.auth.signOut();
+      Cookies.remove("activeRole");
+      setUser(null);
+      alert("Tu acceso ha sido revocado o no tienes permisos para ingresar al sistema.");
+      return;
+    }
+    Cookies.set("activeRole", role); // Session cookie (clears on browser close)
     router.refresh();
   };
 
