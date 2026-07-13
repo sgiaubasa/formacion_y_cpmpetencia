@@ -21,6 +21,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [newPassword, setNewPassword] = useState("");
 
   useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const hash = window.location.hash;
+      const href = window.location.href;
+      if (hash.includes("type=invite") || hash.includes("type=recovery") || href.includes("type=invite") || href.includes("type=recovery")) {
+        setIsRecovery(true);
+      }
+    }
     supabase.auth.getSession().then(({ data: { session } }) => {
       if (session?.user) {
         setUser(session.user);
