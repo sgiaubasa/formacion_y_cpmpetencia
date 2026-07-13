@@ -95,7 +95,6 @@ export default async function AccesosPage() {
           </tbody>
         </table>
       </div>
-      </div>
     </div>
   );
   } catch (error: any) {
