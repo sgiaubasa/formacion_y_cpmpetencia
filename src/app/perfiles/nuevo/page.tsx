@@ -1,5 +1,5 @@
 import { prisma } from "@/lib/prisma";
-import { redirect, isRedirectError } from "next/navigation";
+import { redirect } from "next/navigation";
 import Link from "next/link";
 import { revalidatePath } from "next/cache";
 
@@ -48,11 +48,11 @@ export default async function NuevoPerfilPage({ searchParams }: { searchParams: 
       revalidatePath('/perfiles');
       redirect(`/perfiles/${newProfile.id}`);
     } catch (error: any) {
-      if (isRedirectError(error)) {
+      if (error?.message === "NEXT_REDIRECT" || (error?.digest && error.digest.startsWith("NEXT_REDIRECT"))) {
         throw error;
       }
       console.error(error);
-      redirect(`/perfiles/nuevo?error=${encodeURIComponent(error.message || "Error desconocido al guardar en base de datos")}`);
+      redirect(`/perfiles/nuevo?error=${encodeURIComponent(error?.message || "Error desconocido al guardar en base de datos")}`);
     }
   }
 
