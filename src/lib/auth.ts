@@ -18,7 +18,7 @@ export async function getSectorIdFromRole(role: string) {
 }
 
 export async function getAllowedSectorNames(role: string, mySectorName: string): Promise<string[]> {
-  if (role === "ADMIN" || role === "RRHH") return [];
+  if (role === "SGI" || role === "RRHH" || role === "ADMIN") return [];
   
   if (mySectorName === "Gerencia de Prevencion y Seguridad Integral") {
     return [

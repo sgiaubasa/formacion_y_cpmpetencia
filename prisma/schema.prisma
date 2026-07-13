@@ -16,6 +16,7 @@ model Sector {
   mail      String?
   employees Employee[]
   pendingTransfers PendingTransfer[]
+  appUsers  AppUser[]
 }
 
 model JobProfile {
@@ -86,6 +87,7 @@ model EmployeeTrainingRecord {
   instructorName    String? // Nombre del instructor
   instructorSignature String? // Firma digital del instructor (Base64)
   effectiveness String?   // "PENDING", "EFFECTIVE", "INEFFECTIVE"
+  effectivenessJustification String?
   evaluatedAt   DateTime?
   scheduledDate DateTime? // Fecha de programación en el Plan Anual
   rescheduledDate DateTime? // Fecha de reprogramación
@@ -126,6 +128,7 @@ model EffectivenessEvaluation {
   attendance   Attendance   @relation(fields: [attendanceId], references: [id])
   status       String       @default("PENDING") // PENDING, APPROVED, REJECTED
   score        Int?
+  justification String?
   evaluatedAt  DateTime?
 }
 
@@ -139,4 +142,13 @@ model PendingTransfer {
   targetSector    Sector @relation(fields: [targetSectorId], references: [id])
   gaps            String // JSON array of gaps (stringified)
   createdAt       DateTime @default(now())
+}
+
+model AppUser {
+  id        Int      @id @default(autoincrement())
+  email     String   @unique
+  role      String   // "SGI", "RRHH", "SECTOR", "VIEWER"
+  sectorId  Int?
+  sector    Sector?  @relation(fields: [sectorId], references: [id])
+  createdAt DateTime @default(now())
 }

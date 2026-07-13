@@ -1,7 +1,7 @@
 import { prisma } from "@/lib/prisma";
 import Link from "next/link";
 import { BorrarPerfilButton } from "@/components/BorrarPerfilButton";
-import { enviarARevision, aprobarPerfil, borrarPerfil } from "./actions";
+import { enviarARevision, aprobarPerfil, borrarPerfil, devolverAAdmin } from "./actions";
 
 import { getCurrentRole, isSectorRole, getSectorIdFromRole, getAllowedSectorNames } from "@/lib/auth";
 
@@ -96,6 +96,7 @@ export default async function PerfilesPage({ searchParams }: { searchParams: Pro
                   <td>
                     {perfil.status === 'VIGENTE' && <span className="badge badge-success">Vigente</span>}
                     {perfil.status === 'PENDIENTE_SECTOR' && <span className="badge badge-warning" style={{ background: '#fef08a', color: '#854d0e' }}>Revisión Sector</span>}
+                    {perfil.status === 'DEVUELTO_A_ADMIN' && <span className="badge badge-warning" style={{ background: '#fbcfe8', color: '#be185d' }}>Revisión Admin</span>}
                     {perfil.status === 'BORRADOR' && <span className="badge badge-secondary" style={{ background: '#e2e8f0', color: '#475569' }}>Borrador</span>}
                   </td>
                   <td>
@@ -109,17 +110,33 @@ export default async function PerfilesPage({ searchParams }: { searchParams: Pro
                         📄 Ver PDF
                       </Link>
                       
-                      {/* RRHH siempre puede editar. Si está en BORRADOR, puede enviarlo a revisión */}
+                      {/* SGI/RRHH siempre puede editar. */}
                       {!isSector && (
                         <>
                           <Link href={`/perfiles/${perfil.id}/editar`} className="btn btn-primary" style={{ padding: '0.4rem 0.8rem', fontSize: '0.85rem', borderRadius: '6px', background: '#0d8383', color: 'white', display: 'flex', alignItems: 'center', gap: '0.4rem', fontWeight: 500, boxShadow: '0 1px 2px rgba(0,0,0,0.05)' }}>
                             ✏️ Editar
                           </Link>
                           {perfil.status === 'BORRADOR' && (
-                            <form action={enviarARevision}>
+                            <>
+                              <form action={enviarARevision}>
+                                <input type="hidden" name="id" value={perfil.id} />
+                                <button type="submit" className="btn btn-primary" style={{ padding: '0.4rem 0.8rem', fontSize: '0.85rem', borderRadius: '6px', background: '#3b82f6', color: 'white', border: 'none', display: 'flex', alignItems: 'center', gap: '0.4rem', fontWeight: 500, boxShadow: '0 1px 2px rgba(0,0,0,0.05)', cursor: 'pointer' }} title="Mandar al sector para revisión opcional">
+                                  📤 Enviar a Sector
+                                </button>
+                              </form>
+                              <form action={aprobarPerfil}>
+                                <input type="hidden" name="id" value={perfil.id} />
+                                <button type="submit" className="btn btn-primary" style={{ padding: '0.4rem 0.8rem', fontSize: '0.85rem', borderRadius: '6px', background: '#10b981', color: 'white', border: 'none', display: 'flex', alignItems: 'center', gap: '0.4rem', fontWeight: 500, boxShadow: '0 1px 2px rgba(0,0,0,0.05)', cursor: 'pointer' }} title="Aprobar directamente sin pasar por el sector">
+                                  ✅ Aprobar Directo
+                                </button>
+                              </form>
+                            </>
+                          )}
+                          {perfil.status === 'DEVUELTO_A_ADMIN' && (
+                            <form action={aprobarPerfil}>
                               <input type="hidden" name="id" value={perfil.id} />
-                              <button type="submit" className="btn btn-primary" style={{ padding: '0.4rem 0.8rem', fontSize: '0.85rem', borderRadius: '6px', background: '#3b82f6', color: 'white', border: 'none', display: 'flex', alignItems: 'center', gap: '0.4rem', fontWeight: 500, boxShadow: '0 1px 2px rgba(0,0,0,0.05)', cursor: 'pointer' }} title="Mandar al sector para aprobación">
-                                📤 Enviar a Revisión
+                              <button type="submit" className="btn btn-primary" style={{ padding: '0.4rem 0.8rem', fontSize: '0.85rem', borderRadius: '6px', background: '#10b981', color: 'white', border: 'none', display: 'flex', alignItems: 'center', gap: '0.4rem', fontWeight: 500, boxShadow: '0 1px 2px rgba(0,0,0,0.05)', cursor: 'pointer' }}>
+                                ✅ Cerrar y Aprobar
                               </button>
                             </form>
                           )}
@@ -130,16 +147,16 @@ export default async function PerfilesPage({ searchParams }: { searchParams: Pro
                         </>
                       )}
                       
-                      {/* Si es Sector y el perfil está esperando su OK */}
+                      {/* Sector puede editar si está PENDIENTE_SECTOR */}
                       {isSector && perfil.status === 'PENDIENTE_SECTOR' && (
                         <>
                           <Link href={`/perfiles/${perfil.id}/editar`} className="btn btn-primary" style={{ padding: '0.4rem 0.8rem', fontSize: '0.85rem', borderRadius: '6px', background: '#f59e0b', color: 'white', display: 'flex', alignItems: 'center', gap: '0.4rem', fontWeight: 500, boxShadow: '0 1px 2px rgba(0,0,0,0.05)' }}>
-                            📝 Editar y Confirmar
+                            📝 Editar
                           </Link>
-                          <form action={aprobarPerfil}>
+                          <form action={devolverAAdmin}>
                             <input type="hidden" name="id" value={perfil.id} />
-                            <button type="submit" className="btn btn-primary" style={{ padding: '0.4rem 0.8rem', fontSize: '0.85rem', borderRadius: '6px', background: '#10b981', color: 'white', border: 'none', display: 'flex', alignItems: 'center', gap: '0.4rem', fontWeight: 500, boxShadow: '0 1px 2px rgba(0,0,0,0.05)', cursor: 'pointer' }}>
-                              ✅ Aprobar Directo
+                            <button type="submit" className="btn btn-primary" style={{ padding: '0.4rem 0.8rem', fontSize: '0.85rem', borderRadius: '6px', background: '#6366f1', color: 'white', border: 'none', display: 'flex', alignItems: 'center', gap: '0.4rem', fontWeight: 500, boxShadow: '0 1px 2px rgba(0,0,0,0.05)', cursor: 'pointer' }}>
+                              📤 Devolver a SGI/RRHH
                             </button>
                           </form>
                         </>

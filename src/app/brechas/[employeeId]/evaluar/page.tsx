@@ -23,11 +23,13 @@ export default async function EvaluacionEficaciaPage({ params }: { params: Promi
     "use server"
     const recordId = parseInt(formData.get("recordId") as string);
     const score = formData.get("score") as string;
+    const justification = formData.get("justification") as string;
     
     await prisma.employeeTrainingRecord.update({
       where: { id: recordId },
       data: {
         effectiveness: score,
+        effectivenessJustification: justification,
         evaluatedAt: new Date()
       }
     });
@@ -91,7 +93,14 @@ export default async function EvaluacionEficaciaPage({ params }: { params: Promi
 
                 return (
                   <tr key={record.id}>
-                    <td style={{ fontWeight: 500 }}>{record.trainingName}</td>
+                    <td style={{ fontWeight: 500 }}>
+                      {record.trainingName}
+                      {record.objective && (
+                        <div style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', marginTop: '0.25rem', padding: '0.25rem', background: '#f8fafc', borderRadius: '4px' }}>
+                          <strong>Objetivo:</strong> {record.objective}
+                        </div>
+                      )}
+                    </td>
                     <td>{completedDate.toLocaleDateString('es-AR')}</td>
                     <td style={{ color: isOverdue ? 'red' : 'inherit', fontWeight: isOverdue ? 'bold' : 'normal' }}>
                       {deadlineDate.toLocaleDateString('es-AR')} {isOverdue && ' (¡Vencido!)'}
@@ -100,17 +109,33 @@ export default async function EvaluacionEficaciaPage({ params }: { params: Promi
                       {record.effectiveness === 'PENDING' && <span className="badge badge-warning">Pendiente</span>}
                       {record.effectiveness === 'EFFECTIVE' && <span className="badge badge-success">Eficaz</span>}
                       {record.effectiveness === 'INEFFECTIVE' && <span className="badge badge-secondary" style={{ backgroundColor: '#ef4444' }}>No Eficaz</span>}
+                      {record.effectivenessJustification && (
+                        <div style={{ fontSize: '0.75rem', marginTop: '0.5rem', color: 'var(--text-secondary)', fontStyle: 'italic' }}>
+                          {record.effectivenessJustification}
+                        </div>
+                      )}
                     </td>
                     <td>
-                      <form action={evaluarEficacia} style={{ display: 'flex', gap: '0.5rem' }}>
-                        <input type="hidden" name="recordId" value={record.id} />
-                        <button type="submit" name="score" value="EFFECTIVE" className="btn btn-secondary" style={{ padding: '0.25rem 0.5rem', fontSize: '0.875rem', borderColor: '#10b981', color: '#10b981' }}>
-                          ✓ Eficaz
-                        </button>
-                        <button type="submit" name="score" value="INEFFECTIVE" className="btn btn-secondary" style={{ padding: '0.25rem 0.5rem', fontSize: '0.875rem', borderColor: '#ef4444', color: '#ef4444' }}>
-                          ✕ No Eficaz
-                        </button>
-                      </form>
+                      {record.effectiveness === 'PENDING' && (
+                        <form action={evaluarEficacia} style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+                          <input type="hidden" name="recordId" value={record.id} />
+                          <textarea 
+                            name="justification" 
+                            required 
+                            placeholder="Justificación (Acorde al objetivo de la capacitación)"
+                            className="form-input" 
+                            style={{ minHeight: '60px', fontSize: '0.85rem' }} 
+                          />
+                          <div style={{ display: 'flex', gap: '0.5rem' }}>
+                            <button type="submit" name="score" value="EFFECTIVE" className="btn btn-secondary" style={{ padding: '0.25rem 0.5rem', fontSize: '0.875rem', borderColor: '#10b981', color: '#10b981', flex: 1 }}>
+                              ✓ Eficaz
+                            </button>
+                            <button type="submit" name="score" value="INEFFECTIVE" className="btn btn-secondary" style={{ padding: '0.25rem 0.5rem', fontSize: '0.875rem', borderColor: '#ef4444', color: '#ef4444', flex: 1 }}>
+                              ✕ No Eficaz
+                            </button>
+                          </div>
+                        </form>
+                      )}
                     </td>
                   </tr>
                 )

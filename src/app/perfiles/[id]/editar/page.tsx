@@ -16,7 +16,7 @@ export default async function EditarPerfilPage({ params }: { params: Promise<{ i
     
     const role = await getCurrentRole();
     const isSector = await isSectorRole(role);
-    const newStatus = isSector ? "VIGENTE" : "BORRADOR";
+    const newStatus = isSector ? "DEVUELTO_A_ADMIN" : "BORRADOR";
 
     const title = formData.get("title") as string;
     const gerencia = formData.get("gerencia") as string;
@@ -231,7 +231,7 @@ export default async function EditarPerfilPage({ params }: { params: Promise<{ i
 
           <div style={{ marginTop: '2rem', display: 'flex', justifyContent: 'flex-end', gap: '1rem' }}>
             <button type="submit" className="btn btn-primary" style={{ padding: '0.75rem 2rem', fontSize: '1rem' }}>
-              {perfil.status === 'PENDIENTE_SECTOR' ? "✅ Guardar y Dar Vigencia" : "Guardar Cambios (Quedará en Borrador)"}
+              {perfil.status === 'PENDIENTE_SECTOR' ? "📤 Guardar y Devolver a SGI/RRHH" : "Guardar Cambios (Quedará en Borrador)"}
             </button>
           </div>
         </form>

@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 
-export function SidebarNav({ isSector }: { isSector: boolean }) {
+export function SidebarNav({ isSector, role }: { isSector: boolean; role: string }) {
   const pathname = usePathname();
 
   const links = [
@@ -13,7 +13,8 @@ export function SidebarNav({ isSector }: { isSector: boolean }) {
     ...(!isSector ? [{ href: "/brechas", label: "Evaluación y Brechas", icon: "📝" }] : []),
     { href: "/plan-anual", label: "Plan Anual", icon: "📅" },
     ...(!isSector ? [{ href: "/capacitaciones", label: "Temas a Capacitar", icon: "🎓" }] : []),
-    { href: "/transferencias", label: "Transferencias", icon: "⇄" }
+    { href: "/transferencias", label: "Transferencias", icon: "⇄" },
+    ...(role === 'SGI' ? [{ href: "/accesos", label: "Accesos", icon: "🔐" }] : [])
   ];
 
   return (

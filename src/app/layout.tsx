@@ -34,7 +34,7 @@ export default async function RootLayout({
               <div className="sidebar-header" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '2rem 1rem', borderBottom: '1px solid var(--border-color)', background: '#ffffff' }}>
                 <img src="/logo.png" alt="AUBASA Logo" style={{ width: '180px', height: 'auto', objectFit: 'contain' }} />
               </div>
-              <SidebarNav isSector={isSector} />
+              <SidebarNav isSector={isSector} role={role} />
               <LogoutButton />
             </aside>
             <main className="main-content">
