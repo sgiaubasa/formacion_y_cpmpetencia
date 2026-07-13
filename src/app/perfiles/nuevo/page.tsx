@@ -1,47 +1,59 @@
 import { prisma } from "@/lib/prisma";
-import { redirect } from "next/navigation";
+import { redirect, isRedirectError } from "next/navigation";
 import Link from "next/link";
+import { revalidatePath } from "next/cache";
 
-export default function NuevoPerfilPage() {
+export default async function NuevoPerfilPage({ searchParams }: { searchParams: Promise<{ error?: string }> }) {
+  const params = await searchParams;
+  const error = params.error;
+
   async function createProfile(formData: FormData) {
     "use server"
     
-    const title = formData.get("title") as string;
-    const gerencia = formData.get("gerencia") as string;
-    const reporta = formData.get("reporta") as string;
-    const supervisa = formData.get("supervisa") as string;
-    const objetivo = formData.get("objetivo") as string;
-    const educacion = formData.getAll("educacion").join(", ");
-    const orientacionTecnica = formData.get("orientacionTecnica") as string;
-    const idiomasRequiere = formData.get("idiomasRequiere") === "on";
-    const idiomasAclaracion = formData.get("idiomasAclaracion") as string;
-    
-    const tecBasicas = formData.get("tecBasicas") ? "Basicas" : "";
-    const tecEspeciales = formData.get("tecEspeciales") ? "Especiales" : "";
-    const tecnologias = [tecBasicas, tecEspeciales].filter(Boolean).join(",");
-    
-    const conocimientosEsp = formData.get("conocimientosEsp") as string;
-    const turnos = formData.get("turnos") === "on";
-    const experienciaReq = formData.get("experienciaReq") === "on";
-    const experienciaAnios = formData.get("experienciaAnios") as string;
-    const adminPersonal = formData.get("adminPersonal") as string;
-    const aspectos = formData.getAll("aspectos").join(", ");
-    
-    const vigencia = formData.get("vigencia") as string;
-    const controlCambios = formData.get("controlCambios") as string;
-    const otrosConocimientos = formData.get("otrosConocimientos") as string;
+    try {
+      const title = formData.get("title") as string;
+      const gerencia = formData.get("gerencia") as string;
+      const reporta = formData.get("reporta") as string;
+      const supervisa = formData.get("supervisa") as string;
+      const objetivo = formData.get("objetivo") as string;
+      const educacion = formData.getAll("educacion").join(", ");
+      const orientacionTecnica = formData.get("orientacionTecnica") as string;
+      const idiomasRequiere = formData.get("idiomasRequiere") === "on";
+      const idiomasAclaracion = formData.get("idiomasAclaracion") as string;
+      
+      const tecBasicas = formData.get("tecBasicas") ? "Basicas" : "";
+      const tecEspeciales = formData.get("tecEspeciales") ? "Especiales" : "";
+      const tecnologias = [tecBasicas, tecEspeciales].filter(Boolean).join(",");
+      
+      const conocimientosEsp = formData.get("conocimientosEsp") as string;
+      const turnos = formData.get("turnos") === "on";
+      const experienciaReq = formData.get("experienciaReq") === "on";
+      const experienciaAnios = formData.get("experienciaAnios") as string;
+      const adminPersonal = formData.get("adminPersonal") as string;
+      const aspectos = formData.getAll("aspectos").join(", ");
+      
+      const vigencia = formData.get("vigencia") as string;
+      const controlCambios = formData.get("controlCambios") as string;
+      const otrosConocimientos = formData.get("otrosConocimientos") as string;
 
-    const newProfile = await prisma.jobProfile.create({
-      data: {
-        title, gerencia, reporta, supervisa, objetivo, educacion, orientacionTecnica,
-        idiomasRequiere, idiomasAclaracion, tecnologias, conocimientosEsp, turnos,
-        experienciaReq, experienciaAnios, adminPersonal, aspectos,
-        vigencia, controlCambios, otrosConocimientos,
-        status: 'BORRADOR'
+      const newProfile = await prisma.jobProfile.create({
+        data: {
+          title, gerencia, reporta, supervisa, objetivo, educacion, orientacionTecnica,
+          idiomasRequiere, idiomasAclaracion, tecnologias, conocimientosEsp, turnos,
+          experienciaReq, experienciaAnios, adminPersonal, aspectos,
+          vigencia, controlCambios, otrosConocimientos,
+          status: 'BORRADOR'
+        }
+      });
+      revalidatePath('/perfiles');
+      redirect(`/perfiles/${newProfile.id}`);
+    } catch (error: any) {
+      if (isRedirectError(error)) {
+        throw error;
       }
-    });
-
-    redirect(`/perfiles/${newProfile.id}`);
+      console.error(error);
+      redirect(`/perfiles/nuevo?error=${encodeURIComponent(error.message || "Error desconocido al guardar en base de datos")}`);
+    }
   }
 
   return (
@@ -50,6 +62,12 @@ export default function NuevoPerfilPage() {
         <h1 className="page-title">Nuevo Perfil de Puesto (PAU/03 - Anexo 2)</h1>
         <Link href="/perfiles" className="btn btn-secondary">Volver</Link>
       </div>
+
+      {error && (
+        <div style={{ backgroundColor: '#fee2e2', color: '#991b1b', padding: '1rem', borderRadius: '4px', marginBottom: '1rem', border: '1px solid #f87171' }}>
+          <strong>Error al guardar:</strong> {error}
+        </div>
+      )}
 
       <div className="card">
         <form action={createProfile} style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
