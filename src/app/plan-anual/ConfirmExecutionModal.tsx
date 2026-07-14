@@ -73,9 +73,15 @@ export function ConfirmExecutionModal({
           <input type="hidden" name="recordId" value={recordId} />
           <input type="hidden" name="mode" value={mode} />
           
-          <div>
-            <label className="form-label">Fecha de Realización</label>
-            <input type="date" name="completedAt" className="form-input" defaultValue={new Date().toISOString().split('T')[0]} required />
+          <div style={{ display: 'flex', gap: '1rem' }}>
+            <div style={{ flex: 1 }}>
+              <label className="form-label">Fecha de Realización</label>
+              <input type="date" name="completedAt" className="form-input" defaultValue={new Date().toISOString().split('T')[0]} required />
+            </div>
+            <div style={{ flex: 1 }}>
+              <label className="form-label">Nota (Opcional, 0 a 10)</label>
+              <input type="number" name="score" min="0" max="10" step="0.1" className="form-input" placeholder="Ej. 8" />
+            </div>
           </div>
 
           {mode === "upload" ? (

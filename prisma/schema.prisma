@@ -43,6 +43,15 @@ model JobProfile {
   otrosConocimientos String?
   revision           String?       @default("01")
   fechaRevision      String?
+  firmaRRHH          String?       // Base64 image
+  fechaFirmaRRHH     DateTime?
+  emailFirmaRRHH     String?
+  firmaGerenteArea   String?       // Base64 image
+  fechaFirmaGerenteArea DateTime?
+  emailFirmaGerenteArea String?
+  firmaGerenteGeneral String?      // Base64 image
+  fechaFirmaGerenteGeneral DateTime?
+  emailFirmaGerenteGeneral String?
   isActive           Boolean       @default(true)
   previousVersionId  Int?
   previousVersion    JobProfile?   @relation("ProfileHistory", fields: [previousVersionId], references: [id])
@@ -91,6 +100,7 @@ model EmployeeTrainingRecord {
   evaluatedAt   DateTime?
   scheduledDate DateTime? // Fecha de programación en el Plan Anual
   rescheduledDate DateTime? // Fecha de reprogramación
+  score         String?   // Nota de evaluación de 0 a 10
 }
 
 model Training {

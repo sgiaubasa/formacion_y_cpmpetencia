@@ -111,6 +111,7 @@ export default async function PlanAnualPage({ searchParams }: { searchParams: Pr
     "use server"
     const recordId = parseInt(formData.get("recordId") as string);
     const dateStr = formData.get("completedAt") as string;
+    const scoreStr = formData.get("score") as string;
     const file = formData.get("evidence") as File | null;
     
     let evidencePath = null;
@@ -134,9 +135,59 @@ export default async function PlanAnualPage({ searchParams }: { searchParams: Pr
         status: 'COMPLETED',
         effectiveness: 'PENDING',
         completedAt: dateStr ? new Date(dateStr) : new Date(),
-        ...(evidencePath ? { evidencePath } : {})
+        ...(evidencePath ? { evidencePath } : {}),
+        ...(scoreStr ? { score: scoreStr } : {})
       }
     });
+
+    // Validar si liberó el puesto
+    const record = await prisma.employeeTrainingRecord.findUnique({
+      where: { id: recordId },
+      include: { employee: true }
+    });
+    
+    if (record) {
+      const pendingTransfers = await prisma.pendingTransfer.findMany({
+        where: { employeeId: record.employeeId },
+        include: { targetProfile: true }
+      });
+
+      if (pendingTransfers.length > 0) {
+        // Obtenemos todas las capacitaciones completadas del empleado
+        const allCompleted = await prisma.employeeTrainingRecord.findMany({
+          where: { employeeId: record.employeeId, status: 'COMPLETED' }
+        });
+        const completedNames = new Set(allCompleted.map(r => r.trainingName.trim()));
+
+        for (const transfer of pendingTransfers) {
+          try {
+            const gaps: string[] = JSON.parse(transfer.gaps);
+            const allGapsCompleted = gaps.every(gap => completedNames.has(gap.trim()));
+            
+            if (allGapsCompleted) {
+              // Trigger email
+              const { sendMail } = await import('@/lib/mailer');
+              const rrhhUsers = await prisma.appUser.findMany({ where: { role: 'RRHH' } });
+              const rrhhEmails = rrhhUsers.map(u => u.email);
+              
+              await sendMail({
+                to: rrhhEmails.length > 0 ? rrhhEmails : 'rrhh@aubasa.com.ar',
+                subject: `Puesto Liberado: ${record.employee.name}`,
+                html: `
+                  <h2>El empleado ha completado todas sus brechas</h2>
+                  <p><strong>Empleado:</strong> ${record.employee.name} (Legajo: ${record.employee.legajo})</p>
+                  <p><strong>Puesto Destino:</strong> ${transfer.targetProfile.title}</p>
+                  <p>Ya se han registrado como completadas todas las capacitaciones que requerían para este cambio de puesto.</p>
+                `
+              });
+              
+              // Opcional: Podríamos borrar el PendingTransfer, pero por ahora solo avisamos.
+            }
+          } catch(e) {}
+        }
+      }
+    }
+
     revalidatePath('/plan-anual');
   }
 
@@ -308,6 +359,7 @@ export default async function PlanAnualPage({ searchParams }: { searchParams: Pr
                     ) : (
                       <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
                         <div style={{ fontSize: '0.875rem' }}>Realizada el: <strong>{r.completedAt ? new Date(r.completedAt).toLocaleDateString('es-AR') : '-'}</strong></div>
+                        {r.score && <div style={{ fontSize: '0.875rem' }}>Nota: <strong>{r.score}</strong>/10</div>}
                         {r.evidencePath && (
                           <a href={r.evidencePath} target="_blank" rel="noopener noreferrer" className="btn btn-secondary" style={{ padding: '0.25rem 0.5rem', fontSize: '0.75rem', width: 'fit-content' }}>
                             Ver Evidencia

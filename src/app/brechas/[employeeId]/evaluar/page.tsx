@@ -39,9 +39,33 @@ export default async function EvaluacionEficaciaPage({ params }: { params: Promi
 
   async function sendReminderEmail(formData: FormData) {
     "use server"
-    // Simulador de envío de correo
-    console.log(`Simulando envío de correo a Responsable de ${emp?.sector.name} para evaluar eficacia.`);
-    // Aquí iría la integración con Nodemailer o Resend
+    const { sendMail } = await import('@/lib/mailer');
+    
+    const targetSectorRole = `SECTOR_${emp?.sectorId}`;
+    
+    const targetUsers = await prisma.appUser.findMany({
+      where: {
+        OR: [
+          { role: 'RRHH' },
+          { role: targetSectorRole },
+          { role: 'ADMIN' }
+        ]
+      }
+    });
+
+    const sectorEmails = targetUsers.filter(u => u.role === targetSectorRole).map(u => u.email).filter(e => e);
+    const rrhhEmails = targetUsers.filter(u => u.role === 'RRHH' || u.role === 'ADMIN').map(u => u.email).filter(e => e);
+
+    await sendMail({
+      to: sectorEmails.length > 0 ? sectorEmails : (rrhhEmails.length > 0 ? rrhhEmails : 'rrhh@aubasa.com.ar'),
+      cc: rrhhEmails.length > 0 ? rrhhEmails : undefined,
+      subject: `Recordatorio: Evaluación de Eficacia Pendiente (${emp?.name})`,
+      html: `
+        <h2>Recordatorio de Evaluación de Eficacia</h2>
+        <p>Se solicita al Responsable del sector <strong>${emp?.sector.name}</strong> que ingrese al sistema para evaluar la eficacia de las capacitaciones recientes del empleado <strong>${emp?.name}</strong>.</p>
+        <p>Por favor, revise el listado de brechas del empleado en el sistema y complete la evaluación correspondiente.</p>
+      `
+    });
   }
 
   return (
@@ -119,19 +143,22 @@ export default async function EvaluacionEficaciaPage({ params }: { params: Promi
                       {record.effectiveness === 'PENDING' && (
                         <form action={evaluarEficacia} style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
                           <input type="hidden" name="recordId" value={record.id} />
+                          <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', marginBottom: '0.25rem' }}>
+                            ¿Se cumplió el objetivo propuesto de la capacitación? Explique:
+                          </div>
                           <textarea 
                             name="justification" 
                             required 
-                            placeholder="Justificación (Acorde al objetivo de la capacitación)"
+                            placeholder={`¿El empleado logró: "${record.objective || 'el objetivo propuesto'}"? Detalle por qué...`}
                             className="form-input" 
                             style={{ minHeight: '60px', fontSize: '0.85rem' }} 
                           />
                           <div style={{ display: 'flex', gap: '0.5rem' }}>
                             <button type="submit" name="score" value="EFFECTIVE" className="btn btn-secondary" style={{ padding: '0.25rem 0.5rem', fontSize: '0.875rem', borderColor: '#10b981', color: '#10b981', flex: 1 }}>
-                              ✓ Eficaz
+                              ✓ Sí, fue Eficaz
                             </button>
                             <button type="submit" name="score" value="INEFFECTIVE" className="btn btn-secondary" style={{ padding: '0.25rem 0.5rem', fontSize: '0.875rem', borderColor: '#ef4444', color: '#ef4444', flex: 1 }}>
-                              ✕ No Eficaz
+                              ✕ No fue Eficaz
                             </button>
                           </div>
                         </form>
