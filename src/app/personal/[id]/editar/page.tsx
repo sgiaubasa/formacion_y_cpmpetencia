@@ -2,10 +2,13 @@ import { prisma } from "@/lib/prisma";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { getUniqueActiveProfiles } from "@/lib/profileUtils";
+import { getCurrentRole } from "@/lib/auth";
+import { DeleteEmployeeButton } from "./DeleteEmployeeButton";
 
 export default async function EditarPersonalPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   const empId = parseInt(id);
+  const role = await getCurrentRole();
 
   const empleado = await prisma.employee.findUnique({
     where: { id: empId },
@@ -36,6 +39,25 @@ export default async function EditarPersonalPage({ params }: { params: Promise<{
       }
     });
 
+    redirect('/personal');
+  }
+
+  async function deleteEmpleado() {
+    "use server"
+    try {
+      // Intentamos borrar todas las capacitaciones y transferencias pendientes primero para evitar errores de llave foránea
+      await prisma.employeeTrainingRecord.deleteMany({ where: { employeeId: empId } });
+      await prisma.pendingTransfer.deleteMany({ where: { employeeId: empId } });
+      
+      // Borramos al empleado definitivamente
+      await prisma.employee.delete({
+        where: { id: empId }
+      });
+    } catch (e) {
+      console.error("Error al eliminar empleado:", e);
+      // No podemos mostrar error fácilmente sin estado de cliente, pero se eliminará si es posible.
+    }
+    
     redirect('/personal');
   }
 
@@ -79,7 +101,12 @@ export default async function EditarPersonalPage({ params }: { params: Promise<{
             </select>
           </div>
 
-          <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '1rem' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: '1rem' }}>
+            <div>
+              {role === 'ADMIN' && (
+                <DeleteEmployeeButton deleteAction={deleteEmpleado} />
+              )}
+            </div>
             <button type="submit" className="btn btn-primary">
               Guardar Cambios
             </button>
