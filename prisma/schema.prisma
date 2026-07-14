@@ -41,6 +41,7 @@ model JobProfile {
   status             String        @default("VIGENTE") // BORRADOR, PENDIENTE_SECTOR, VIGENTE
   controlCambios     String?
   otrosConocimientos String?
+  responsabilidades  String?
   revision           String?       @default("01")
   fechaRevision      String?
   firmaRRHH          String?       // Base64 image
@@ -160,5 +161,6 @@ model AppUser {
   role      String   // "SGI", "RRHH", "SECTOR", "VIEWER"
   sectorId  Int?
   sector    Sector?  @relation(fields: [sectorId], references: [id])
+  isManager Boolean  @default(false)
   createdAt DateTime @default(now())
 }

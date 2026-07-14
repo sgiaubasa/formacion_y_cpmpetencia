@@ -42,6 +42,7 @@ export default async function EditarPerfilPage({ params }: { params: Promise<{ i
     const vigencia = formData.get("vigencia") as string;
     const controlCambios = formData.get("controlCambios") as string;
     const otrosConocimientos = formData.get("otrosConocimientos") as string;
+    const responsabilidades = formData.get("responsabilidades") as string;
     const revision = formData.get("revision") as string || "01";
 
     const oldId = parseInt(id);
@@ -60,7 +61,7 @@ export default async function EditarPerfilPage({ params }: { params: Promise<{ i
           title, gerencia, reporta, supervisa, objetivo, educacion, orientacionTecnica,
           idiomasRequiere, idiomasAclaracion, tecnologias, conocimientosEsp, turnos,
           experienciaReq, experienciaAnios, adminPersonal, aspectos,
-          vigencia, controlCambios, otrosConocimientos,
+          vigencia, controlCambios, otrosConocimientos, responsabilidades,
           revision,
           isActive: true,
           previousVersionId: oldId,
@@ -130,8 +131,13 @@ export default async function EditarPerfilPage({ params }: { params: Promise<{ i
           </div>
 
           <div className="form-group" style={{ gridColumn: 'span 2' }}>
-            <label className="form-label">Objetivo del Puesto / Funciones y Responsabilidades</label>
-            <textarea name="objetivo" rows={8} className="form-input" defaultValue={perfil.objetivo || ''}></textarea>
+            <label className="form-label">Objetivo del Puesto</label>
+            <textarea name="objetivo" rows={4} className="form-input" defaultValue={perfil.objetivo || ''}></textarea>
+          </div>
+
+          <div className="form-group" style={{ gridColumn: 'span 2' }}>
+            <label className="form-label">Funciones y Responsabilidades</label>
+            <textarea name="responsabilidades" rows={8} className="form-input" defaultValue={perfil.responsabilidades || ''} placeholder="Escribe las funciones y responsabilidades del puesto..."></textarea>
           </div>
 
           <div className="form-group" style={{ gridColumn: 'span 2' }}>

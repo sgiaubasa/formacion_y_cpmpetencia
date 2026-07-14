@@ -54,6 +54,14 @@ export default async function AccesosPage() {
             </select>
           </div>
 
+          <div className="form-group" style={{ marginBottom: 0 }}>
+            <label className="form-label">¿Es Gerente del Sector?</label>
+            <div style={{ display: 'flex', alignItems: 'center', height: '100%' }}>
+              <input type="checkbox" name="isManager" style={{ width: '20px', height: '20px' }} />
+              <span style={{ marginLeft: '0.5rem', fontSize: '0.875rem' }}>Puede firmar perfiles</span>
+            </div>
+          </div>
+
           <button type="submit" className="btn btn-primary" style={{ padding: '0.75rem 1.5rem', height: 'fit-content' }}>
             + Agregar Acceso
           </button>
@@ -78,6 +86,7 @@ export default async function AccesosPage() {
                   {u.role === "SGI" && <span className="badge badge-primary">Admin SGI</span>}
                   {u.role === "RRHH" && <span className="badge badge-primary" style={{ background: '#0284c7' }}>Admin RRHH</span>}
                   {u.role === "SECTOR" && <span className="badge badge-secondary">Sector</span>}
+                  {u.isManager && <span className="badge badge-warning" style={{ marginLeft: '0.5rem' }}>Gerente</span>}
                 </td>
                 <td>{u.role === "SECTOR" ? u.sector?.name || "-" : "Todo el Sistema"}</td>
                 <td>

@@ -2,13 +2,20 @@ import { prisma } from "@/lib/prisma";
 import Link from "next/link";
 import PrintButton from "./PrintButton";
 import { notFound } from "next/navigation";
-import { getCurrentRole, isSectorRole } from "@/lib/auth";
+import { getCurrentRole, isSectorRole, getUserEmail } from "@/lib/auth";
 import { ProfileSignatureWrapper } from "./ProfileSignatureWrapper";
 
 export default async function PerfilViewPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   const role = await getCurrentRole();
+  const email = await getUserEmail();
   const isSector = await isSectorRole(role);
+  
+  let isManager = false;
+  if (email) {
+    const user = await prisma.appUser.findUnique({ where: { email } });
+    isManager = user?.isManager || false;
+  }
   const perfil = await prisma.jobProfile.findUnique({
     where: { id: parseInt(id) },
     include: {
@@ -117,6 +124,15 @@ export default async function PerfilViewPage({ params }: { params: Promise<{ id:
             <tr><td style={{ padding: '1rem', whiteSpace: 'pre-wrap' }}>{perfil.objetivo || '-'}</td></tr>
           </tbody>
         </table>
+
+        {perfil.responsabilidades && (
+          <table className="aubasa-form">
+            <tbody>
+              <tr><td className="header-dark">FUNCIONES Y RESPONSABILIDADES</td></tr>
+              <tr><td style={{ padding: '1rem', whiteSpace: 'pre-wrap' }}>{perfil.responsabilidades}</td></tr>
+            </tbody>
+          </table>
+        )}
 
         <table className="aubasa-form">
           <tbody>
@@ -257,63 +273,47 @@ export default async function PerfilViewPage({ params }: { params: Promise<{ id:
           </tbody>
         </table>
 
-        {/* Firmas Digitales */}
-        <div className="no-print" style={{ marginTop: '2rem' }}>
-          <h3 style={{ marginBottom: '1rem', color: 'var(--primary-color)' }}>Firmas de Aprobación</h3>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(250px, 1fr))', gap: '1rem' }}>
-            <ProfileSignatureWrapper 
-              profileId={perfil.id}
-              roleName="RRHH"
-              roleTitle="Redacción - Revisión (Gerente RRHH)"
-              existingSignature={perfil.firmaRRHH}
-              existingDate={perfil.fechaFirmaRRHH}
-              existingEmail={perfil.emailFirmaRRHH}
-              canSign={role === 'RRHH' || role === 'ADMIN'}
-            />
-            <ProfileSignatureWrapper 
-              profileId={perfil.id}
-              roleName="GerenteArea"
-              roleTitle="Aprobación (Gerente de Área)"
-              existingSignature={perfil.firmaGerenteArea}
-              existingDate={perfil.fechaFirmaGerenteArea}
-              existingEmail={perfil.emailFirmaGerenteArea}
-              canSign={role.startsWith('SECTOR_') || role === 'ADMIN'}
-            />
-            <ProfileSignatureWrapper 
-              profileId={perfil.id}
-              roleName="GerenteGeneral"
-              roleTitle="Liberación (Gerente General)"
-              existingSignature={perfil.firmaGerenteGeneral}
-              existingDate={perfil.fechaFirmaGerenteGeneral}
-              existingEmail={perfil.emailFirmaGerenteGeneral}
-              canSign={role === 'ADMIN' || role === 'RRHH'} // Por ahora permitimos ADMIN/RRHH firmar como GG
-            />
-          </div>
-        </div>
-
-        {/* Firmas para Imprimir (solo visibles al imprimir) */}
-        <table className="aubasa-form print-only" style={{ marginTop: '2rem' }}>
+        {/* Firmas Integradas (Pantalla e Impresión) */}
+        <table className="aubasa-form" style={{ marginTop: '2rem' }}>
           <tbody>
             <tr className="header-light" style={{ textAlign: 'center' }}>
               <td style={{ width: '33%' }}>REDACCIÓN - REVISIÓN</td>
               <td style={{ width: '33%' }}>APROBACIÓN</td>
               <td style={{ width: '33%' }}>LIBERACIÓN</td>
             </tr>
-            <tr style={{ height: '100px', verticalAlign: 'bottom', textAlign: 'center' }}>
-              <td>
-                {perfil.firmaRRHH ? <img src={perfil.firmaRRHH} style={{ maxHeight: '60px', display: 'block', margin: '0 auto' }} alt="Firma RRHH" /> : <div style={{ borderBottom: '1px solid black', width: '80%', margin: '0 auto 5px auto' }}></div>}
-                Gerente RRHH<br/>
-                <span style={{fontSize:'0.7rem'}}>{perfil.emailFirmaRRHH}</span>
+            <tr style={{ minHeight: '120px', verticalAlign: 'bottom', textAlign: 'center' }}>
+              <td style={{ padding: '1rem 0' }}>
+                <ProfileSignatureWrapper 
+                  profileId={perfil.id}
+                  roleName="RRHH"
+                  roleTitle="Gerente RRHH"
+                  existingSignature={perfil.firmaRRHH}
+                  existingDate={perfil.fechaFirmaRRHH}
+                  existingEmail={perfil.emailFirmaRRHH}
+                  canSign={role === 'RRHH' || role === 'ADMIN'}
+                />
               </td>
-              <td>
-                {perfil.firmaGerenteArea ? <img src={perfil.firmaGerenteArea} style={{ maxHeight: '60px', display: 'block', margin: '0 auto' }} alt="Firma Área" /> : <div style={{ borderBottom: '1px solid black', width: '80%', margin: '0 auto 5px auto' }}></div>}
-                Gerente de Área<br/>
-                <span style={{fontSize:'0.7rem'}}>{perfil.emailFirmaGerenteArea}</span>
+              <td style={{ padding: '1rem 0' }}>
+                <ProfileSignatureWrapper 
+                  profileId={perfil.id}
+                  roleName="GerenteArea"
+                  roleTitle="Gerente de Área"
+                  existingSignature={perfil.firmaGerenteArea}
+                  existingDate={perfil.fechaFirmaGerenteArea}
+                  existingEmail={perfil.emailFirmaGerenteArea}
+                  canSign={role === 'ADMIN' || (role.startsWith('SECTOR_') && isManager)}
+                />
               </td>
-              <td>
-                {perfil.firmaGerenteGeneral ? <img src={perfil.firmaGerenteGeneral} style={{ maxHeight: '60px', display: 'block', margin: '0 auto' }} alt="Firma GG" /> : <div style={{ borderBottom: '1px solid black', width: '80%', margin: '0 auto 5px auto' }}></div>}
-                Gerente General<br/>
-                <span style={{fontSize:'0.7rem'}}>{perfil.emailFirmaGerenteGeneral}</span>
+              <td style={{ padding: '1rem 0' }}>
+                <ProfileSignatureWrapper 
+                  profileId={perfil.id}
+                  roleName="GerenteGeneral"
+                  roleTitle="Gerente General"
+                  existingSignature={perfil.firmaGerenteGeneral}
+                  existingDate={perfil.fechaFirmaGerenteGeneral}
+                  existingEmail={perfil.emailFirmaGerenteGeneral}
+                  canSign={role === 'ADMIN' || role === 'RRHH'} 
+                />
               </td>
             </tr>
           </tbody>

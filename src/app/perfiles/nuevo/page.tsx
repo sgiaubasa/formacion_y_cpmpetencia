@@ -35,13 +35,14 @@ export default async function NuevoPerfilPage({ searchParams }: { searchParams: 
       const vigencia = formData.get("vigencia") as string;
       const controlCambios = formData.get("controlCambios") as string;
       const otrosConocimientos = formData.get("otrosConocimientos") as string;
+      const responsabilidades = formData.get("responsabilidades") as string;
 
       const newProfile = await prisma.jobProfile.create({
         data: {
           title, gerencia, reporta, supervisa, objetivo, educacion, orientacionTecnica,
           idiomasRequiere, idiomasAclaracion, tecnologias, conocimientosEsp, turnos,
           experienciaReq, experienciaAnios, adminPersonal, aspectos,
-          vigencia, controlCambios, otrosConocimientos,
+          vigencia, controlCambios, otrosConocimientos, responsabilidades,
           status: 'BORRADOR'
         }
       });
@@ -100,6 +101,11 @@ export default async function NuevoPerfilPage({ searchParams }: { searchParams: 
           <div className="form-group" style={{ gridColumn: 'span 2' }}>
             <label className="form-label">Objetivo del Puesto</label>
             <textarea name="objetivo" rows={3} className="form-input" placeholder="Ej: Asistir al GLE en el asesoramiento técnico..."></textarea>
+          </div>
+
+          <div className="form-group" style={{ gridColumn: 'span 2' }}>
+            <label className="form-label">Funciones y Responsabilidades</label>
+            <textarea name="responsabilidades" rows={6} className="form-input" placeholder="Escribe las funciones y responsabilidades del puesto..."></textarea>
           </div>
 
           <div className="form-group" style={{ gridColumn: 'span 2' }}>

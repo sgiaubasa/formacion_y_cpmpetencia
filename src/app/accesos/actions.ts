@@ -10,6 +10,7 @@ export async function addAccess(formData: FormData) {
   const role = formData.get("role") as string; // "SGI", "RRHH", "SECTOR"
   const sectorIdStr = formData.get("sectorId") as string;
   const sectorId = sectorIdStr ? parseInt(sectorIdStr) : null;
+  const isManager = formData.get("isManager") === "on";
   const cleanEmail = email.toLowerCase().trim();
 
   try {
@@ -17,12 +18,14 @@ export async function addAccess(formData: FormData) {
       where: { email: cleanEmail },
       update: {
         role,
-        sectorId: role === "SECTOR" ? sectorId : null
+        sectorId: role === "SECTOR" ? sectorId : null,
+        isManager
       },
       create: {
         email: cleanEmail,
         role,
-        sectorId: role === "SECTOR" ? sectorId : null
+        sectorId: role === "SECTOR" ? sectorId : null,
+        isManager
       }
     });
   } catch (error) {
