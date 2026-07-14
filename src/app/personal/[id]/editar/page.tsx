@@ -103,7 +103,7 @@ export default async function EditarPersonalPage({ params }: { params: Promise<{
 
           <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: '1rem' }}>
             <div>
-              {role === 'ADMIN' && (
+              {['ADMIN', 'SGI', 'RRHH'].includes(role) && (
                 <DeleteEmployeeButton deleteAction={deleteEmpleado} />
               )}
             </div>

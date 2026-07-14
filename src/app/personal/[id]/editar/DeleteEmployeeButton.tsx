@@ -15,7 +15,7 @@ export function DeleteEmployeeButton({ deleteAction }: { deleteAction: () => voi
         }
       }}
     >
-      Eliminar Definitivamente (Solo Admin)
+      Eliminar Definitivamente (Solo Administradores)
     </button>
   );
 }
