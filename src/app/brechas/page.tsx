@@ -2,13 +2,13 @@ import { prisma } from "@/lib/prisma";
 import Link from "next/link";
 import { getCurrentRole } from "@/lib/auth";
 
-export default async function BrechasPage({ searchParams }: { searchParams: Promise<{ sectorId?: string }> }) {
+export default async function BrechasPage({ searchParams }: { searchParams: Promise<{ sectorId?: string, query?: string }> }) {
   const role = await getCurrentRole();
   if (role !== "ADMIN" && role !== "RRHH" && role !== "SGI") {
     return (
       <div className="card" style={{ padding: '2rem', textAlign: 'center', marginTop: '2rem' }}>
         <h1 style={{ color: 'var(--text-secondary)' }}>Acceso Denegado</h1>
-        <p>La Evaluación Inicial y el Simulador de Brechas están restringidos a los roles de ADMIN, RRHH y SGI.</p>
+        <p>El Cambio de Puesto está restringido a los roles de ADMIN, RRHH y SGI.</p>
         <p>Por favor, dirígete a la pestaña <b>Plan Anual</b> para planificar las capacitaciones de tu sector.</p>
       </div>
     );
@@ -16,8 +16,13 @@ export default async function BrechasPage({ searchParams }: { searchParams: Prom
 
   const sp = await searchParams;
   const sectorFilter = sp.sectorId ? parseInt(sp.sectorId) : undefined;
+  const queryFilter = sp.query || "";
 
-  const whereClause = sectorFilter ? { sectorId: sectorFilter } : {};
+  const whereClause: any = {};
+  if (sectorFilter) whereClause.sectorId = sectorFilter;
+  if (queryFilter) {
+    whereClause.name = { contains: queryFilter, mode: 'insensitive' };
+  }
 
   const empleados = await prisma.employee.findMany({
     where: { isActive: true, ...whereClause },
@@ -34,19 +39,28 @@ export default async function BrechasPage({ searchParams }: { searchParams: Prom
   return (
     <div>
       <div className="page-header">
-        <h1 className="page-title">Simulador de Cambio de Puesto</h1>
-        <p style={{ color: 'var(--text-secondary)' }}>Seleccione un empleado para evaluar su brecha contra un nuevo puesto o sector.</p>
+        <h1 className="page-title">Cambio de Puesto</h1>
+        <p style={{ color: 'var(--text-secondary)' }}>Seleccione un empleado para iniciar un cambio de puesto y evaluar sus brechas.</p>
       </div>
 
       <div className="card" style={{ marginBottom: '1rem', padding: '1rem' }}>
-        <form method="get" style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
-          <label style={{ fontWeight: 'bold', color: 'var(--primary-color)' }}>Filtrar por Sector:</label>
-          <select name="sectorId" className="form-input" defaultValue={sectorFilter || ""} style={{ maxWidth: '300px' }}>
-            <option value="">Todos los Sectores</option>
-            {sectores.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
-          </select>
-          <button type="submit" className="btn btn-primary">Aplicar Filtro</button>
-          {sectorFilter && <Link href="/brechas" className="btn btn-secondary">Limpiar</Link>}
+        <form method="get" style={{ display: 'flex', alignItems: 'center', gap: '1rem', flexWrap: 'wrap' }}>
+          
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+            <label style={{ fontWeight: 'bold', color: 'var(--primary-color)' }}>Buscar por Nombre:</label>
+            <input type="text" name="query" className="form-input" defaultValue={queryFilter} placeholder="Ej: Perez" style={{ maxWidth: '200px' }} />
+          </div>
+
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+            <label style={{ fontWeight: 'bold', color: 'var(--primary-color)' }}>Filtrar por Sector:</label>
+            <select name="sectorId" className="form-input" defaultValue={sectorFilter || ""} style={{ maxWidth: '250px' }}>
+              <option value="">Todos los Sectores</option>
+              {sectores.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
+            </select>
+          </div>
+
+          <button type="submit" className="btn btn-primary">Aplicar Filtros</button>
+          {(sectorFilter || queryFilter) && <Link href="/brechas" className="btn btn-secondary">Limpiar</Link>}
         </form>
       </div>
 
@@ -89,7 +103,7 @@ export default async function BrechasPage({ searchParams }: { searchParams: Prom
                   </td>
                   <td>
                     <Link href={`/brechas/${emp.id}`} className="btn btn-primary" style={{ padding: '0.25rem 0.75rem', fontSize: '0.875rem' }}>
-                      Simular Cambio de Puesto
+                      Iniciar Cambio
                     </Link>
                   </td>
                 </tr>
