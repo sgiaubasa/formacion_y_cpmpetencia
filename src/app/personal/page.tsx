@@ -147,9 +147,11 @@ export default async function PersonalPage({ searchParams }: { searchParams: Pro
                   </td>
                   <td>
                     <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
-                      <Link href={`/personal/${emp.id}`} className="btn btn-secondary" style={{ padding: '0.4rem 0.8rem', fontSize: '0.85rem', borderRadius: '6px', background: '#f1f5f9', color: '#334155', border: '1px solid #cbd5e1', display: 'flex', alignItems: 'center', gap: '0.4rem', fontWeight: 500, boxShadow: '0 1px 2px rgba(0,0,0,0.05)' }} title="Ver Historial/Ficha">
-                        📇 Ficha
-                      </Link>
+                      {['ADMIN', 'SGI', 'RRHH'].includes(role) && (
+                        <Link href={`/personal/${emp.id}/historial`} className="btn btn-secondary" style={{ padding: '0.4rem 0.8rem', fontSize: '0.85rem', borderRadius: '6px', background: '#f1f5f9', color: '#334155', border: '1px solid #cbd5e1', display: 'flex', alignItems: 'center', gap: '0.4rem', fontWeight: 500, boxShadow: '0 1px 2px rgba(0,0,0,0.05)' }} title="Ver Historial de Puestos">
+                          📜 Historial
+                        </Link>
+                      )}
                       {!isSector && (
                         <>
                           <Link href={`/personal/${emp.id}/editar`} className="btn btn-primary" style={{ padding: '0.4rem 0.8rem', fontSize: '0.85rem', borderRadius: '6px', background: '#0d8383', color: 'white', display: 'flex', alignItems: 'center', gap: '0.4rem', fontWeight: 500, boxShadow: '0 1px 2px rgba(0,0,0,0.05)' }} title="Cambiar Perfil de Puesto">
