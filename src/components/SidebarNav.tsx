@@ -10,10 +10,11 @@ export function SidebarNav({ isSector, role }: { isSector: boolean; role: string
     { href: "/", label: "Dashboard", icon: "📊" },
     { href: "/personal", label: "Personal (Legajos)", icon: "👤" },
     { href: "/perfiles", label: "Perfiles de Puesto", icon: "💼" },
-    ...(!isSector ? [{ href: "/brechas", label: "Evaluación y Brechas", icon: "📝" }] : []),
+    ...(!isSector ? [{ href: "/brechas", label: "Cambio de Puesto", icon: "📝" }] : []),
     { href: "/plan-anual", label: "Plan Anual", icon: "📅" },
     ...(!isSector ? [{ href: "/capacitaciones", label: "Temas a Capacitar", icon: "🎓" }] : []),
     { href: "/transferencias", label: "Transferencias", icon: "⇄" },
+    ...(['ADMIN', 'SGI', 'RRHH'].includes(role) ? [{ href: "/auditoria", label: "Historial Eval. Inicial", icon: "📋" }] : []),
     ...(role === 'SGI' ? [{ href: "/accesos", label: "Accesos", icon: "🔐" }] : [])
   ];
 
