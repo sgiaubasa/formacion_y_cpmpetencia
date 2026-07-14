@@ -62,7 +62,7 @@ export default async function EvaluacionEficaciaPage({ params }: { params: Promi
       subject: `Recordatorio: Evaluación de Eficacia Pendiente (${emp?.name})`,
       html: `
         <h2>Recordatorio de Evaluación de Eficacia</h2>
-        <p>Se solicita al Responsable del sector <strong>${emp?.sector.name}</strong> que ingrese al sistema para evaluar la eficacia de las capacitaciones recientes del empleado <strong>${emp?.name}</strong>.</p>
+        <p>Se solicita a los integrantes del sector <strong>${emp?.sector.name}</strong> que ingresen al sistema para evaluar la eficacia de las capacitaciones recientes del empleado <strong>${emp?.name}</strong>.</p>
         <p>Por favor, revise el listado de brechas del empleado en el sistema y complete la evaluación correspondiente.</p>
       `
     });
@@ -81,13 +81,13 @@ export default async function EvaluacionEficaciaPage({ params }: { params: Promi
       </div>
 
       <div className="card" style={{ marginBottom: '1rem' }}>
-        <h3 style={{ marginBottom: '1rem', color: 'var(--primary-color)' }}>Notificar al Responsable</h3>
+        <h3 style={{ marginBottom: '1rem', color: 'var(--primary-color)' }}>Notificar al Sector</h3>
         <p style={{ marginBottom: '1rem', color: 'var(--text-secondary)' }}>
-          Envía un recordatorio automático por correo electrónico al Jefe o Responsable del SGI para que ingrese y evalúe la eficacia de las capacitaciones recientes de este empleado antes de que se cumplan los 2 meses.
+          Envía un recordatorio automático por correo electrónico a todos los integrantes del sector para que ingresen y evalúen la eficacia de las capacitaciones recientes de este empleado.
         </p>
         <form action={sendReminderEmail}>
           <button type="submit" className="btn btn-primary">
-            📧 Enviar Correo de Recordatorio a Responsable
+            📧 Enviar Correo de Recordatorio al Sector
           </button>
         </form>
       </div>
@@ -143,13 +143,14 @@ export default async function EvaluacionEficaciaPage({ params }: { params: Promi
                       {record.effectiveness === 'PENDING' && (
                         <form action={evaluarEficacia} style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
                           <input type="hidden" name="recordId" value={record.id} />
-                          <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', marginBottom: '0.25rem' }}>
-                            ¿Se cumplió el objetivo propuesto de la capacitación? Explique:
+                          <div style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', marginBottom: '0.5rem', background: '#f0f9ff', padding: '0.5rem', borderRadius: '4px', border: '1px solid #bae6fd' }}>
+                            <strong>¿Cumplió con el objetivo?</strong><br/>
+                            {record.objective || 'El empleado debe haber adquirido las competencias propuestas.'}
                           </div>
                           <textarea 
                             name="justification" 
                             required 
-                            placeholder={`¿El empleado logró: "${record.objective || 'el objetivo propuesto'}"? Detalle por qué...`}
+                            placeholder="Describa aquí el porqué de su evaluación..."
                             className="form-input" 
                             style={{ minHeight: '60px', fontSize: '0.85rem' }} 
                           />
