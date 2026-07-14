@@ -12,7 +12,8 @@ export default async function EvaluacionEficaciaPage({ params }: { params: Promi
       sector: true,
       trainingRecords: {
         where: { status: 'COMPLETED' },
-        orderBy: { completedAt: 'desc' }
+        orderBy: { completedAt: 'desc' },
+        include: { sourceProfile: true }
       }
     }
   });
@@ -97,6 +98,7 @@ export default async function EvaluacionEficaciaPage({ params }: { params: Promi
           <thead>
             <tr>
               <th>Capacitación Realizada</th>
+              <th>Perfil Origen</th>
               <th>Fecha de Realización</th>
               <th>Vencimiento Plazo (2 meses)</th>
               <th>Estado de Eficacia</th>
@@ -123,6 +125,15 @@ export default async function EvaluacionEficaciaPage({ params }: { params: Promi
                         <div style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', marginTop: '0.25rem', padding: '0.25rem', background: '#f8fafc', borderRadius: '4px' }}>
                           <strong>Objetivo:</strong> {record.objective}
                         </div>
+                      )}
+                    </td>
+                    <td style={{ fontSize: '0.875rem' }}>
+                      {record.sourceProfileId ? (
+                        <Link href={`/perfiles/${record.sourceProfileId}`} target="_blank" style={{ color: 'var(--primary-color)', textDecoration: 'underline' }}>
+                          Ver Perfil (Rev: {record.sourceProfile?.revision || '01'})
+                        </Link>
+                      ) : (
+                        <span style={{ color: 'var(--text-secondary)' }}>-</span>
                       )}
                     </td>
                     <td>{completedDate.toLocaleDateString('es-AR')}</td>

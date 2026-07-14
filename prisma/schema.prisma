@@ -60,6 +60,7 @@ model JobProfile {
   requirements       Requirement[]
   employees          Employee[]
   pendingTransfers   PendingTransfer[]
+  trainingRecords    EmployeeTrainingRecord[]
 }
 
 model Requirement {
@@ -93,6 +94,8 @@ model EmployeeTrainingRecord {
   status        String    // "COMPLETED", "GAP", "IN_PLAN"
   completedAt   DateTime? // Cuándo realizó/firmó la capacitación
   evidencePath  String?   // Ruta al archivo de examen/evidencia subido
+  sourceProfileId Int?    // El ID del JobProfile exacto que generó esta brecha/capacitación
+  sourceProfile JobProfile? @relation(fields: [sourceProfileId], references: [id])
   employeeSignature String? // Firma digital del capacitado (Base64)
   instructorName    String? // Nombre del instructor
   instructorSignature String? // Firma digital del instructor (Base64)

@@ -99,6 +99,13 @@ export default async function EditarPersonalPage({ params }: { params: Promise<{
               <option value="">-- Sin perfil asignado --</option>
               {perfiles.map(p => <option key={p.id} value={p.id}>{p.title}</option>)}
             </select>
+            {empleado.jobProfileId && (
+              <div style={{ marginTop: '0.5rem' }}>
+                <Link href={`/perfiles/${empleado.jobProfileId}`} target="_blank" style={{ color: 'var(--primary-color)', textDecoration: 'underline', fontSize: '0.875rem' }}>
+                  Ver Perfil Asignado
+                </Link>
+              </div>
+            )}
           </div>
 
           <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: '1rem' }}>
