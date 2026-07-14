@@ -6,6 +6,11 @@ export async function getCurrentRole() {
   return role;
 }
 
+export async function getUserEmail() {
+  const cookieStore = await cookies();
+  return cookieStore.get("userEmail")?.value || "usuario@desconocido.com";
+}
+
 export async function isSectorRole(role: string) {
   return role.startsWith("SECTOR_");
 }

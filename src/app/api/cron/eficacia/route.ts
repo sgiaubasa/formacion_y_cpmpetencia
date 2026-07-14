@@ -86,7 +86,8 @@ export async function GET(request: Request) {
               <p>Por favor, ingrese al sistema para evaluar si el objetivo propuesto se cumplió.</p>
             `
           });
-          notificationsSent.push({ recordId: record.id, alertType, emails });
+          const allEmails = [...sectorEmails, ...rrhhEmails];
+          notificationsSent.push({ recordId: record.id, alertType, emails: allEmails });
         }
       }
     }
