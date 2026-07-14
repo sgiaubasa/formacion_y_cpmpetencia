@@ -290,7 +290,7 @@ export default async function PerfilViewPage({ params }: { params: Promise<{ id:
                   existingSignature={perfil.firmaRRHH}
                   existingDate={perfil.fechaFirmaRRHH}
                   existingEmail={perfil.emailFirmaRRHH}
-                  canSign={role === 'RRHH' || role === 'ADMIN'}
+                  canSign={role === 'RRHH' || role === 'ADMIN' || role === 'SGI'}
                 />
               </td>
               <td style={{ padding: '1rem 0' }}>
@@ -301,7 +301,7 @@ export default async function PerfilViewPage({ params }: { params: Promise<{ id:
                   existingSignature={perfil.firmaGerenteArea}
                   existingDate={perfil.fechaFirmaGerenteArea}
                   existingEmail={perfil.emailFirmaGerenteArea}
-                  canSign={role === 'ADMIN' || (role.startsWith('SECTOR_') && isManager)}
+                  canSign={role === 'ADMIN' || role === 'SGI' || (role.startsWith('SECTOR_') && isManager)}
                 />
               </td>
               <td style={{ padding: '1rem 0' }}>
@@ -312,7 +312,7 @@ export default async function PerfilViewPage({ params }: { params: Promise<{ id:
                   existingSignature={perfil.firmaGerenteGeneral}
                   existingDate={perfil.fechaFirmaGerenteGeneral}
                   existingEmail={perfil.emailFirmaGerenteGeneral}
-                  canSign={role === 'ADMIN' || role === 'RRHH'} 
+                  canSign={role === 'ADMIN' || role === 'RRHH' || role === 'SGI'} 
                 />
               </td>
             </tr>
