@@ -16,8 +16,6 @@ export async function confirmarTransferenciaAction(formData: FormData) {
   const gaps = JSON.parse(pending.gaps) as string[];
 
   // 1. Actualizar al empleado
-  await prisma.employee.update({
-    where: { id: pending.employeeId },
   await prisma.$transaction(async (tx) => {
     await tx.employee.update({
       where: { id: pending.employeeId },
@@ -47,9 +45,13 @@ export async function confirmarTransferenciaAction(formData: FormData) {
       });
     }
 
-    // 3. Eliminar la transferencia pendiente
-    await tx.pendingTransfer.delete({
-      where: { id: transferId }
+    // 3. Completar la transferencia pendiente (Mantener en historial)
+    await tx.pendingTransfer.update({
+      where: { id: transferId },
+      data: { 
+        status: 'COMPLETED',
+        completedAt: new Date()
+      }
     });
   });
 

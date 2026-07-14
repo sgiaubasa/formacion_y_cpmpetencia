@@ -16,6 +16,7 @@ model Sector {
   mail      String?
   employees Employee[]
   pendingTransfers PendingTransfer[]
+  pendingTransfersSource PendingTransfer[] @relation("TransferSourceSector")
   appUsers  AppUser[]
 }
 
@@ -60,6 +61,7 @@ model JobProfile {
   requirements       Requirement[]
   employees          Employee[]
   pendingTransfers   PendingTransfer[]
+  pendingTransfersSource PendingTransfer[] @relation("TransferSourceProfile")
   trainingRecords    EmployeeTrainingRecord[]
 }
 
@@ -156,6 +158,12 @@ model PendingTransfer {
   targetSector    Sector @relation(fields: [targetSectorId], references: [id])
   gaps            String // JSON array of gaps (stringified)
   createdAt       DateTime @default(now())
+  status          String   @default("PENDING") // PENDING, COMPLETED
+  completedAt     DateTime?
+  sourceProfileId Int?
+  sourceSectorId  Int?
+  sourceProfile   JobProfile? @relation("TransferSourceProfile", fields: [sourceProfileId], references: [id])
+  sourceSector    Sector? @relation("TransferSourceSector", fields: [sourceSectorId], references: [id])
 }
 
 model AppUser {

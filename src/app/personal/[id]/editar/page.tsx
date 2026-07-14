@@ -12,7 +12,19 @@ export default async function EditarPersonalPage({ params }: { params: Promise<{
 
   const empleado = await prisma.employee.findUnique({
     where: { id: empId },
-    include: { jobProfile: true }
+    include: { 
+      jobProfile: true,
+      pendingTransfers: {
+        where: { status: 'COMPLETED' },
+        orderBy: { completedAt: 'desc' },
+        include: {
+          sourceSector: true,
+          sourceProfile: true,
+          targetSector: true,
+          targetProfile: true
+        }
+      }
+    }
   });
 
   if (!empleado) {
@@ -119,6 +131,58 @@ export default async function EditarPersonalPage({ params }: { params: Promise<{
             </button>
           </div>
         </form>
+      </div>
+
+      <div className="card" style={{ marginTop: '2rem' }}>
+        <h2 style={{ fontSize: '1.25rem', marginBottom: '1rem', color: 'var(--primary-color)' }}>Historial de Cambios de Puesto (Auditoría)</h2>
+        <table className="data-table">
+          <thead>
+            <tr>
+              <th>Fecha del Cambio</th>
+              <th>Sector Origen</th>
+              <th>Perfil Origen</th>
+              <th>Sector Destino</th>
+              <th>Perfil Destino (Nuevo Puesto)</th>
+              <th>Brechas Detectadas al Mudar</th>
+            </tr>
+          </thead>
+          <tbody>
+            {empleado.pendingTransfers.length === 0 ? (
+              <tr><td colSpan={6} style={{ textAlign: 'center', color: 'var(--text-secondary)' }}>No hay historial de cambios de puesto registrados.</td></tr>
+            ) : (
+              empleado.pendingTransfers.map(pt => (
+                <tr key={pt.id}>
+                  <td>{pt.completedAt ? pt.completedAt.toLocaleDateString('es-AR') : pt.createdAt.toLocaleDateString('es-AR')}</td>
+                  <td>{pt.sourceSector?.name || '-'}</td>
+                  <td>
+                    {pt.sourceProfileId ? (
+                      <Link href={`/perfiles/${pt.sourceProfileId}`} target="_blank" style={{ color: 'var(--primary-color)', textDecoration: 'underline' }}>
+                        Ver Rev: {pt.sourceProfile?.revision || '01'}
+                      </Link>
+                    ) : '-'}
+                  </td>
+                  <td>{pt.targetSector.name}</td>
+                  <td>
+                    <Link href={`/perfiles/${pt.targetProfileId}`} target="_blank" style={{ color: 'var(--primary-color)', textDecoration: 'underline' }}>
+                      Ver Rev: {pt.targetProfile.revision || '01'}
+                    </Link>
+                  </td>
+                  <td style={{ fontSize: '0.8rem' }}>
+                    {(() => {
+                      try {
+                        const gaps = JSON.parse(pt.gaps);
+                        if (gaps.length === 0) return 'Sin Brechas (100% apto)';
+                        return <ul style={{ margin: 0, paddingLeft: '1rem' }}>{gaps.map((g: string, i: number) => <li key={i}>{g}</li>)}</ul>;
+                      } catch {
+                        return '-';
+                      }
+                    })()}
+                  </td>
+                </tr>
+              ))
+            )}
+          </tbody>
+        </table>
       </div>
     </div>
   );

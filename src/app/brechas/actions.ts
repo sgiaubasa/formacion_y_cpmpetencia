@@ -31,7 +31,9 @@ export async function confirmarCambioPuestoAction(formData: FormData) {
       employeeId: empId,
       targetProfileId: targetProfileId,
       targetSectorId: targetSectorId,
-      gaps: JSON.stringify(gapsToCreate)
+      gaps: JSON.stringify(gapsToCreate),
+      sourceProfileId: empleado.jobProfileId,
+      sourceSectorId: empleado.sectorId
     }
   });
 

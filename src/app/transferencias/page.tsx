@@ -7,9 +7,9 @@ export default async function TransferenciasPage() {
   const isSector = await isSectorRole(role);
   const sectorRoleId = await getSectorIdFromRole(role);
 
-  let whereClause = {};
+  let whereClause: any = { status: 'PENDING' };
   if (isSector && sectorRoleId) {
-    whereClause = { targetSectorId: sectorRoleId };
+    whereClause = { ...whereClause, targetSectorId: sectorRoleId };
   }
 
   const transferencias = await prisma.pendingTransfer.findMany({
