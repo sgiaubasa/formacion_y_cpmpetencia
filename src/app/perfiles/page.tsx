@@ -40,7 +40,7 @@ export default async function PerfilesPage({ searchParams }: { searchParams: Pro
   const uniqueGerencias = await prisma.jobProfile.findMany({
     select: { gerencia: true },
     distinct: ['gerencia'],
-    where: { gerencia: { not: null } }
+    where: { gerencia: { not: null }, isActive: true }
   });
 
   return (
