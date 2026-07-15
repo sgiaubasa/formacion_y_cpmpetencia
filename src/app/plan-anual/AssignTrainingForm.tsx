@@ -95,10 +95,10 @@ export function AssignTrainingForm({
 
       <div style={{ flex: '1 1 200px' }}>
         <label className="form-label" style={{ display: 'flex', alignItems: 'center', gap: '0.25rem' }}>
-          Fecha Programada (Opcional)
+          Fecha Programada
           <span title="Día planificado para realizarla" style={{ cursor: 'help', color: 'var(--text-secondary)', background: '#e2e8f0', borderRadius: '50%', width: '16px', height: '16px', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', fontSize: '0.65rem', fontWeight: 'bold' }}>?</span>
         </label>
-        <input type="date" name="scheduledDate" className="form-input" style={{ borderRadius: '20px' }} />
+        <input type="date" name="scheduledDate" className="form-input" style={{ borderRadius: '20px' }} required />
       </div>
 
       <button type="submit" className="btn btn-primary" style={{ padding: '0.5rem 1.5rem', height: '42px', borderRadius: '20px' }}>
