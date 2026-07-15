@@ -80,11 +80,11 @@ export default async function PerfilViewPage({ params }: { params: Promise<{ id:
                 Perfil y Descripción de Puesto
               </td>
               <td>Revisión</td>
-              <td>{perfil.revision || '01'}</td>
+              <td>03</td>
             </tr>
             <tr>
               <td>Fecha</td>
-              <td>{perfil.vigencia ? perfil.vigencia.split('-').reverse().join('/') : '-'}</td>
+              <td>14/02/2026</td>
             </tr>
             <tr>
               <td>Página</td>

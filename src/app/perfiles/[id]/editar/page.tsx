@@ -43,7 +43,7 @@ export default async function EditarPerfilPage({ params }: { params: Promise<{ i
     const controlCambios = formData.get("controlCambios") as string;
     const otrosConocimientos = formData.get("otrosConocimientos") as string;
     const responsabilidades = formData.get("responsabilidades") as string;
-    const revision = formData.get("revision") as string || "01";
+    const revision = "03";
 
     const oldId = parseInt(id);
     let newId = oldId;
@@ -107,12 +107,7 @@ export default async function EditarPerfilPage({ params }: { params: Promise<{ i
 
           <div className="form-group">
             <label className="form-label">Gerencia de Pertenencia</label>
-            <input type="text" name="gerencia" className="form-input" defaultValue={perfil.gerencia || ''} />
-          </div>
-
-          <div className="form-group">
-            <label className="form-label">Número de Revisión</label>
-            <input type="text" name="revision" className="form-input" defaultValue={perfil.revision || '01'} />
+            <input type="text" name="gerencia" className="form-input" defaultValue={perfil.gerencia || ''} style={{ gridColumn: 'span 2' }} />
           </div>
 
           <div className="form-group">
