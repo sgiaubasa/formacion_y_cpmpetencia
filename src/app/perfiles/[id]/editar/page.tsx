@@ -43,7 +43,7 @@ export default async function EditarPerfilPage({ params }: { params: Promise<{ i
     const controlCambios = formData.get("controlCambios") as string;
     const otrosConocimientos = formData.get("otrosConocimientos") as string;
     const responsabilidades = formData.get("responsabilidades") as string;
-    const revision = "03";
+    const revision = "02";
 
     const oldId = parseInt(id);
     let newId = oldId;

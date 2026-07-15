@@ -3,27 +3,37 @@ import { redirect } from "next/navigation";
 import Link from "next/link";
 import { getUniqueActiveProfiles } from "@/lib/profileUtils";
 
-export default async function NuevoPersonalPage() {
+export default async function NuevoPersonalPage({ searchParams }: { searchParams: Promise<{ error?: string }> }) {
+  const params = await searchParams;
+  const error = params.error;
+
   const sectores = await prisma.sector.findMany({ orderBy: { name: 'asc' } });
   const perfiles = await getUniqueActiveProfiles();
 
   async function createEmployee(formData: FormData) {
     "use server"
     
-    const legajo = formData.get("legajo") as string;
-    const name = formData.get("name") as string;
-    const sectorId = parseInt(formData.get("sectorId") as string);
-    const jobProfileId = formData.get("jobProfileId") ? parseInt(formData.get("jobProfileId") as string) : null;
+    try {
+      const legajo = formData.get("legajo") as string;
+      const name = formData.get("name") as string;
+      const sectorId = parseInt(formData.get("sectorId") as string);
+      const jobProfileId = formData.get("jobProfileId") ? parseInt(formData.get("jobProfileId") as string) : null;
 
-    await prisma.employee.create({
-      data: {
-        legajo,
-        name,
-        sectorId,
-        jobProfileId
+      await prisma.employee.create({
+        data: {
+          legajo,
+          name,
+          sectorId,
+          jobProfileId
+        }
+      });
+    } catch (e: any) {
+      if (e?.code === 'P2002') {
+        redirect(`/personal/nuevo?error=${encodeURIComponent("Ya existe un empleado registrado con este número de legajo.")}`);
       }
-    });
-
+      redirect(`/personal/nuevo?error=${encodeURIComponent("Error al crear el empleado.")}`);
+    }
+    
     redirect("/personal");
   }
 
@@ -33,6 +43,12 @@ export default async function NuevoPersonalPage() {
         <h1 className="page-title">Vincular Nuevo Personal</h1>
         <Link href="/personal" className="btn btn-secondary">Volver</Link>
       </div>
+
+      {error && (
+        <div style={{ backgroundColor: '#fef2f2', border: '1px solid #ef4444', color: '#b91c1c', padding: '1rem', borderRadius: '4px', marginBottom: '1.5rem', fontWeight: 'bold' }}>
+          {error}
+        </div>
+      )}
 
       <div className="card" style={{ maxWidth: '600px' }}>
         <form action={createEmployee}>
@@ -51,7 +67,7 @@ export default async function NuevoPersonalPage() {
             <select name="sectorId" required className="form-input">
               <option value="">Seleccione un sector...</option>
               {sectores.map(s => (
-                <option key={s.id} value={s.id}>{s.name} ({s.role})</option>
+                <option key={s.id} value={s.id}>{s.name}</option>
               ))}
             </select>
             <small style={{ color: 'var(--text-secondary)', display: 'block', marginTop: '0.25rem' }}>

@@ -98,8 +98,9 @@ export default async function EditarPersonalPage({ params }: { params: Promise<{
           <div className="form-group">
             <label className="form-label">Sector / Gerencia</label>
             <select name="sectorId" className="form-input" defaultValue={empleado.sectorId} required>
-              {sectores.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
-            </select>
+              {sectores.map(s => (
+                <option key={s.id} value={s.id}>{s.name}</option>
+              ))}</select>
           </div>
 
           <div className="form-group" style={{ padding: '1rem', backgroundColor: '#f8fafc', borderRadius: '4px', border: '1px solid #e2e8f0' }}>

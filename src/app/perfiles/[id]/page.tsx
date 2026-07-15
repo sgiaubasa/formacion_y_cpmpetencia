@@ -80,7 +80,7 @@ export default async function PerfilViewPage({ params }: { params: Promise<{ id:
                 Perfil y Descripción de Puesto
               </td>
               <td>Revisión</td>
-              <td>03</td>
+              <td>02</td>
             </tr>
             <tr>
               <td>Fecha</td>
