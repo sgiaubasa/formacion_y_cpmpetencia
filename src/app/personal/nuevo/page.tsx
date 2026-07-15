@@ -19,19 +19,41 @@ export default async function NuevoPersonalPage({ searchParams }: { searchParams
       const sectorId = parseInt(formData.get("sectorId") as string);
       const jobProfileId = formData.get("jobProfileId") ? parseInt(formData.get("jobProfileId") as string) : null;
 
-      await prisma.employee.create({
-        data: {
-          legajo,
-          name,
-          sectorId,
-          jobProfileId
-        }
+      const existingEmployee = await prisma.employee.findUnique({
+        where: { legajo }
       });
-    } catch (e: any) {
-      if (e?.code === 'P2002') {
-        redirect(`/personal/nuevo?error=${encodeURIComponent("Ya existe un empleado registrado con este número de legajo.")}`);
+
+      if (existingEmployee) {
+        if (existingEmployee.isActive) {
+          redirect(`/personal/nuevo?error=${encodeURIComponent("Ya existe un empleado activo con este número de legajo.")}`);
+        } else {
+          // Si existe pero está inactivo, lo reactivamos y actualizamos sus datos
+          await prisma.employee.update({
+            where: { id: existingEmployee.id },
+            data: {
+              name,
+              sectorId,
+              jobProfileId,
+              isActive: true
+            }
+          });
+        }
+      } else {
+        // Si no existe, lo creamos nuevo
+        await prisma.employee.create({
+          data: {
+            legajo,
+            name,
+            sectorId,
+            jobProfileId
+          }
+        });
       }
-      redirect(`/personal/nuevo?error=${encodeURIComponent("Error al crear el empleado.")}`);
+    } catch (e: any) {
+      if (e?.message === "NEXT_REDIRECT" || (e?.digest && e.digest.startsWith("NEXT_REDIRECT"))) {
+        throw e;
+      }
+      redirect(`/personal/nuevo?error=${encodeURIComponent("Error al guardar el empleado.")}`);
     }
     
     redirect("/personal");
