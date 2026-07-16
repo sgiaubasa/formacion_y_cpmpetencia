@@ -84,7 +84,7 @@ export default async function PerfilViewPage({ params }: { params: Promise<{ id:
             </tr>
             <tr>
               <td>Fecha</td>
-              <td>14/02/2026</td>
+              <td>14/02/2025</td>
             </tr>
             <tr>
               <td>Página</td>
