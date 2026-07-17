@@ -14,7 +14,7 @@ export function RowActions({
   status: string
 }) {
   const [isOpen, setIsOpen] = useState(false);
-  const [activeForm, setActiveForm] = useState<"none" | "schedule" | "execute">("none");
+  const [activeForm, setActiveForm] = useState<"none" | "schedule" | "execute" | "print_blank">("none");
   const dropdownRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -46,6 +46,26 @@ export function RowActions({
     return <ConfirmExecutionModal recordId={recordId} onClose={() => setActiveForm("none")} />;
   }
 
+  if (activeForm === "print_blank") {
+    return (
+      <form onSubmit={(e) => {
+        e.preventDefault();
+        const fd = new FormData(e.currentTarget);
+        const date = fd.get('printDate') as string;
+        const url = `/plan-anual/planilla/${recordId}${date ? '?date=' + date : ''}`;
+        window.location.href = url; // Navigates in the same tab to avoid login issues
+      }} style={{ display: 'flex', gap: '0.5rem', alignItems: 'center', background: '#f8fafc', padding: '0.5rem', borderRadius: '8px', border: '1px solid var(--border-color)' }}>
+        <input type="date" name="printDate" className="form-input" style={{ width: '130px', padding: '0.25rem' }} required title="Fecha de Capacitación" />
+        <button type="submit" className="btn btn-secondary" style={{ padding: '0.25rem 0.5rem', fontSize: '0.75rem', background: 'var(--teal-color)', color: 'white' }} title="Generar">
+          🖨️ Generar
+        </button>
+        <button type="button" onClick={() => setActiveForm("none")} className="btn btn-secondary" style={{ padding: '0.25rem', fontSize: '0.75rem', border: 'none' }} title="Cancelar">
+          ❌
+        </button>
+      </form>
+    );
+  }
+
   return (
     <div className="dropdown-container" ref={dropdownRef}>
       <button 
@@ -71,15 +91,12 @@ export function RowActions({
             ✓ Confirmar Ejecución
           </button>
           
-          <a 
-            href={`/plan-anual/planilla/${recordId}`} 
-            target="_blank" 
+          <button 
             className="dropdown-item"
-            style={{ textDecoration: 'none', color: 'inherit' }}
-            onClick={() => setIsOpen(false)}
+            onClick={() => { setActiveForm("print_blank"); setIsOpen(false); }}
           >
             🖨️ Generar Planilla (Vacía)
-          </a>
+          </button>
           
           {status !== 'GAP' && (
             <form action={borrarCapacitacion}>

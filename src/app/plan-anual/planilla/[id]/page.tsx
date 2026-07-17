@@ -1,8 +1,9 @@
 import { prisma } from "@/lib/prisma";
 import { notFound } from "next/navigation";
 
-export default async function PlanillaAsistenciaPage({ params }: { params: Promise<{ id: string }> }) {
+export default async function PlanillaAsistenciaPage({ params, searchParams }: { params: Promise<{ id: string }>, searchParams: Promise<{ date?: string }> }) {
   const resolvedParams = await params;
+  const sp = await searchParams;
   const recordId = parseInt(resolvedParams.id);
   
   if (isNaN(recordId)) {
@@ -18,10 +19,13 @@ export default async function PlanillaAsistenciaPage({ params }: { params: Promi
     return notFound();
   }
 
-  // Obtenemos la fecha a mostrar (la programada o la actual)
-  const displayDate = record.scheduledDate 
-    ? new Date(record.scheduledDate).toLocaleDateString('es-AR') 
-    : '';
+  // Obtenemos la fecha a mostrar (la pasada por parámetro, la programada, o la actual)
+  let displayDate = '';
+  if (sp.date) {
+    displayDate = new Date(sp.date + "T12:00:00").toLocaleDateString('es-AR');
+  } else if (record.scheduledDate) {
+    displayDate = new Date(record.scheduledDate).toLocaleDateString('es-AR');
+  }
 
   return (
     <div style={{ backgroundColor: 'white', minHeight: '100vh', padding: '20px', fontFamily: 'Arial, sans-serif' }}>
