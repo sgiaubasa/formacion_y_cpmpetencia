@@ -1,8 +1,13 @@
 import { prisma } from "./prisma";
 
-export async function getUniqueActiveProfiles() {
+export async function getUniqueActiveProfiles(allowedSectors?: string[] | null) {
+  const whereClause: any = { isActive: true, status: "VIGENTE" };
+  if (allowedSectors && allowedSectors.length > 0) {
+    whereClause.gerencia = { in: allowedSectors };
+  }
+
   const perfiles = await prisma.jobProfile.findMany({
-    where: { isActive: true, status: "VIGENTE" },
+    where: whereClause,
     orderBy: { title: 'asc' }
   });
 

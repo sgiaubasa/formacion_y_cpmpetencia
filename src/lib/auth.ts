@@ -34,5 +34,9 @@ export async function getAllowedSectorNames(role: string, mySectorName: string):
     ];
   }
 
+  if (["Asistencia Vial", "CCM", "Seguridad Patrimonial"].includes(mySectorName)) {
+    return [mySectorName, "Gerencia de Prevencion y Seguridad Integral"];
+  }
+
   return [mySectorName];
 }

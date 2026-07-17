@@ -2,13 +2,26 @@ import { prisma } from "@/lib/prisma";
 import { redirect } from "next/navigation";
 import Link from "next/link";
 import { getUniqueActiveProfiles } from "@/lib/profileUtils";
+import { getCurrentRole, isSectorRole, getSectorIdFromRole, getAllowedSectorNames } from "@/lib/auth";
 
 export default async function NuevoPersonalPage({ searchParams }: { searchParams: Promise<{ error?: string }> }) {
   const params = await searchParams;
   const error = params.error;
 
+  const role = await getCurrentRole();
+  const isSector = await isSectorRole(role);
+  const mySectorId = await getSectorIdFromRole(role);
+
+  let allowedSectors: string[] | null = null;
+  if (isSector && mySectorId) {
+    const mySector = await prisma.sector.findUnique({ where: { id: mySectorId } });
+    if (mySector) {
+      allowedSectors = await getAllowedSectorNames(role, mySector.name);
+    }
+  }
+
   const sectores = await prisma.sector.findMany({ orderBy: { name: 'asc' } });
-  const perfiles = await getUniqueActiveProfiles();
+  const perfiles = await getUniqueActiveProfiles(allowedSectors);
 
   async function createEmployee(formData: FormData) {
     "use server"

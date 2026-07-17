@@ -1,5 +1,5 @@
 import { prisma } from "@/lib/prisma";
-import { getCurrentRole, isSectorRole, getSectorIdFromRole } from "@/lib/auth";
+import { getCurrentRole, isSectorRole, getSectorIdFromRole, getAllowedSectorNames } from "@/lib/auth";
 import DashboardClient from "@/components/DashboardClient";
 
 import { getUniqueActiveProfiles } from "@/lib/profileUtils";
@@ -9,9 +9,17 @@ export default async function Home() {
   const isSector = await isSectorRole(role);
   const sectorRoleId = await getSectorIdFromRole(role);
 
+  let allowedSectors: string[] | null = null;
+  if (isSector && sectorRoleId) {
+    const mySector = await prisma.sector.findUnique({ where: { id: sectorRoleId } });
+    if (mySector) {
+      allowedSectors = await getAllowedSectorNames(role, mySector.name);
+    }
+  }
+
   // Fetch all sectors and profiles for filter dropdowns
   const sectors = await prisma.sector.findMany({ orderBy: { name: 'asc' } });
-  const profiles = await getUniqueActiveProfiles();
+  const profiles = await getUniqueActiveProfiles(allowedSectors);
 
   // Filter records based on role (Admin sees all, Sector sees only their sector)
   const whereClause = (isSector && sectorRoleId) 

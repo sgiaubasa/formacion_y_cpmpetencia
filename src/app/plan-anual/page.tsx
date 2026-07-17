@@ -1,6 +1,6 @@
 import { prisma } from "@/lib/prisma";
 import Link from "next/link";
-import { getCurrentRole, isSectorRole, getSectorIdFromRole } from "@/lib/auth";
+import { getCurrentRole, isSectorRole, getSectorIdFromRole, getAllowedSectorNames } from "@/lib/auth";
 import { revalidatePath } from "next/cache";
 import { AssignTrainingForm } from "./AssignTrainingForm";
 import { writeFile } from "fs/promises";
@@ -242,7 +242,16 @@ export default async function PlanAnualPage({ searchParams }: { searchParams: Pr
 
   const allEmployees = await prisma.employee.findMany({ orderBy: { name: 'asc' } });
   const allSectors = await prisma.sector.findMany({ orderBy: { name: 'asc' } });
-  const allJobProfiles = await getUniqueActiveProfiles();
+  let allowedSectors: string[] | null = null;
+  if (isSector && sectorRoleId) {
+    const mySector = await prisma.sector.findUnique({ where: { id: sectorRoleId } });
+    if (mySector) {
+      allowedSectors = await getAllowedSectorNames(role, mySector.name);
+    }
+  }
+
+  // Used for filtering dropdowns (if they want to filter by profile across their permitted sectors)
+  const allJobProfiles = await getUniqueActiveProfiles(allowedSectors);
   const allTrainings = await prisma.training.findMany({ orderBy: { title: 'asc' } });
 
   const totalProgramadas = records.filter(r => r.status === 'IN_PLAN').length;

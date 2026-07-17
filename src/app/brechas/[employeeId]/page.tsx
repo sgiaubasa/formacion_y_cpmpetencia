@@ -1,17 +1,28 @@
 import { prisma } from "@/lib/prisma";
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import { getCurrentRole } from "@/lib/auth";
+import { getCurrentRole, isSectorRole, getSectorIdFromRole, getAllowedSectorNames } from "@/lib/auth";
 import { ConfirmGapForm } from "../ConfirmGapForm";
 import { getUniqueActiveProfiles } from "@/lib/profileUtils";
 
 export default async function SimuladorCambioPuestoPage({ params, searchParams }: { params: Promise<{ employeeId: string }>, searchParams: Promise<{ targetProfileId?: string }> }) {
   const role = await getCurrentRole();
-  if (role !== "ADMIN" && role !== "RRHH" && role !== "SGI") {
+  const isSector = await isSectorRole(role);
+  const mySectorId = await getSectorIdFromRole(role);
+
+  let allowedSectors: string[] | null = null;
+  if (isSector && mySectorId) {
+    const mySector = await prisma.sector.findUnique({ where: { id: mySectorId } });
+    if (mySector) {
+      allowedSectors = await getAllowedSectorNames(role, mySector.name);
+    }
+  }
+
+  if (role !== "ADMIN" && role !== "RRHH" && role !== "SGI" && !isSector) {
     return (
       <div className="card" style={{ padding: '2rem', textAlign: 'center', marginTop: '2rem' }}>
         <h1 style={{ color: 'var(--text-secondary)' }}>Acceso Denegado</h1>
-        <p>Solo RRHH, Administradores y SGI pueden realizar simulaciones de cambio de puesto.</p>
+        <p>Solo RRHH, Administradores, SGI o responsables de sector pueden realizar simulaciones de cambio de puesto.</p>
       </div>
     );
   }
@@ -36,7 +47,7 @@ export default async function SimuladorCambioPuestoPage({ params, searchParams }
     return <div>Empleado no encontrado</div>;
   }
 
-  const allProfiles = await getUniqueActiveProfiles();
+  const allProfiles = await getUniqueActiveProfiles(allowedSectors);
   const allSectors = await prisma.sector.findMany({ orderBy: { name: 'asc' } });
   
   let targetProfile = null;

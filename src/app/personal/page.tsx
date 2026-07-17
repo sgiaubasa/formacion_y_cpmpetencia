@@ -17,12 +17,13 @@ export default async function PersonalPage({ searchParams }: { searchParams: Pro
   let userSelectedSectorFilter = sp.sectorId ? parseInt(sp.sectorId) : undefined;
   
   let allowedSectorIds: number[] | undefined = undefined;
+  let allowedSectors: string[] | null = null;
 
   if (isSector && mySectorId) {
     const mySector = await prisma.sector.findUnique({ where: { id: mySectorId } });
     if (mySector) {
-      const allowedNames = await getAllowedSectorNames(role, mySector.name);
-      const allowedObjs = await prisma.sector.findMany({ where: { name: { in: allowedNames } } });
+      allowedSectors = await getAllowedSectorNames(role, mySector.name);
+      const allowedObjs = await prisma.sector.findMany({ where: { name: { in: allowedSectors } } });
       allowedSectorIds = allowedObjs.map(s => s.id);
     } else {
       allowedSectorIds = [mySectorId];
@@ -55,7 +56,7 @@ export default async function PersonalPage({ searchParams }: { searchParams: Pro
   });
 
   const sectores = await prisma.sector.findMany({ orderBy: { name: 'asc' } });
-  const perfiles = await getUniqueActiveProfiles();
+  const perfiles = await getUniqueActiveProfiles(allowedSectors);
 
   async function darDeBaja(formData: FormData) {
     "use server"
