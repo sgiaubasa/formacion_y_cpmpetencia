@@ -260,6 +260,10 @@ export default async function PerfilViewPage({ params }: { params: Promise<{ id:
                   <li>{hasAspecto('CONTROL')} CONTROL</li>
                   <li>{hasAspecto('FLEXIBILIDAD')} FLEXIBILIDAD</li>
                   <li>{hasAspecto('PROACTIVIDAD')} PROACTIVIDAD</li>
+                  <li>{hasAspecto('LIDERAZGO')} LIDERAZGO</li>
+                  <li>{hasAspecto('COMUNICACION EFECTIVA')} COMUNICACIÓN EFECTIVA</li>
+                  <li>{hasAspecto('RESOLUCION DE PROBLEMAS')} RESOLUCIÓN DE PROBLEMAS</li>
+                  <li>{hasAspecto('ORIENTACION DE OBJETIVO')} ORIENTACIÓN DE OBJETIVO</li>
                 </ul>
               </td>
               <td style={{ verticalAlign: 'top', padding: '1rem' }}>
@@ -267,6 +271,10 @@ export default async function PerfilViewPage({ params }: { params: Promise<{ id:
                   <li>{hasAspecto('ORGANIZACIÓN')} ORGANIZACIÓN</li>
                   <li>{hasAspecto('CAPACIDAD DE TRABAJO EN EQUIPO')} CAPACIDAD DE TRABAJO EN EQUIPO</li>
                   <li>{hasAspecto('CAPACIDAD DE ANÁLISIS')} CAPACIDAD DE ANÁLISIS</li>
+                  <li>{hasAspecto('NEGOCIACION')} NEGOCIACIÓN</li>
+                  <li>{hasAspecto('HABILIDAD PARA TOMAR DECISIONES')} HABILIDAD PARA TOMAR DECISIONES</li>
+                  <li>{hasAspecto('GESTION DE PROYECTOS')} GESTIÓN DE PROYECTOS</li>
+                  <li>{hasAspecto('VISION ESTRATEGICA')} VISIÓN ESTRATÉGICA</li>
                 </ul>
               </td>
             </tr>

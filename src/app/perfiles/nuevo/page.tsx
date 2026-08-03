@@ -189,6 +189,14 @@ export default async function NuevoPerfilPage({ searchParams }: { searchParams: 
               <label><input type="checkbox" name="aspectos" value="FLEXIBILIDAD" /> Flexibilidad</label>
               <label><input type="checkbox" name="aspectos" value="CAPACIDAD DE ANÁLISIS" /> Capacidad de análisis</label>
               <label><input type="checkbox" name="aspectos" value="PROACTIVIDAD" /> Proactividad</label>
+              <label><input type="checkbox" name="aspectos" value="LIDERAZGO" /> Liderazgo</label>
+              <label><input type="checkbox" name="aspectos" value="COMUNICACION EFECTIVA" /> Comunicación Efectiva</label>
+              <label><input type="checkbox" name="aspectos" value="RESOLUCION DE PROBLEMAS" /> Resolución de problemas</label>
+              <label><input type="checkbox" name="aspectos" value="ORIENTACION DE OBJETIVO" /> Orientación de Objetivo</label>
+              <label><input type="checkbox" name="aspectos" value="NEGOCIACION" /> Negociación</label>
+              <label><input type="checkbox" name="aspectos" value="HABILIDAD PARA TOMAR DECISIONES" /> Habilidad para tomar decisiones</label>
+              <label><input type="checkbox" name="aspectos" value="GESTION DE PROYECTOS" /> Gestión de Proyectos</label>
+              <label><input type="checkbox" name="aspectos" value="VISION ESTRATEGICA" /> Visión Estratégica</label>
             </div>
           </div>
           

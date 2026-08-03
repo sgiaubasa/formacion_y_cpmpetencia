@@ -216,6 +216,14 @@ export default async function EditarPerfilPage({ params }: { params: Promise<{ i
               <label><input type="checkbox" name="aspectos" value="FLEXIBILIDAD" defaultChecked={hasAspecto('FLEXIBILIDAD')} /> Flexibilidad</label>
               <label><input type="checkbox" name="aspectos" value="CAPACIDAD DE ANÁLISIS" defaultChecked={hasAspecto('CAPACIDAD DE ANÁLISIS')} /> Capacidad de análisis</label>
               <label><input type="checkbox" name="aspectos" value="PROACTIVIDAD" defaultChecked={hasAspecto('PROACTIVIDAD')} /> Proactividad</label>
+              <label><input type="checkbox" name="aspectos" value="LIDERAZGO" defaultChecked={hasAspecto('LIDERAZGO')} /> Liderazgo</label>
+              <label><input type="checkbox" name="aspectos" value="COMUNICACION EFECTIVA" defaultChecked={hasAspecto('COMUNICACION EFECTIVA')} /> Comunicación Efectiva</label>
+              <label><input type="checkbox" name="aspectos" value="RESOLUCION DE PROBLEMAS" defaultChecked={hasAspecto('RESOLUCION DE PROBLEMAS')} /> Resolución de problemas</label>
+              <label><input type="checkbox" name="aspectos" value="ORIENTACION DE OBJETIVO" defaultChecked={hasAspecto('ORIENTACION DE OBJETIVO')} /> Orientación de Objetivo</label>
+              <label><input type="checkbox" name="aspectos" value="NEGOCIACION" defaultChecked={hasAspecto('NEGOCIACION')} /> Negociación</label>
+              <label><input type="checkbox" name="aspectos" value="HABILIDAD PARA TOMAR DECISIONES" defaultChecked={hasAspecto('HABILIDAD PARA TOMAR DECISIONES')} /> Habilidad para tomar decisiones</label>
+              <label><input type="checkbox" name="aspectos" value="GESTION DE PROYECTOS" defaultChecked={hasAspecto('GESTION DE PROYECTOS')} /> Gestión de Proyectos</label>
+              <label><input type="checkbox" name="aspectos" value="VISION ESTRATEGICA" defaultChecked={hasAspecto('VISION ESTRATEGICA')} /> Visión Estratégica</label>
             </div>
           </div>
           
