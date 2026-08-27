@@ -4,12 +4,13 @@ import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { confirmarCambioPuestoAction } from "./actions";
 
-export function ConfirmGapForm({ 
+export default function ConfirmGapForm({ 
   employeeName,
   targetProfileTitle,
   empId,
   targetProfileId,
   allSectors,
+  rrhhUsers,
   defaultTargetSectorId,
   gapResults,
   completedTrainings

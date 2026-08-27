@@ -2,7 +2,7 @@ import { prisma } from "@/lib/prisma";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { getCurrentRole, isSectorRole, getSectorIdFromRole, getAllowedSectorNames } from "@/lib/auth";
-import { ConfirmGapForm } from "../ConfirmGapForm";
+import ConfirmGapForm from "../ConfirmGapForm";
 import { getUniqueActiveProfiles } from "@/lib/profileUtils";
 
 export default async function SimuladorCambioPuestoPage({ params, searchParams }: { params: Promise<{ employeeId: string }>, searchParams: Promise<{ targetProfileId?: string }> }) {
