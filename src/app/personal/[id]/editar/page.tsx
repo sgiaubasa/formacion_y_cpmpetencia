@@ -65,7 +65,27 @@ export default async function EditarPersonalPage({ params, searchParams }: { par
       });
     } catch (e: any) {
       if (e?.code === 'P2002') {
-        isDuplicate = true;
+        // Verificar si el legajo pertenece a un empleado inactivo
+        const existing = await prisma.employee.findUnique({ where: { legajo } });
+        if (existing && !existing.isActive && existing.id !== empId) {
+          // Liberar el legajo del empleado inactivo
+          await prisma.employee.update({
+            where: { id: existing.id },
+            data: { legajo: `${legajo}_inactivo_${existing.id}` }
+          });
+          // Reintentar la actualización
+          await prisma.employee.update({
+            where: { id: empId },
+            data: {
+              name,
+              legajo,
+              sectorId,
+              jobProfileId
+            }
+          });
+        } else {
+          isDuplicate = true;
+        }
       } else {
         throw e;
       }
