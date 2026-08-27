@@ -66,6 +66,12 @@ export default async function SimuladorCambioPuestoPage({ params, searchParams }
     }
   }
 
+  // Fetch RRHH and SGI users for the sender dropdown
+  const rrhhUsers = await prisma.appUser.findMany({
+    where: { role: { in: ['RRHH', 'SGI'] } },
+    orderBy: { email: 'asc' }
+  });
+
   return (
     <div>
       <div className="page-header">
@@ -125,6 +131,7 @@ export default async function SimuladorCambioPuestoPage({ params, searchParams }
           empId={empId}
           targetProfileId={targetProfile.id}
           allSectors={allSectors}
+          rrhhUsers={rrhhUsers}
           defaultTargetSectorId={(() => {
             if (targetProfile.gerencia) {
               const matching = allSectors.find(s => s.name.toLowerCase() === targetProfile.gerencia!.toLowerCase());

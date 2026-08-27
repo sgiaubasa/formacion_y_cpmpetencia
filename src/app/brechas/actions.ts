@@ -9,6 +9,7 @@ export async function confirmarCambioPuestoAction(formData: FormData) {
   const gapsToCreate = formData.getAll("gap") as string[];
   const targetSectorId = parseInt(formData.get("targetSectorId") as string || "0");
   const notificationEmails = formData.get("notificationEmails") as string || "sergio.montes@aubasa.com.ar";
+  const senderEmail = formData.get("senderEmail") as string;
 
   // 1. Obtener datos para el correo
   const empleado = await prisma.employee.findUnique({
@@ -58,6 +59,7 @@ export async function confirmarCambioPuestoAction(formData: FormData) {
 
     const { sendMail } = await import('@/lib/mailer');
     await sendMail({
+      from: `"RRHH - SGC" <${senderEmail || 'rrhh@aubasa.com.ar'}>`,
       to: notificationEmails,
       subject: emailSubject,
       html: emailBody

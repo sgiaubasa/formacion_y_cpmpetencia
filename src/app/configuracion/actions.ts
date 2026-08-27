@@ -6,7 +6,7 @@ import { getCurrentRole } from "@/lib/auth";
 
 export async function updateEmailTemplateAction(formData: FormData) {
   const role = await getCurrentRole();
-  if (role !== "ADMIN" && role !== "RRHH") throw new Error("Unauthorized");
+  if (role !== "ADMIN" && role !== "RRHH" && role !== "SGI") throw new Error("Unauthorized");
 
   const templateId = formData.get("templateId") as string;
   const value = formData.get("value") as string;

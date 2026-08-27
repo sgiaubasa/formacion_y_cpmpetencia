@@ -19,6 +19,7 @@ export function ConfirmGapForm({
   empId: number,
   targetProfileId: number,
   allSectors: { id: number, name: string, mail: string | null }[],
+  rrhhUsers: { id: number, email: string, role: string }[],
   defaultTargetSectorId: number,
   gapResults: { requirement: string, hasTraining: boolean }[],
   completedTrainings: string[]
@@ -68,6 +69,14 @@ export function ConfirmGapForm({
       <input type="hidden" name="targetProfileId" value={targetProfileId} />
       
       <div style={{ marginBottom: '1.5rem', padding: '1rem', backgroundColor: '#f8fafc', borderRadius: '4px', border: '1px solid #e2e8f0' }}>
+        <label className="form-label" style={{ fontWeight: 'bold' }}>Remitente del Correo (Quién envía):</label>
+        <select name="senderEmail" className="form-input" required style={{ marginBottom: '1rem' }}>
+          <option value="">Seleccione el remitente...</option>
+          {rrhhUsers.map(u => (
+            <option key={u.id} value={u.email}>{u.email} ({u.role})</option>
+          ))}
+        </select>
+
         <label className="form-label" style={{ fontWeight: 'bold' }}>Sector Destino (Quien recibe al empleado y aprueba la transferencia):</label>
         <select name="targetSectorId" className="form-input" value={selectedSectorId} onChange={handleSectorChange} required>
           <option value="" disabled>Seleccione el sector...</option>

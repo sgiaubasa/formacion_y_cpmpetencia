@@ -4,11 +4,11 @@ import { updateEmailTemplateAction } from "./actions";
 
 export default async function ConfiguracionPage() {
   const role = await getCurrentRole();
-  if (role !== "ADMIN" && role !== "RRHH") {
+  if (role !== "ADMIN" && role !== "RRHH" && role !== "SGI") {
     return (
       <div className="card" style={{ padding: '2rem', textAlign: 'center', marginTop: '2rem' }}>
         <h1 style={{ color: 'var(--text-secondary)' }}>Acceso Denegado</h1>
-        <p>Solo RRHH y Administradores pueden acceder a esta sección.</p>
+        <p>Solo RRHH, SGI y Administradores pueden acceder a esta sección.</p>
       </div>
     );
   }

@@ -10,10 +10,11 @@ const transporter = nodemailer.createTransport({
   },
 });
 
-export async function sendMail({ to, subject, html, cc }: { to: string | string[], subject: string, html: string, cc?: string | string[] }) {
+export async function sendMail({ to, subject, html, cc, from }: { to: string | string[], subject: string, html: string, cc?: string | string[], from?: string }) {
   if (!process.env.SMTP_USER) {
     console.log("------------------------------------------");
     console.log("Mock Email (SMTP no configurado):");
+    console.log(`From: ${from || 'Default'}`);
     console.log(`To: ${to}`);
     console.log(`Cc: ${cc || '-'}`);
     console.log(`Subject: ${subject}`);
@@ -24,7 +25,7 @@ export async function sendMail({ to, subject, html, cc }: { to: string | string[
 
   try {
     const info = await transporter.sendMail({
-      from: `"SGCySV - Capacitaciones" <${process.env.SMTP_USER}>`,
+      from: from ? from : `"SGCySV - Capacitaciones" <${process.env.SMTP_USER}>`,
       to: Array.isArray(to) ? to.join(', ') : to,
       cc: cc ? (Array.isArray(cc) ? cc.join(', ') : cc) : undefined,
       subject,
