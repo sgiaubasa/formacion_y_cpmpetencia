@@ -175,3 +175,10 @@ model AppUser {
   isManager Boolean  @default(false)
   createdAt DateTime @default(now())
 }
+
+model AppSetting {
+  id          String   @id
+  value       String   // Can store JSON or plain string
+  description String?
+  updatedAt   DateTime @updatedAt
+}

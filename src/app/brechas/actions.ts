@@ -39,26 +39,22 @@ export async function confirmarCambioPuestoAction(formData: FormData) {
 
   let previewUrl = "";
   try {
+    let templateSetting = await prisma.appSetting.findUnique({
+      where: { id: 'email_template_transferencia' }
+    });
+
     const hasGaps = gapsToCreate.length > 0;
     
     const emailSubject = `Atención: Transferencia pendiente de aprobación para ${empleado.name}`;
 
-    const emailBody = `
-      <p>Hola, RRHH ha propuesto a <strong>${empleado.name}</strong> para el puesto de <strong>${targetProfile.title}</strong> en su sector.</p>
-      <p>Para que este cambio se haga efectivo, usted <strong>DEBE ingresar al sistema (sección Transferencias) y CONFIRMAR la recepción</strong>.</p>
-      <p>Al momento de confirmar, será obligatorio que programe las fechas para las siguientes capacitaciones faltantes.</p>
-      <p style="color: red; font-weight: bold;">IMPORTANTE: Cuenta con un plazo de 90 días como máximo para programar y completar estas capacitaciones, de manera que se cumpla con la evaluación inicial obligatoria.</p>
-      <h3>Detalles:</h3>
-      <ul>
-        <li><strong>Empleado:</strong> ${empleado.name} (Legajo: ${empleado.legajo})</li>
-        <li><strong>Nuevo Puesto:</strong> ${targetProfile.title}</li>
-      </ul>
-      <h3>Capacitaciones a Planificar:</h3>
-      <ul>
-        ${gapsToCreate.map(g => `<li>${g}</li>`).join("")}
-      </ul>
-      <p>Por favor, ingrese al sistema para confirmar el cambio.</p>
-    `;
+    let emailBody = templateSetting?.value || "";
+    // Reemplazar variables
+    emailBody = emailBody.replace(/\{\{nombre\}\}/g, empleado.name);
+    emailBody = emailBody.replace(/\{\{puesto\}\}/g, targetProfile.title);
+    emailBody = emailBody.replace(/\{\{legajo\}\}/g, empleado.legajo);
+    
+    const brechasHtml = gapsToCreate.map(g => `<li>${g}</li>`).join("");
+    emailBody = emailBody.replace(/\{\{brechas\}\}/g, brechasHtml);
 
     const { sendMail } = await import('@/lib/mailer');
     await sendMail({
