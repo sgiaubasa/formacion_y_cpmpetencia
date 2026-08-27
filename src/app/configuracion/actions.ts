@@ -17,5 +17,4 @@ export async function updateEmailTemplateAction(formData: FormData) {
   });
 
   revalidatePath('/configuracion');
-  return { success: true };
 }
