@@ -33,8 +33,8 @@ export default async function PersonalPage({ searchParams }: { searchParams: Pro
   const whereClause: any = { isActive: true };
   if (q) {
     whereClause.OR = [
-      { name: { contains: q } },
-      { legajo: { contains: q } }
+      { name: { contains: q, mode: 'insensitive' } },
+      { legajo: { contains: q, mode: 'insensitive' } }
     ];
   }
   if (jobFilter) {

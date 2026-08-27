@@ -5,8 +5,9 @@ import { getUniqueActiveProfiles } from "@/lib/profileUtils";
 import { getCurrentRole, isSectorRole, getSectorIdFromRole, getAllowedSectorNames } from "@/lib/auth";
 import { DeleteEmployeeButton } from "./DeleteEmployeeButton";
 
-export default async function EditarPersonalPage({ params }: { params: Promise<{ id: string }> }) {
+export default async function EditarPersonalPage({ params, searchParams }: { params: Promise<{ id: string }>, searchParams: Promise<{ error?: string }> }) {
   const { id } = await params;
+  const sp = await searchParams;
   const empId = parseInt(id);
   const role = await getCurrentRole();
   const isSector = await isSectorRole(role);
@@ -51,15 +52,22 @@ export default async function EditarPersonalPage({ params }: { params: Promise<{
     const sectorId = parseInt(formData.get("sectorId") as string);
     const jobProfileId = formData.get("jobProfileId") ? parseInt(formData.get("jobProfileId") as string) : null;
 
-    await prisma.employee.update({
-      where: { id: empId },
-      data: {
-        name,
-        legajo,
-        sectorId,
-        jobProfileId
+    try {
+      await prisma.employee.update({
+        where: { id: empId },
+        data: {
+          name,
+          legajo,
+          sectorId,
+          jobProfileId
+        }
+      });
+    } catch (e: any) {
+      if (e.code === 'P2002') {
+        redirect(`/personal/${empId}/editar?error=legajo_exists`);
       }
-    });
+      throw e;
+    }
 
     redirect('/personal');
   }
@@ -91,6 +99,12 @@ export default async function EditarPersonalPage({ params }: { params: Promise<{
           Volver a la Nómina
         </Link>
       </div>
+
+      {sp.error === 'legajo_exists' && (
+        <div style={{ color: 'red', marginBottom: '1rem', padding: '1rem', backgroundColor: '#fee2e2', borderRadius: '4px', border: '1px solid #fca5a5' }}>
+          <strong>Error:</strong> El legajo ingresado ya está asignado a otro empleado.
+        </div>
+      )}
 
       <div className="card" style={{ maxWidth: '600px' }}>
         <form action={updateEmpleado} style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>

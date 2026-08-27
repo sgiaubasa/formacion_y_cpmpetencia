@@ -32,7 +32,7 @@ export default async function PlanAnualPage({ searchParams }: { searchParams: Pr
 
   const records = await prisma.employeeTrainingRecord.findMany({
     where: {
-      trainingName: { contains: q },
+      trainingName: { contains: q, mode: 'insensitive' },
       ...globalFilters
     },
     include: { employee: { include: { sector: true } } },
