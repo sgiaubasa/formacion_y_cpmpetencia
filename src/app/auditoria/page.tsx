@@ -41,8 +41,8 @@ export default async function AuditoriaGlobalPage() {
           <thead>
             <tr>
               <th>Fecha Aprobación</th>
+              <th>Vencimiento (90 Días)</th>
               <th>Empleado</th>
-              <th>Origen</th>
               <th>Destino (Nuevo Puesto)</th>
               <th style={{ width: '40%' }}>Detalle de Brechas y Eficacia</th>
             </tr>
@@ -57,10 +57,45 @@ export default async function AuditoriaGlobalPage() {
                   gapsList = JSON.parse(pt.gaps);
                 } catch {}
 
+                const hasPendingGaps = gapsList.some(gap => {
+                  const record = pt.employee.trainingRecords.find(r => 
+                    r.trainingName === gap && r.sourceProfileId === pt.targetProfileId
+                  );
+                  return !record || record.status !== 'COMPLETED';
+                });
+
+                let dueDateStr = '-';
+                let alertBadge = null;
+                if (pt.completedAt) {
+                  const dueDate = new Date(pt.completedAt);
+                  dueDate.setDate(dueDate.getDate() + 90);
+                  dueDateStr = dueDate.toLocaleDateString('es-AR');
+
+                  const now = new Date();
+                  const diffTime = Math.abs(dueDate.getTime() - now.getTime());
+                  const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24)); 
+
+                  if (hasPendingGaps) {
+                    if (now > dueDate) {
+                      alertBadge = <span className="badge badge-error" style={{ background: '#fecdd3', color: '#e11d48', display: 'block', marginTop: '0.25rem' }}>Vencido hace {diffDays} días</span>;
+                    } else if (diffDays <= 30) {
+                      alertBadge = <span className="badge badge-warning" style={{ background: '#fef08a', color: '#b45309', display: 'block', marginTop: '0.25rem' }}>Vence en {diffDays} días</span>;
+                    } else {
+                      alertBadge = <span className="badge badge-success" style={{ background: '#dcfce7', color: '#166534', display: 'block', marginTop: '0.25rem' }}>Vence en {diffDays} días</span>;
+                    }
+                  } else {
+                    alertBadge = <span className="badge badge-success" style={{ background: '#dcfce7', color: '#166534', display: 'block', marginTop: '0.25rem' }}>Completado</span>;
+                  }
+                }
+
                 return (
                   <tr key={pt.id}>
                     <td style={{ whiteSpace: 'nowrap' }}>
                       {pt.completedAt ? pt.completedAt.toLocaleDateString('es-AR') : '-'}
+                    </td>
+                    <td style={{ whiteSpace: 'nowrap', fontWeight: 'bold' }}>
+                      {dueDateStr}
+                      {alertBadge}
                     </td>
                     <td>
                       <Link href={`/personal/${pt.employeeId}/editar`} style={{ fontWeight: 'bold', color: 'var(--primary-color)' }}>
@@ -68,16 +103,6 @@ export default async function AuditoriaGlobalPage() {
                       </Link>
                       <br/>
                       <span style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>Leg: {pt.employee.legajo}</span>
-                    </td>
-                    <td>
-                      <div>{pt.sourceSector?.name || '-'}</div>
-                      <div style={{ fontSize: '0.8rem' }}>
-                        {pt.sourceProfileId ? (
-                          <Link href={`/perfiles/${pt.sourceProfileId}`} target="_blank" style={{ color: 'var(--text-secondary)', textDecoration: 'underline' }}>
-                            {pt.sourceProfile?.title} (Rev: {pt.sourceProfile?.revision || '01'})
-                          </Link>
-                        ) : '-'}
-                      </div>
                     </td>
                     <td>
                       <div>{pt.targetSector.name}</div>
@@ -93,7 +118,6 @@ export default async function AuditoriaGlobalPage() {
                       ) : (
                         <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
                           {gapsList.map((gap, i) => {
-                            // Buscar si existe un record para esta brecha y este sourceProfileId (que es el targetProfileId del momento del cambio)
                             const record = pt.employee.trainingRecords.find(r => 
                               r.trainingName === gap && r.sourceProfileId === pt.targetProfileId
                             );
