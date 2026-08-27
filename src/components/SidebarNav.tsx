@@ -15,7 +15,8 @@ export function SidebarNav({ isSector, role }: { isSector: boolean; role: string
     ...(!isSector ? [{ href: "/capacitaciones", label: "Temas a Capacitar", icon: "🎓" }] : []),
     { href: "/transferencias", label: "Transferencias", icon: "⇄" },
     ...(['ADMIN', 'SGI', 'RRHH'].includes(role) ? [{ href: "/auditoria", label: "Historial Eval. Inicial", icon: "📋" }] : []),
-    ...(role === 'SGI' ? [{ href: "/accesos", label: "Accesos", icon: "🔐" }] : [])
+    ...(role === 'SGI' ? [{ href: "/accesos", label: "Accesos", icon: "🔐" }] : []),
+    ...(['ADMIN', 'SGI', 'RRHH'].includes(role) ? [{ href: "/configuracion", label: "Configuración Correo", icon: "⚙️" }] : [])
   ];
 
   return (
