@@ -52,6 +52,7 @@ export default async function EditarPersonalPage({ params, searchParams }: { par
     const sectorId = parseInt(formData.get("sectorId") as string);
     const jobProfileId = formData.get("jobProfileId") ? parseInt(formData.get("jobProfileId") as string) : null;
 
+    let isDuplicate = false;
     try {
       await prisma.employee.update({
         where: { id: empId },
@@ -63,10 +64,15 @@ export default async function EditarPersonalPage({ params, searchParams }: { par
         }
       });
     } catch (e: any) {
-      if (e.code === 'P2002') {
-        redirect(`/personal/${empId}/editar?error=legajo_exists`);
+      if (e?.code === 'P2002') {
+        isDuplicate = true;
+      } else {
+        throw e;
       }
-      throw e;
+    }
+
+    if (isDuplicate) {
+      redirect(`/personal/${empId}/editar?error=legajo_exists`);
     }
 
     redirect('/personal');
