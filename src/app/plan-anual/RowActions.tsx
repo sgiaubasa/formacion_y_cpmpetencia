@@ -4,17 +4,27 @@ import { useState, useRef, useEffect } from "react";
 import { programarFecha, borrarCapacitacion } from "./actions";
 import { ConfirmExecutionModal } from "./ConfirmExecutionModal";
 
+import { SgiEditModal } from "./SgiEditModal";
+
 export function RowActions({ 
   recordId, 
   currentDate,
-  status
+  status,
+  isSgi = false,
+  isCompleted = false,
+  currentScore = "",
+  currentCompletedDate = ""
 }: { 
   recordId: number, 
   currentDate: string,
-  status: string
+  status: string,
+  isSgi?: boolean,
+  isCompleted?: boolean,
+  currentScore?: string,
+  currentCompletedDate?: string
 }) {
   const [isOpen, setIsOpen] = useState(false);
-  const [activeForm, setActiveForm] = useState<"none" | "schedule" | "execute" | "print_blank">("none");
+  const [activeForm, setActiveForm] = useState<"none" | "schedule" | "execute" | "print_blank" | "sgi_edit">("none");
   const dropdownRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -66,39 +76,62 @@ export function RowActions({
     );
   }
 
+  if (activeForm === "sgi_edit") {
+    return <SgiEditModal 
+      recordId={recordId} 
+      currentScheduledDate={currentDate} 
+      currentCompletedDate={currentCompletedDate}
+      currentScore={currentScore}
+      onClose={() => setActiveForm("none")} 
+    />;
+  }
+
   return (
     <div className="dropdown-container" ref={dropdownRef}>
       <button 
         onClick={() => setIsOpen(!isOpen)} 
         className="btn"
-        style={{ background: 'var(--teal-color)', color: 'white', padding: '0.25rem 0.75rem', borderRadius: '20px', fontSize: '0.875rem' }}
+        style={{ background: isCompleted ? 'var(--warning-color)' : 'var(--teal-color)', color: isCompleted ? '#000' : 'white', padding: '0.25rem 0.75rem', borderRadius: '20px', fontSize: '0.875rem' }}
       >
-        Gestión ...
+        {isCompleted && isSgi ? "Opciones SGI..." : "Gestión ..."}
       </button>
       
       {isOpen && (
         <div className="dropdown-menu">
-          <button 
-            className="dropdown-item"
-            onClick={() => { setActiveForm("schedule"); setIsOpen(false); }}
-          >
-            📅 Asignar Fecha
-          </button>
-          <button 
-            className="dropdown-item"
-            onClick={() => { setActiveForm("execute"); setIsOpen(false); }}
-          >
-            ✓ Confirmar Ejecución
-          </button>
+          {!isCompleted && (
+            <>
+              <button 
+                className="dropdown-item"
+                onClick={() => { setActiveForm("schedule"); setIsOpen(false); }}
+              >
+                📅 Asignar Fecha
+              </button>
+              <button 
+                className="dropdown-item"
+                onClick={() => { setActiveForm("execute"); setIsOpen(false); }}
+              >
+                ✓ Confirmar Ejecución
+              </button>
+              
+              <button 
+                className="dropdown-item"
+                onClick={() => { setActiveForm("print_blank"); setIsOpen(false); }}
+              >
+                🖨️ Generar Planilla (Vacía)
+              </button>
+            </>
+          )}
+
+          {isSgi && isCompleted && (
+            <button 
+              className="dropdown-item"
+              onClick={() => { setActiveForm("sgi_edit"); setIsOpen(false); }}
+            >
+              ✏️ Modificar Registro (SGI)
+            </button>
+          )}
           
-          <button 
-            className="dropdown-item"
-            onClick={() => { setActiveForm("print_blank"); setIsOpen(false); }}
-          >
-            🖨️ Generar Planilla (Vacía)
-          </button>
-          
-          {status !== 'GAP' && (
+          {(status !== 'GAP' || isSgi) && (
             <form action={borrarCapacitacion}>
               <input type="hidden" name="recordId" value={recordId} />
               <button 

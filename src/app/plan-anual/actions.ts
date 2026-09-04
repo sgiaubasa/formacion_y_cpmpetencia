@@ -75,3 +75,39 @@ export async function borrarCapacitacion(formData: FormData) {
   });
   revalidatePath('/plan-anual');
 }
+
+export async function sgiEditRecord(formData: FormData) {
+  const recordId = parseInt(formData.get("recordId") as string);
+  const scheduledDateStr = formData.get("scheduledDate") as string;
+  const completedAtStr = formData.get("completedAt") as string;
+  const scoreStr = formData.get("score") as string;
+  const file = formData.get("evidence") as File | null;
+
+  let updateData: any = {};
+
+  if (scheduledDateStr) updateData.scheduledDate = new Date(scheduledDateStr);
+  if (completedAtStr) updateData.completedAt = new Date(completedAtStr);
+  if (scoreStr) updateData.score = scoreStr;
+
+  if (file && file.size > 0) {
+    const bytes = await file.arrayBuffer();
+    const buffer = Buffer.from(bytes);
+    const filename = `${Date.now()}-${file.name.replace(/\s/g, '_')}`;
+    const uploadDir = join(process.cwd(), 'public/uploads');
+    if (!fs.existsSync(uploadDir)) {
+      fs.mkdirSync(uploadDir, { recursive: true });
+    }
+    const path = join(uploadDir, filename);
+    await writeFile(path, buffer);
+    updateData.evidencePath = `/uploads/${filename}`;
+  }
+
+  if (Object.keys(updateData).length > 0) {
+    await prisma.employeeTrainingRecord.update({
+      where: { id: recordId },
+      data: updateData
+    });
+  }
+  
+  revalidatePath('/plan-anual');
+}

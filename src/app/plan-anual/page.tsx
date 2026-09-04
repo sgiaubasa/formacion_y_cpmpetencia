@@ -364,7 +364,12 @@ export default async function PlanAnualPage({ searchParams }: { searchParams: Pr
                   </td>
                   <td>
                     {!isCompleted ? (
-                      <RowActions recordId={r.id} currentDate={r.scheduledDate ? r.scheduledDate.toISOString().split('T')[0] : ''} status={r.status} />
+                      <RowActions 
+                        recordId={r.id} 
+                        currentDate={r.scheduledDate ? r.scheduledDate.toISOString().split('T')[0] : ''} 
+                        status={r.status} 
+                        isSgi={role === 'SGI'}
+                      />
                     ) : (
                       <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
                         <div style={{ fontSize: '0.875rem' }}>Realizada el: <strong>{r.completedAt ? new Date(r.completedAt).toLocaleDateString('es-AR') : '-'}</strong></div>
@@ -386,6 +391,20 @@ export default async function PlanAnualPage({ searchParams }: { searchParams: Pr
                         )}
                         {r.effectiveness === 'EFFECTIVE' && <span className="badge badge-success" style={{ width: 'fit-content' }}>Eficaz</span>}
                         {r.effectiveness === 'INEFFECTIVE' && <span className="badge badge-secondary" style={{ backgroundColor: '#ef4444', width: 'fit-content' }}>No Eficaz</span>}
+                        
+                        {role === 'SGI' && (
+                          <div style={{ marginTop: '0.5rem' }}>
+                            <RowActions 
+                              recordId={r.id} 
+                              currentDate={r.scheduledDate ? r.scheduledDate.toISOString().split('T')[0] : ''} 
+                              status={r.status}
+                              isSgi={true}
+                              isCompleted={true}
+                              currentCompletedDate={r.completedAt ? r.completedAt.toISOString().split('T')[0] : ''}
+                              currentScore={r.score || ""}
+                            />
+                          </div>
+                        )}
                       </div>
                     )}
                   </td>
