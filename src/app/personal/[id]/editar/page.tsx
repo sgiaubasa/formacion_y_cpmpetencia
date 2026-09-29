@@ -4,8 +4,15 @@ import { redirect } from "next/navigation";
 import { getUniqueActiveProfiles } from "@/lib/profileUtils";
 import { getCurrentRole, isSectorRole, getSectorIdFromRole, getAllowedSectorNames } from "@/lib/auth";
 import { DeleteEmployeeButton } from "./DeleteEmployeeButton";
+import { BASES_OPERATIVAS } from "@/lib/constants";
 
-export default async function EditarPersonalPage({ params, searchParams }: { params: Promise<{ id: string }>, searchParams: Promise<{ error?: string }> }) {
+export default async function EditarPersonalPage({ 
+  params, 
+  searchParams 
+}: { 
+  params: Promise<{ id: string }>, 
+  searchParams: Promise<{ error?: string }> 
+}) {
   const { id } = await params;
   const sp = await searchParams;
   const empId = parseInt(id);
@@ -13,17 +20,18 @@ export default async function EditarPersonalPage({ params, searchParams }: { par
   const isSector = await isSectorRole(role);
   const mySectorId = await getSectorIdFromRole(role);
 
-  let allowedSectors: string[] | null = null;
+  let mySector = null;
   if (isSector && mySectorId) {
-    const mySector = await prisma.sector.findUnique({ where: { id: mySectorId } });
-    if (mySector) {
-      allowedSectors = await getAllowedSectorNames(role, mySector.name);
-    }
+    mySector = await prisma.sector.findUnique({ where: { id: mySectorId } });
   }
+
+  const isComercialSector = isSector && mySector?.name.toLowerCase().includes('comercial');
+  const isAdminOrRRHH = ['ADMIN', 'SGI', 'RRHH'].includes(role);
 
   const empleado = await prisma.employee.findUnique({
     where: { id: empId },
     include: { 
+      sector: true,
       jobProfile: true,
       pendingTransfers: {
         where: { status: 'COMPLETED' },
@@ -42,15 +50,32 @@ export default async function EditarPersonalPage({ params, searchParams }: { par
     return <div>Empleado no encontrado</div>;
   }
 
+  // Restricción de permisos: si es usuario sectorial, SOLO puede modificar si es Comercial y el empleado es de Comercial
+  if (isSector) {
+    if (!isComercialSector || !empleado.sector.name.toLowerCase().includes('comercial') || empleado.sectorId !== mySectorId) {
+      redirect('/personal');
+    }
+  }
+
+  let allowedSectors: string[] | null = null;
+  if (isSector && mySector) {
+    allowedSectors = await getAllowedSectorNames(role, mySector.name);
+  }
+
   const sectores = await prisma.sector.findMany({ orderBy: { name: 'asc' } });
   const perfiles = await getUniqueActiveProfiles(allowedSectors);
 
+  const isEmpComercial = empleado.sector.name.toLowerCase().includes('comercial');
+
   async function updateEmpleado(formData: FormData) {
     "use server"
-    const name = formData.get("name") as string;
-    const legajo = formData.get("legajo") as string;
-    const sectorId = parseInt(formData.get("sectorId") as string);
+    const name = (formData.get("name") as string)?.trim();
+    const legajo = (formData.get("legajo") as string)?.trim();
+    const rawSectorId = formData.get("sectorId") as string;
+    const sectorId = isComercialSector ? empleado!.sectorId : parseInt(rawSectorId);
     const jobProfileId = formData.get("jobProfileId") ? parseInt(formData.get("jobProfileId") as string) : null;
+    const baseOperativa = (formData.get("baseOperativa") as string) || null;
+    const dni = (formData.get("dni") as string)?.trim() || null;
 
     let isDuplicate = false;
     try {
@@ -60,7 +85,9 @@ export default async function EditarPersonalPage({ params, searchParams }: { par
           name,
           legajo,
           sectorId,
-          jobProfileId
+          jobProfileId,
+          baseOperativa,
+          dni
         }
       });
     } catch (e: any) {
@@ -80,7 +107,9 @@ export default async function EditarPersonalPage({ params, searchParams }: { par
               name,
               legajo,
               sectorId,
-              jobProfileId
+              jobProfileId,
+              baseOperativa,
+              dni
             }
           });
         } else {
@@ -101,17 +130,17 @@ export default async function EditarPersonalPage({ params, searchParams }: { par
   async function deleteEmpleado() {
     "use server"
     try {
-      // Intentamos borrar todas las capacitaciones y transferencias pendientes primero para evitar errores de llave foránea
+      // Solo administradores/RRHH pueden borrar definitivamente
+      const currentRole = await getCurrentRole();
+      if (!['ADMIN', 'SGI', 'RRHH'].includes(currentRole)) return;
+
       await prisma.employeeTrainingRecord.deleteMany({ where: { employeeId: empId } });
       await prisma.pendingTransfer.deleteMany({ where: { employeeId: empId } });
-      
-      // Borramos al empleado definitivamente
       await prisma.employee.delete({
         where: { id: empId }
       });
     } catch (e) {
       console.error("Error al eliminar empleado:", e);
-      // No podemos mostrar error fácilmente sin estado de cliente, pero se eliminará si es posible.
     }
     
     redirect('/personal');
@@ -145,12 +174,49 @@ export default async function EditarPersonalPage({ params, searchParams }: { par
             <input type="text" name="legajo" className="form-input" defaultValue={empleado.legajo} required />
           </div>
 
+          {(isEmpComercial || isComercialSector || isAdminOrRRHH) && (
+            <div className="form-group">
+              <label className="form-label">DNI (Solo Comercial)</label>
+              <input 
+                type="text" 
+                name="dni" 
+                className="form-input" 
+                defaultValue={empleado.dni || ''} 
+                placeholder="Ej: 35123456" 
+              />
+              <small style={{ color: 'var(--text-secondary)' }}>
+                Documento Nacional de Identidad del colaborador.
+              </small>
+            </div>
+          )}
+
+          <div className="form-group">
+            <label className="form-label">Base Operativa</label>
+            <select name="baseOperativa" className="form-input" defaultValue={empleado.baseOperativa || ''}>
+              <option value="">-- Sin base asignada --</option>
+              {BASES_OPERATIVAS.map(b => (
+                <option key={b} value={b}>{b}</option>
+              ))}
+            </select>
+          </div>
+
           <div className="form-group">
             <label className="form-label">Sector / Gerencia</label>
-            <select name="sectorId" className="form-input" defaultValue={empleado.sectorId} required>
-              {sectores.map(s => (
-                <option key={s.id} value={s.id}>{s.name}</option>
-              ))}</select>
+            {isComercialSector ? (
+              <>
+                <input type="text" className="form-input" value={empleado.sector.name} disabled />
+                <input type="hidden" name="sectorId" value={empleado.sectorId} />
+                <small style={{ color: 'var(--text-secondary)', display: 'block', marginTop: '0.25rem' }}>
+                  Como referente de Comercial, solo podés gestionar personal de tu gerencia.
+                </small>
+              </>
+            ) : (
+              <select name="sectorId" className="form-input" defaultValue={empleado.sectorId} required>
+                {sectores.map(s => (
+                  <option key={s.id} value={s.id}>{s.name}</option>
+                ))}
+              </select>
+            )}
           </div>
 
           <div className="form-group" style={{ padding: '1rem', backgroundColor: '#f8fafc', borderRadius: '4px', border: '1px solid #e2e8f0' }}>
@@ -173,7 +239,7 @@ export default async function EditarPersonalPage({ params, searchParams }: { par
 
           <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: '1rem' }}>
             <div>
-              {['ADMIN', 'SGI', 'RRHH'].includes(role) && (
+              {isAdminOrRRHH && (
                 <DeleteEmployeeButton deleteAction={deleteEmpleado} />
               )}
             </div>

@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 import Link from "next/link";
 import { getUniqueActiveProfiles } from "@/lib/profileUtils";
 import { getCurrentRole, isSectorRole, getSectorIdFromRole, getAllowedSectorNames } from "@/lib/auth";
+import { BASES_OPERATIVAS } from "@/lib/constants";
 
 export default async function NuevoPersonalPage({ searchParams }: { searchParams: Promise<{ error?: string }> }) {
   const params = await searchParams;
@@ -12,12 +13,22 @@ export default async function NuevoPersonalPage({ searchParams }: { searchParams
   const isSector = await isSectorRole(role);
   const mySectorId = await getSectorIdFromRole(role);
 
-  let allowedSectors: string[] | null = null;
+  let mySector = null;
   if (isSector && mySectorId) {
-    const mySector = await prisma.sector.findUnique({ where: { id: mySectorId } });
-    if (mySector) {
-      allowedSectors = await getAllowedSectorNames(role, mySector.name);
-    }
+    mySector = await prisma.sector.findUnique({ where: { id: mySectorId } });
+  }
+
+  const isComercialSector = isSector && mySector?.name.toLowerCase().includes('comercial');
+  const isAdminOrRRHH = ['ADMIN', 'SGI', 'RRHH'].includes(role);
+
+  // Si es rol sectorial y no es Comercial, no tiene permiso de crear empleados
+  if (isSector && !isComercialSector) {
+    redirect('/personal');
+  }
+
+  let allowedSectors: string[] | null = null;
+  if (isSector && mySector) {
+    allowedSectors = await getAllowedSectorNames(role, mySector.name);
   }
 
   const sectores = await prisma.sector.findMany({ orderBy: { name: 'asc' } });
@@ -27,10 +38,13 @@ export default async function NuevoPersonalPage({ searchParams }: { searchParams
     "use server"
     
     try {
-      const legajo = formData.get("legajo") as string;
-      const name = formData.get("name") as string;
-      const sectorId = parseInt(formData.get("sectorId") as string);
+      const legajo = (formData.get("legajo") as string)?.trim();
+      const name = (formData.get("name") as string)?.trim();
+      const rawSectorId = formData.get("sectorId") as string;
+      const sectorId = isComercialSector && mySectorId ? mySectorId : parseInt(rawSectorId);
       const jobProfileId = formData.get("jobProfileId") ? parseInt(formData.get("jobProfileId") as string) : null;
+      const baseOperativa = (formData.get("baseOperativa") as string) || null;
+      const dni = (formData.get("dni") as string)?.trim() || null;
 
       const existingEmployee = await prisma.employee.findUnique({
         where: { legajo }
@@ -47,6 +61,8 @@ export default async function NuevoPersonalPage({ searchParams }: { searchParams
               name,
               sectorId,
               jobProfileId,
+              baseOperativa,
+              dni,
               isActive: true
             }
           });
@@ -58,7 +74,9 @@ export default async function NuevoPersonalPage({ searchParams }: { searchParams
             legajo,
             name,
             sectorId,
-            jobProfileId
+            jobProfileId,
+            baseOperativa,
+            dni
           }
         });
       }
@@ -97,17 +115,49 @@ export default async function NuevoPersonalPage({ searchParams }: { searchParams
             <input type="text" name="name" required className="form-input" placeholder="Ej: Juan Pérez" />
           </div>
 
+          {(isComercialSector || isAdminOrRRHH) && (
+            <div className="form-group">
+              <label className="form-label">DNI (Solo Comercial)</label>
+              <input type="text" name="dni" className="form-input" placeholder="Ej: 35123456" />
+              <small style={{ color: 'var(--text-secondary)', display: 'block', marginTop: '0.25rem' }}>
+                Documento Nacional de Identidad del colaborador.
+              </small>
+            </div>
+          )}
+
           <div className="form-group">
-            <label className="form-label">Sector a la que pertenece</label>
-            <select name="sectorId" required className="form-input">
-              <option value="">Seleccione un sector...</option>
-              {sectores.map(s => (
-                <option key={s.id} value={s.id}>{s.name}</option>
+            <label className="form-label">Base Operativa</label>
+            <select name="baseOperativa" className="form-input">
+              <option value="">Seleccione una base operativa...</option>
+              {BASES_OPERATIVAS.map(b => (
+                <option key={b} value={b}>{b}</option>
               ))}
             </select>
-            <small style={{ color: 'var(--text-secondary)', display: 'block', marginTop: '0.25rem' }}>
-              Los sectores disponibles provienen de tu histórico migrado.
-            </small>
+          </div>
+
+          <div className="form-group">
+            <label className="form-label">Sector a la que pertenece</label>
+            {isComercialSector ? (
+              <>
+                <input type="text" className="form-input" value={mySector?.name || 'Gerencia Comercial'} disabled />
+                <input type="hidden" name="sectorId" value={mySectorId!} />
+                <small style={{ color: 'var(--text-secondary)', display: 'block', marginTop: '0.25rem' }}>
+                  Fijado a tu gerencia (Comercial).
+                </small>
+              </>
+            ) : (
+              <>
+                <select name="sectorId" required className="form-input">
+                  <option value="">Seleccione un sector...</option>
+                  {sectores.map(s => (
+                    <option key={s.id} value={s.id}>{s.name}</option>
+                  ))}
+                </select>
+                <small style={{ color: 'var(--text-secondary)', display: 'block', marginTop: '0.25rem' }}>
+                  Los sectores disponibles provienen de tu histórico migrado.
+                </small>
+              </>
+            )}
           </div>
 
           <div className="form-group">

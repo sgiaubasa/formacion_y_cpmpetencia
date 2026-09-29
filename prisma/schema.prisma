@@ -82,6 +82,8 @@ model Employee {
   sector       Sector     @relation(fields: [sectorId], references: [id])
   jobProfileId Int?
   jobProfile   JobProfile? @relation(fields: [jobProfileId], references: [id])
+  baseOperativa String?
+  dni          String?
   attendances      Attendance[]
   trainingRecords  EmployeeTrainingRecord[]
   pendingTransfers PendingTransfer[]
