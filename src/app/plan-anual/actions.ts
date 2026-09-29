@@ -5,6 +5,59 @@ import { revalidatePath } from "next/cache";
 import { writeFile } from "fs/promises";
 import { join } from "path";
 import fs from "fs";
+import { encryptRecordId } from "@/lib/crypto";
+import { syncRecordToPowerAutomate } from "@/lib/powerAutomate";
+import { createClient } from "@supabase/supabase-js";
+
+async function saveEvidenceFile(file: File, recordId: number): Promise<string> {
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+
+  if (supabaseUrl && supabaseKey) {
+    try {
+      const supabaseAdmin = createClient(supabaseUrl, supabaseKey);
+      const cleanName = file.name.replace(/[^a-zA-Z0-9.-]/g, '_');
+      const filename = `${recordId}-${Date.now()}-${cleanName}`;
+      const bytes = await file.arrayBuffer();
+      const buffer = Buffer.from(bytes);
+
+      const { data, error } = await supabaseAdmin.storage
+        .from('evidencias')
+        .upload(filename, buffer, {
+          contentType: file.type || 'application/pdf',
+          upsert: true
+        });
+
+      if (!error && data) {
+        const { data: publicData } = supabaseAdmin.storage
+          .from('evidencias')
+          .getPublicUrl(filename);
+        return publicData.publicUrl;
+      } else {
+        console.error("Supabase storage upload error:", error);
+      }
+    } catch (storageErr) {
+      console.error("Storage upload exception:", storageErr);
+    }
+  }
+
+  // Fallback for local development or if storage is unreachable
+  try {
+    const bytes = await file.arrayBuffer();
+    const buffer = Buffer.from(bytes);
+    const filename = `${Date.now()}-${file.name.replace(/\s/g, '_')}`;
+    const uploadDir = join(process.cwd(), 'public/uploads');
+    if (!fs.existsSync(uploadDir)) {
+      fs.mkdirSync(uploadDir, { recursive: true });
+    }
+    const path = join(uploadDir, filename);
+    await writeFile(path, buffer);
+    return `/uploads/${filename}`;
+  } catch (fsErr) {
+    console.warn("Local filesystem write skipped/failed (expected on Vercel):", fsErr);
+    return file.name;
+  }
+}
 
 export async function programarFecha(formData: FormData) {
   const recordId = parseInt(formData.get("recordId") as string);
@@ -26,12 +79,15 @@ export async function programarFecha(formData: FormData) {
     where: { id: recordId },
     data: updateData
   });
+
+  syncRecordToPowerAutomate(recordId).catch(() => {});
   revalidatePath('/plan-anual');
 }
 
 export async function marcarEjecutada(formData: FormData) {
   const recordId = parseInt(formData.get("recordId") as string);
   const dateStr = formData.get("completedAt") as string;
+  const score = formData.get("score") as string | null;
   const mode = formData.get("mode") as string;
   const file = formData.get("evidence") as File | null;
   const employeeSignature = formData.get("employeeSignature") as string | null;
@@ -40,16 +96,7 @@ export async function marcarEjecutada(formData: FormData) {
   
   let evidencePath = null;
   if (mode === "upload" && file && file.size > 0) {
-    const bytes = await file.arrayBuffer();
-    const buffer = Buffer.from(bytes);
-    const filename = `${Date.now()}-${file.name.replace(/\s/g, '_')}`;
-    const uploadDir = join(process.cwd(), 'public/uploads');
-    if (!fs.existsSync(uploadDir)) {
-      fs.mkdirSync(uploadDir, { recursive: true });
-    }
-    const path = join(uploadDir, filename);
-    await writeFile(path, buffer);
-    evidencePath = `/uploads/${filename}`;
+    evidencePath = await saveEvidenceFile(file, recordId);
   }
 
   // Update the record
@@ -59,12 +106,15 @@ export async function marcarEjecutada(formData: FormData) {
       status: 'COMPLETED',
       effectiveness: 'PENDING',
       completedAt: dateStr ? new Date(dateStr) : new Date(),
+      ...(score ? { score } : {}),
       ...(evidencePath ? { evidencePath } : {}),
       ...(mode === "sign" && employeeSignature ? { employeeSignature } : {}),
       ...(mode === "sign" && instructorSignature ? { instructorSignature } : {}),
       ...(mode === "sign" && instructorName ? { instructorName } : {})
     }
   });
+
+  syncRecordToPowerAutomate(recordId).catch(() => {});
   revalidatePath('/plan-anual');
 }
 
@@ -90,16 +140,7 @@ export async function sgiEditRecord(formData: FormData) {
   if (scoreStr) updateData.score = scoreStr;
 
   if (file && file.size > 0) {
-    const bytes = await file.arrayBuffer();
-    const buffer = Buffer.from(bytes);
-    const filename = `${Date.now()}-${file.name.replace(/\s/g, '_')}`;
-    const uploadDir = join(process.cwd(), 'public/uploads');
-    if (!fs.existsSync(uploadDir)) {
-      fs.mkdirSync(uploadDir, { recursive: true });
-    }
-    const path = join(uploadDir, filename);
-    await writeFile(path, buffer);
-    updateData.evidencePath = `/uploads/${filename}`;
+    updateData.evidencePath = await saveEvidenceFile(file, recordId);
   }
 
   if (Object.keys(updateData).length > 0) {
@@ -107,7 +148,13 @@ export async function sgiEditRecord(formData: FormData) {
       where: { id: recordId },
       data: updateData
     });
+    syncRecordToPowerAutomate(recordId).catch(() => {});
   }
   
   revalidatePath('/plan-anual');
+}
+
+export async function generarLinkFirma(recordId: number) {
+  const token = encryptRecordId(recordId);
+  return token;
 }
