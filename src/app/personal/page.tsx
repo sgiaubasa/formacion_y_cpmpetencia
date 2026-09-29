@@ -150,7 +150,9 @@ export default async function PersonalPage({
           </div>
 
           <div style={{ flex: '2 1 250px' }}>
-            <label className="form-label" style={{ fontSize: '0.75rem', marginBottom: '0.25rem' }}>Buscador (Nombre/Legajo/DNI)</label>
+            <label className="form-label" style={{ fontSize: '0.75rem', marginBottom: '0.25rem' }}>
+              {isComercialView ? 'Buscador (Nombre/Legajo/DNI)' : 'Buscador (Nombre/Legajo)'}
+            </label>
             <input type="text" name="q" className="form-input" placeholder="Buscar empleado..." defaultValue={q} />
           </div>
 

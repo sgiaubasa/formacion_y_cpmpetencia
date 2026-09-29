@@ -115,13 +115,10 @@ export default async function NuevoPersonalPage({ searchParams }: { searchParams
             <input type="text" name="name" required className="form-input" placeholder="Ej: Juan Pérez" />
           </div>
 
-          {(isComercialSector || isAdminOrRRHH) && (
+          {isComercialSector && (
             <div className="form-group">
-              <label className="form-label">DNI (Solo Comercial)</label>
+              <label className="form-label">DNI</label>
               <input type="text" name="dni" className="form-input" placeholder="Ej: 35123456" />
-              <small style={{ color: 'var(--text-secondary)', display: 'block', marginTop: '0.25rem' }}>
-                Documento Nacional de Identidad del colaborador.
-              </small>
             </div>
           )}
 

@@ -174,9 +174,9 @@ export default async function EditarPersonalPage({
             <input type="text" name="legajo" className="form-input" defaultValue={empleado.legajo} required />
           </div>
 
-          {(isEmpComercial || isComercialSector || isAdminOrRRHH) && (
+          {isEmpComercial && (
             <div className="form-group">
-              <label className="form-label">DNI (Solo Comercial)</label>
+              <label className="form-label">DNI</label>
               <input 
                 type="text" 
                 name="dni" 
@@ -184,9 +184,6 @@ export default async function EditarPersonalPage({
                 defaultValue={empleado.dni || ''} 
                 placeholder="Ej: 35123456" 
               />
-              <small style={{ color: 'var(--text-secondary)' }}>
-                Documento Nacional de Identidad del colaborador.
-              </small>
             </div>
           )}
 
