@@ -4,7 +4,7 @@ import { redirect } from "next/navigation";
 import { getUniqueActiveProfiles } from "@/lib/profileUtils";
 import { getCurrentRole, isSectorRole, getSectorIdFromRole, getAllowedSectorNames } from "@/lib/auth";
 import { DeleteEmployeeButton } from "./DeleteEmployeeButton";
-import { BASES_OPERATIVAS } from "@/lib/constants";
+import { BASES_OPERATIVAS, formatEmployeeName } from "@/lib/constants";
 
 export default async function EditarPersonalPage({ 
   params, 
@@ -69,7 +69,8 @@ export default async function EditarPersonalPage({
 
   async function updateEmpleado(formData: FormData) {
     "use server"
-    const name = (formData.get("name") as string)?.trim();
+    const rawName = (formData.get("name") as string)?.trim();
+    const name = formatEmployeeName(rawName);
     const legajo = (formData.get("legajo") as string)?.trim();
     const rawSectorId = formData.get("sectorId") as string;
     const sectorId = isComercialSector ? empleado!.sectorId : parseInt(rawSectorId);

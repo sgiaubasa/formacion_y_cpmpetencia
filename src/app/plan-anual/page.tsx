@@ -240,7 +240,10 @@ export default async function PlanAnualPage({ searchParams }: { searchParams: Pr
     );
   }
 
-  const allEmployees = await prisma.employee.findMany({ orderBy: { name: 'asc' } });
+  const allEmployees = await prisma.employee.findMany({ 
+    where: { isActive: true },
+    orderBy: { name: 'asc' } 
+  });
   const allSectors = await prisma.sector.findMany({ orderBy: { name: 'asc' } });
   let allowedSectors: string[] | null = null;
   if (isSector && sectorRoleId) {

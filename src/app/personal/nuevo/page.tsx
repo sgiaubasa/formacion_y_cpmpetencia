@@ -3,7 +3,7 @@ import { redirect } from "next/navigation";
 import Link from "next/link";
 import { getUniqueActiveProfiles } from "@/lib/profileUtils";
 import { getCurrentRole, isSectorRole, getSectorIdFromRole, getAllowedSectorNames } from "@/lib/auth";
-import { BASES_OPERATIVAS } from "@/lib/constants";
+import { BASES_OPERATIVAS, formatEmployeeName } from "@/lib/constants";
 
 export default async function NuevoPersonalPage({ searchParams }: { searchParams: Promise<{ error?: string }> }) {
   const params = await searchParams;
@@ -39,7 +39,8 @@ export default async function NuevoPersonalPage({ searchParams }: { searchParams
     
     try {
       const legajo = (formData.get("legajo") as string)?.trim();
-      const name = (formData.get("name") as string)?.trim();
+      const rawName = (formData.get("name") as string)?.trim();
+      const name = formatEmployeeName(rawName);
       const rawSectorId = formData.get("sectorId") as string;
       const sectorId = isComercialSector && mySectorId ? mySectorId : parseInt(rawSectorId);
       const jobProfileId = formData.get("jobProfileId") ? parseInt(formData.get("jobProfileId") as string) : null;
