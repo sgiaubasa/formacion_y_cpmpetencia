@@ -82,6 +82,17 @@ export default function ConfirmGapForm({
           router.push("/brechas");
         } else if (result.mailtoData?.to) {
           setFallbackMail(result.mailtoData);
+          const toFormatted = result.mailtoData.to
+            .split(/[,;]+/)
+            .map((x: string) => x.trim())
+            .filter(Boolean)
+            .join(";");
+          const mailtoParams = new URLSearchParams();
+          if (result.mailtoData.cc) mailtoParams.set("cc", result.mailtoData.cc);
+          mailtoParams.set("subject", result.mailtoData.subject);
+          mailtoParams.set("body", result.mailtoData.body);
+          const mailtoUrl = `mailto:${toFormatted}?${mailtoParams.toString().replace(/\+/g, "%20")}`;
+          window.location.href = mailtoUrl;
         } else {
           alert(`¡Propuesta de cambio registrada en Transferencias!`);
           router.push("/brechas");
