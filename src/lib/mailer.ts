@@ -99,9 +99,7 @@ export async function sendMail({
     // IMPORTANTE: El correo dentro de <...> en 'from' SIEMPRE debe ser smtpUser (ej. sgiaubasa@gmail.com)
     // para que el servidor de correo corporativo (@aubasa.com.ar) no bloquee el mensaje por Anti-Spoofing (SPF/DMARC).
     const cleanReplyTo = replyTo ? parseEmailArray(replyTo)[0] : undefined;
-    const fromHeader = cleanReplyTo
-      ? `"SGCySV - RRHH (${cleanReplyTo})" <${smtpUser}>`
-      : `"SGCySV - Capacitaciones" <${smtpUser}>`;
+    const fromHeader = `"RRHH - AUBASA (No Responder)" <${smtpUser}>`;
 
     const info = await transporter.sendMail({
       from: fromHeader,

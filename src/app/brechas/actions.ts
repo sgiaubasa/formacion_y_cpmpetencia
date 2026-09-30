@@ -120,16 +120,12 @@ export async function confirmarCambioPuestoAction(formData: FormData) {
         : `<li>Sin brechas pendientes (cumple con todos los requisitos)</li>`;
     emailBody = emailBody.replace(/\{\{brechas\}\}/g, brechasHtml);
 
-    if (senderEmail) {
-      emailBody += `<hr style="margin-top:20px;border:none;border-top:1px solid #e2e8f0;" /><p style="font-size:12px;color:#64748b;">Notificación generada por: <strong>${senderEmail}</strong> | <a href="https://formacion-y-competencia.vercel.app/transferencias">Ir a Transferencias</a></p>`;
-    }
+    emailBody += `<hr style="margin-top:20px;border:none;border-top:1px solid #e2e8f0;" /><p style="font-size:12px;color:#64748b;"><em>Este es un aviso automático del Sistema de Formación y Competencia (RRHH - AUBASA). Por favor, no responda a este correo.</em> | <a href="https://formacion-y-competencia.vercel.app/transferencias">Ir a Transferencias</a></p>`;
 
     if (finalRecipients) {
       const { sendMail } = await import("@/lib/mailer");
       const res = await sendMail({
-        replyTo: senderEmail || undefined,
         to: finalRecipients,
-        cc: senderEmail || undefined,
         subject: emailSubject,
         html: emailBody,
       });

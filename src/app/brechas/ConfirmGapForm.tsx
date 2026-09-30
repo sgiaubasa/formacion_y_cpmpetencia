@@ -20,7 +20,7 @@ export default function ConfirmGapForm({
   empId: number,
   targetProfileId: number,
   allSectors: { id: number, name: string, mail: string | null }[],
-  rrhhUsers: { id: number, email: string, role: string }[],
+  rrhhUsers?: { id: number, email: string, role: string }[],
   defaultTargetSectorId: number,
   gapResults: { requirement: string, hasTraining: boolean }[],
   completedTrainings: string[]
@@ -77,7 +77,7 @@ export default function ConfirmGapForm({
       if (result.success) {
         if (result.emailSent) {
           alert(
-            `¡Propuesta de cambio enviada!\nSe envió automáticamente el correo de notificación a:\n${result.mailtoData?.to || "los destinatarios indicados"}${result.mailtoData?.cc ? `\n(CC: ${result.mailtoData.cc})` : ""}`
+            `¡Propuesta de cambio enviada!\nSe envió automáticamente la comunicación a:\n${result.mailtoData?.to || "los destinatarios indicados"}`
           );
           router.push("/brechas");
         } else if (result.mailtoData?.to) {
@@ -88,7 +88,6 @@ export default function ConfirmGapForm({
             .filter(Boolean)
             .join(";");
           const mailtoParams = new URLSearchParams();
-          if (result.mailtoData.cc) mailtoParams.set("cc", result.mailtoData.cc);
           mailtoParams.set("subject", result.mailtoData.subject);
           mailtoParams.set("body", result.mailtoData.body);
           const mailtoUrl = `mailto:${toFormatted}?${mailtoParams.toString().replace(/\+/g, "%20")}`;
@@ -113,14 +112,12 @@ export default function ConfirmGapForm({
       .join(";");
 
     const mailtoParams = new URLSearchParams();
-    if (fallbackMail.cc) mailtoParams.set("cc", fallbackMail.cc);
     mailtoParams.set("subject", fallbackMail.subject);
     mailtoParams.set("body", fallbackMail.body);
     const mailtoUrl = `mailto:${toFormatted}?${mailtoParams.toString().replace(/\+/g, "%20")}`;
 
     const owaParams = new URLSearchParams();
     owaParams.set("to", toFormatted);
-    if (fallbackMail.cc) owaParams.set("cc", fallbackMail.cc);
     owaParams.set("subject", fallbackMail.subject);
     owaParams.set("body", fallbackMail.body);
     const owaUrl = `https://outlook.office.com/mail/deeplink/compose?${owaParams.toString()}`;
@@ -133,7 +130,7 @@ export default function ConfirmGapForm({
         <p style={{ marginBottom: "1rem", color: "var(--text-secondary)" }}>
           La solicitud de cambio de puesto de <strong>{employeeName}</strong> ya quedó cargada en la pestaña <b>Transferencias</b>.
           <br />
-          Seleccione cómo desea enviar el correo de aviso a <strong>{fallbackMail.to}</strong>:
+          Seleccione cómo desea despachar el aviso a <strong>{fallbackMail.to}</strong>:
         </p>
         <div style={{ display: "flex", gap: "1rem", flexWrap: "wrap", marginBottom: "1.5rem" }}>
           <a
@@ -170,14 +167,6 @@ export default function ConfirmGapForm({
       <input type="hidden" name="targetProfileId" value={targetProfileId} />
       
       <div style={{ marginBottom: '1.5rem', padding: '1rem', backgroundColor: '#f8fafc', borderRadius: '4px', border: '1px solid #e2e8f0' }}>
-        <label className="form-label" style={{ fontWeight: 'bold' }}>Remitente del Correo (Quién envía):</label>
-        <select name="senderEmail" className="form-input" required style={{ marginBottom: '1rem' }}>
-          <option value="">Seleccione el remitente...</option>
-          {rrhhUsers.map(u => (
-            <option key={u.id} value={u.email}>{u.email} ({u.role})</option>
-          ))}
-        </select>
-
         <label className="form-label" style={{ fontWeight: 'bold' }}>Sector Destino (Quien recibe al empleado y aprueba la transferencia):</label>
         <select name="targetSectorId" className="form-input" value={selectedSectorId} onChange={handleSectorChange} required>
           <option value="" disabled>Seleccione el sector...</option>
