@@ -2,8 +2,25 @@
 
 import { prisma } from "@/lib/prisma";
 import { revalidatePath } from "next/cache";
-
 import { createClient } from '@supabase/supabase-js';
+
+async function syncSectorMail(sectorId: number | null) {
+  if (!sectorId) return;
+  try {
+    const sectorUsers = await prisma.appUser.findMany({
+      where: { role: "SECTOR", sectorId }
+    });
+    const emails = Array.from(
+      new Set(sectorUsers.map(u => u.email.trim().toLowerCase()).filter(Boolean))
+    );
+    await prisma.sector.update({
+      where: { id: sectorId },
+      data: { mail: emails.length > 0 ? emails.join(", ") : null }
+    });
+  } catch (e) {
+    console.error("Error sincronizando correos del sector:", e);
+  }
+}
 
 export async function addAccess(formData: FormData) {
   const email = formData.get("email") as string;
@@ -28,6 +45,9 @@ export async function addAccess(formData: FormData) {
         isManager
       }
     });
+    if (role === "SECTOR" && sectorId) {
+      await syncSectorMail(sectorId);
+    }
   } catch (error) {
     console.error("Error al guardar usuario en base de datos:", error);
     return; // Evitar que rompa la pagina
@@ -50,18 +70,24 @@ export async function addAccess(formData: FormData) {
   }
 
   revalidatePath('/accesos');
+  revalidatePath('/brechas');
 }
 
 export async function removeAccess(formData: FormData) {
   const id = parseInt(formData.get("id") as string);
   
   try {
+    const user = await prisma.appUser.findUnique({ where: { id } });
     await prisma.appUser.delete({
       where: { id }
     });
+    if (user?.sectorId) {
+      await syncSectorMail(user.sectorId);
+    }
   } catch (error) {
     console.error("Error al borrar:", error);
   }
 
   revalidatePath('/accesos');
+  revalidatePath('/brechas');
 }

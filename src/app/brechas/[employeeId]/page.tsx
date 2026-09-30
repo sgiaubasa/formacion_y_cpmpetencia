@@ -48,7 +48,27 @@ export default async function SimuladorCambioPuestoPage({ params, searchParams }
   }
 
   const allProfiles = await getUniqueActiveProfiles(allowedSectors);
-  const allSectors = await prisma.sector.findMany({ orderBy: { name: 'asc' } });
+  const rawSectors = await prisma.sector.findMany({ orderBy: { name: 'asc' } });
+  const sectorUsers = await prisma.appUser.findMany({
+    where: { sectorId: { not: null } },
+    orderBy: { email: 'asc' }
+  });
+
+  const allSectors = rawSectors.map(s => {
+    const existingMails = (s.mail || "")
+      .split(/[,;]+/)
+      .map(e => e.trim())
+      .filter(Boolean);
+    const userMails = sectorUsers
+      .filter(u => u.sectorId === s.id)
+      .map(u => u.email.trim())
+      .filter(Boolean);
+    const merged = Array.from(new Set([...existingMails, ...userMails]));
+    return {
+      ...s,
+      mail: merged.length > 0 ? merged.join(", ") : null
+    };
+  });
   
   let targetProfile = null;
   let requirements: string[] = [];

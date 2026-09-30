@@ -1,11 +1,13 @@
 import { prisma } from "@/lib/prisma";
 import Link from "next/link";
 import { getCurrentRole, isSectorRole, getSectorIdFromRole } from "@/lib/auth";
+import { eliminarTransferenciaAction } from "./actions";
 
 export default async function TransferenciasPage() {
   const role = await getCurrentRole();
   const isSector = await isSectorRole(role);
   const sectorRoleId = await getSectorIdFromRole(role);
+  const canDelete = ['ADMIN', 'RRHH', 'SGI'].includes(role);
 
   let whereClause: any = { status: 'PENDING' };
   if (isSector && sectorRoleId) {
@@ -49,9 +51,29 @@ export default async function TransferenciasPage() {
                 <td>{t.targetSector.name}</td>
                 <td>{t.targetProfile.title}</td>
                 <td>
-                  <Link href={`/transferencias/${t.id}`} className="btn btn-primary" style={{ padding: '0.25rem 0.5rem', fontSize: '0.875rem' }}>
-                    Revisar y Confirmar
-                  </Link>
+                  <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
+                    <Link href={`/transferencias/${t.id}`} className="btn btn-primary" style={{ padding: '0.25rem 0.5rem', fontSize: '0.875rem' }}>
+                      Revisar y Confirmar
+                    </Link>
+                    {canDelete && (
+                      <form action={eliminarTransferenciaAction}>
+                        <input type="hidden" name="transferId" value={t.id} />
+                        <button
+                          type="submit"
+                          className="btn btn-secondary"
+                          style={{
+                            padding: '0.25rem 0.5rem',
+                            fontSize: '0.875rem',
+                            color: '#dc2626',
+                            borderColor: '#fecaca',
+                            backgroundColor: '#fef2f2'
+                          }}
+                        >
+                          Eliminar
+                        </button>
+                      </form>
+                    )}
+                  </div>
                 </td>
               </tr>
             ))}

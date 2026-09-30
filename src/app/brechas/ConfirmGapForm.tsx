@@ -49,11 +49,32 @@ export default function ConfirmGapForm({
     try {
       const result = await confirmarCambioPuestoAction(formData);
       if (result.success) {
-        if (result.previewUrl) {
-          alert(`¡Propuesta de cambio enviada!\nSe ha enviado un correo de notificación.\n\nAl hacer clic en Aceptar, se abrirá una pestaña simulando el buzón de entrada.`);
-          window.open(result.previewUrl, "_blank");
+        if (result.emailSent) {
+          alert(
+            `¡Propuesta de cambio enviada!\nSe envió automáticamente el correo de notificación a: ${result.mailtoData?.to || "los destinatarios indicados"}.`
+          );
+        } else if (result.mailtoData?.to) {
+          const toFormatted = result.mailtoData.to
+            .split(/[,;]+/)
+            .map((x: string) => x.trim())
+            .filter(Boolean)
+            .join(";");
+          const params = new URLSearchParams();
+          if (result.mailtoData.cc) {
+            params.set("cc", result.mailtoData.cc);
+          }
+          params.set("subject", result.mailtoData.subject);
+          params.set("body", result.mailtoData.body);
+          const mailtoUrl = `mailto:${toFormatted}?${params
+            .toString()
+            .replace(/\+/g, "%20")}`;
+
+          alert(
+            `¡Propuesta de cambio registrada en Transferencias!\n\nA continuación se abrirá su correo (Outlook) con el mensaje ya redactado para enviar la notificación a: ${result.mailtoData.to}`
+          );
+          window.location.href = mailtoUrl;
         } else {
-          alert(`¡Propuesta de cambio enviada!`);
+          alert(`¡Propuesta de cambio registrada en Transferencias!`);
         }
         router.push("/brechas");
       }
@@ -94,8 +115,11 @@ export default function ConfirmGapForm({
           value={emails} 
           onChange={e => setEmails(e.target.value)}
           placeholder="ejemplo@aubasa.com.ar, otro@aubasa.com.ar"
+          required
         />
-        <small style={{ color: 'var(--text-secondary)' }}>Puedes separar múltiples correos usando comas.</small>
+        <small style={{ color: 'var(--text-secondary)' }}>
+          Se cargan automáticamente los responsables del sector seleccionado. También puedes agregar o escribir correos manualmente separados por comas.
+        </small>
       </div>
 
       <h2 style={{ fontSize: '1.25rem', marginBottom: '1rem' }}>2. Confirmación de Brechas para el Plan Anual</h2>

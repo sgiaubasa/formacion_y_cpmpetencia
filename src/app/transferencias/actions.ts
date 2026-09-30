@@ -2,7 +2,7 @@
 
 import { prisma } from "@/lib/prisma";
 import { revalidatePath } from "next/cache";
-import { redirect } from "next/navigation";
+import { getCurrentRole } from "@/lib/auth";
 
 export async function confirmarTransferenciaAction(formData: FormData) {
   const transferId = parseInt(formData.get("transferId") as string);
@@ -59,4 +59,21 @@ export async function confirmarTransferenciaAction(formData: FormData) {
   revalidatePath('/personal');
   revalidatePath('/brechas');
   return { success: true };
+}
+
+export async function eliminarTransferenciaAction(formData: FormData) {
+  const role = await getCurrentRole();
+  if (!['ADMIN', 'RRHH', 'SGI'].includes(role)) {
+    throw new Error("No autorizado");
+  }
+
+  const transferId = parseInt(formData.get("transferId") as string);
+  if (!transferId) return;
+
+  await prisma.pendingTransfer.delete({
+    where: { id: transferId }
+  });
+
+  revalidatePath('/transferencias');
+  revalidatePath('/brechas');
 }
