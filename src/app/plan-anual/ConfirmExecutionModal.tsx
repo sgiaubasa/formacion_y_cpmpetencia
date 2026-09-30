@@ -3,6 +3,7 @@
 import { useState, useRef } from "react";
 import SignatureCanvas from "react-signature-canvas";
 import { marcarEjecutada, generarLinkFirma } from "./actions";
+import { supabase } from "@/lib/supabase";
 
 export function ConfirmExecutionModal({
   recordId,
@@ -56,8 +57,44 @@ export function ConfirmExecutionModal({
       formData.set("instructorSignature", instructorSigRef.current.getTrimmedCanvas().toDataURL('image/png'));
     }
 
+    if (mode === "upload") {
+      const file = formData.get("evidence") as File | null;
+      if (file && file.size > 0) {
+        try {
+          const cleanName = file.name
+            .normalize("NFD")
+            .replace(/[\u0300-\u036f]/g, "")
+            .replace(/[^a-zA-Z0-9.-]/g, "_");
+          const filename = `${recordId}-${Date.now()}-${cleanName}`;
+
+          const { data: uploadData, error: uploadError } = await supabase.storage
+            .from("evidencias")
+            .upload(filename, file, {
+              contentType: file.type || "application/octet-stream",
+              upsert: true
+            });
+
+          if (!uploadError && uploadData) {
+            const { data: publicData } = supabase.storage
+              .from("evidencias")
+              .getPublicUrl(filename);
+            formData.set("evidenceUrl", publicData.publicUrl);
+            formData.delete("evidence");
+          } else {
+            console.warn("Direct client storage upload fallback:", uploadError);
+          }
+        } catch (uploadEx) {
+          console.warn("Client upload exception, falling back to server action:", uploadEx);
+        }
+      }
+    }
+
     try {
-      await marcarEjecutada(formData);
+      const result = await marcarEjecutada(formData);
+      if (result && typeof result === "object" && "error" in result && result.error) {
+        setError(result.error as string);
+        return;
+      }
       onClose();
     } catch (err: any) {
       console.error("Error al guardar ejecución:", err);

@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { sgiEditRecord } from "./actions";
+import { supabase } from "@/lib/supabase";
 
 export function SgiEditModal({
   recordId,
@@ -25,8 +26,40 @@ export function SgiEditModal({
     setError("");
 
     const formData = new FormData(e.currentTarget);
+    const file = formData.get("evidence") as File | null;
+    if (file && file.size > 0) {
+      try {
+        const cleanName = file.name
+          .normalize("NFD")
+          .replace(/[\u0300-\u036f]/g, "")
+          .replace(/[^a-zA-Z0-9.-]/g, "_");
+        const filename = `${recordId}-${Date.now()}-${cleanName}`;
+
+        const { data: uploadData, error: uploadError } = await supabase.storage
+          .from("evidencias")
+          .upload(filename, file, {
+            contentType: file.type || "application/octet-stream",
+            upsert: true
+          });
+
+        if (!uploadError && uploadData) {
+          const { data: publicData } = supabase.storage
+            .from("evidencias")
+            .getPublicUrl(filename);
+          formData.set("evidenceUrl", publicData.publicUrl);
+          formData.delete("evidence");
+        }
+      } catch (uploadEx) {
+        console.warn("Client upload exception in SGI edit:", uploadEx);
+      }
+    }
+
     try {
-      await sgiEditRecord(formData);
+      const result = await sgiEditRecord(formData);
+      if (result && typeof result === "object" && "error" in result && result.error) {
+        setError(result.error as string);
+        return;
+      }
       onClose();
     } catch (err) {
       setError("Error al guardar.");

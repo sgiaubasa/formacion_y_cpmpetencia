@@ -16,7 +16,10 @@ async function saveEvidenceFile(file: File, recordId: number): Promise<string> {
   if (supabaseUrl && supabaseKey) {
     try {
       const supabaseAdmin = createClient(supabaseUrl, supabaseKey);
-      const cleanName = file.name.replace(/[^a-zA-Z0-9.-]/g, '_');
+      const cleanName = file.name
+        .normalize("NFD")
+        .replace(/[\u0300-\u036f]/g, "")
+        .replace(/[^a-zA-Z0-9.-]/g, '_');
       const filename = `${recordId}-${Date.now()}-${cleanName}`;
       const bytes = await file.arrayBuffer();
       const buffer = Buffer.from(bytes);
@@ -24,7 +27,7 @@ async function saveEvidenceFile(file: File, recordId: number): Promise<string> {
       const { data, error } = await supabaseAdmin.storage
         .from('evidencias')
         .upload(filename, buffer, {
-          contentType: file.type || 'application/pdf',
+          contentType: file.type || 'application/octet-stream',
           upsert: true
         });
 
@@ -85,37 +88,44 @@ export async function programarFecha(formData: FormData) {
 }
 
 export async function marcarEjecutada(formData: FormData) {
-  const recordId = parseInt(formData.get("recordId") as string);
-  const dateStr = formData.get("completedAt") as string;
-  const score = formData.get("score") as string | null;
-  const mode = formData.get("mode") as string;
-  const file = formData.get("evidence") as File | null;
-  const employeeSignature = formData.get("employeeSignature") as string | null;
-  const instructorSignature = formData.get("instructorSignature") as string | null;
-  const instructorName = formData.get("instructorName") as string | null;
-  
-  let evidencePath = null;
-  if (mode === "upload" && file && file.size > 0) {
-    evidencePath = await saveEvidenceFile(file, recordId);
-  }
-
-  // Update the record
-  await prisma.employeeTrainingRecord.update({
-    where: { id: recordId },
-    data: {
-      status: 'COMPLETED',
-      effectiveness: 'PENDING',
-      completedAt: dateStr ? new Date(dateStr) : new Date(),
-      ...(score ? { score } : {}),
-      ...(evidencePath ? { evidencePath } : {}),
-      ...(mode === "sign" && employeeSignature ? { employeeSignature } : {}),
-      ...(mode === "sign" && instructorSignature ? { instructorSignature } : {}),
-      ...(mode === "sign" && instructorName ? { instructorName } : {})
+  try {
+    const recordId = parseInt(formData.get("recordId") as string);
+    const dateStr = formData.get("completedAt") as string;
+    const score = formData.get("score") as string | null;
+    const mode = formData.get("mode") as string;
+    const file = formData.get("evidence") as File | null;
+    const evidenceUrl = formData.get("evidenceUrl") as string | null;
+    const employeeSignature = formData.get("employeeSignature") as string | null;
+    const instructorSignature = formData.get("instructorSignature") as string | null;
+    const instructorName = formData.get("instructorName") as string | null;
+    
+    let evidencePath: string | null = evidenceUrl || null;
+    if (!evidencePath && mode === "upload" && file && file.size > 0) {
+      evidencePath = await saveEvidenceFile(file, recordId);
     }
-  });
 
-  syncRecordToPowerAutomate(recordId).catch(() => {});
-  revalidatePath('/plan-anual');
+    // Update the record
+    await prisma.employeeTrainingRecord.update({
+      where: { id: recordId },
+      data: {
+        status: 'COMPLETED',
+        effectiveness: 'PENDING',
+        completedAt: dateStr ? new Date(dateStr) : new Date(),
+        ...(score ? { score } : {}),
+        ...(evidencePath ? { evidencePath } : {}),
+        ...(mode === "sign" && employeeSignature ? { employeeSignature } : {}),
+        ...(mode === "sign" && instructorSignature ? { instructorSignature } : {}),
+        ...(mode === "sign" && instructorName ? { instructorName } : {})
+      }
+    });
+
+    syncRecordToPowerAutomate(recordId).catch(() => {});
+    revalidatePath('/plan-anual');
+    return { success: true };
+  } catch (err: any) {
+    console.error("Error in marcarEjecutada:", err);
+    return { error: err?.message || "No se pudo guardar el registro." };
+  }
 }
 
 export async function borrarCapacitacion(formData: FormData) {
@@ -127,31 +137,40 @@ export async function borrarCapacitacion(formData: FormData) {
 }
 
 export async function sgiEditRecord(formData: FormData) {
-  const recordId = parseInt(formData.get("recordId") as string);
-  const scheduledDateStr = formData.get("scheduledDate") as string;
-  const completedAtStr = formData.get("completedAt") as string;
-  const scoreStr = formData.get("score") as string;
-  const file = formData.get("evidence") as File | null;
+  try {
+    const recordId = parseInt(formData.get("recordId") as string);
+    const scheduledDateStr = formData.get("scheduledDate") as string;
+    const completedAtStr = formData.get("completedAt") as string;
+    const scoreStr = formData.get("score") as string;
+    const file = formData.get("evidence") as File | null;
+    const evidenceUrl = formData.get("evidenceUrl") as string | null;
 
-  let updateData: any = {};
+    let updateData: any = {};
 
-  if (scheduledDateStr) updateData.scheduledDate = new Date(scheduledDateStr);
-  if (completedAtStr) updateData.completedAt = new Date(completedAtStr);
-  if (scoreStr) updateData.score = scoreStr;
+    if (scheduledDateStr) updateData.scheduledDate = new Date(scheduledDateStr);
+    if (completedAtStr) updateData.completedAt = new Date(completedAtStr);
+    if (scoreStr) updateData.score = scoreStr;
 
-  if (file && file.size > 0) {
-    updateData.evidencePath = await saveEvidenceFile(file, recordId);
+    if (evidenceUrl) {
+      updateData.evidencePath = evidenceUrl;
+    } else if (file && file.size > 0) {
+      updateData.evidencePath = await saveEvidenceFile(file, recordId);
+    }
+
+    if (Object.keys(updateData).length > 0) {
+      await prisma.employeeTrainingRecord.update({
+        where: { id: recordId },
+        data: updateData
+      });
+      syncRecordToPowerAutomate(recordId).catch(() => {});
+    }
+    
+    revalidatePath('/plan-anual');
+    return { success: true };
+  } catch (err: any) {
+    console.error("Error in sgiEditRecord:", err);
+    return { error: err?.message || "No se pudo actualizar el registro." };
   }
-
-  if (Object.keys(updateData).length > 0) {
-    await prisma.employeeTrainingRecord.update({
-      where: { id: recordId },
-      data: updateData
-    });
-    syncRecordToPowerAutomate(recordId).catch(() => {});
-  }
-  
-  revalidatePath('/plan-anual');
 }
 
 export async function generarLinkFirma(recordId: number) {
