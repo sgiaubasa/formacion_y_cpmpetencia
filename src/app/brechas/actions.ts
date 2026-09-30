@@ -25,26 +25,31 @@ export async function confirmarCambioPuestoAction(formData: FormData) {
 
   if (!empleado || !targetProfile) throw new Error("Datos inválidos");
 
-  // Resolver destinatarios: los ingresados manualmente o los del sector destino
-  let recipientsList = rawNotificationEmails
-    .split(/[,;]+/)
+  // Resolver todos los destinatarios: manuales + sector destino
+  const manualEmails = rawNotificationEmails
+    .split(/[,;\s]+/)
     .map(e => e.trim())
-    .filter(Boolean);
+    .filter(e => e.includes("@"));
 
-  if (recipientsList.length === 0 && targetSectorId) {
+  let sectorEmails: string[] = [];
+  if (targetSectorId) {
     const sectorUsers = await prisma.appUser.findMany({
       where: { sectorId: targetSectorId },
     });
-    const sectorMails = [
-      ...(targetSector?.mail ? targetSector.mail.split(/[,;]+/) : []),
+    sectorEmails = [
+      ...(targetSector?.mail ? targetSector.mail.split(/[,;\s]+/) : []),
       ...sectorUsers.map(u => u.email),
     ]
       .map(e => e.trim())
-      .filter(Boolean);
-    recipientsList = Array.from(new Set(sectorMails));
+      .filter(e => e.includes("@"));
   }
 
-  const finalRecipients = recipientsList.join(", ");
+  // Unificar correos manuales + correos del sector destino (y si ambos están vacíos, usar senderEmail)
+  const allToEmails = Array.from(new Set([...manualEmails, ...sectorEmails]));
+  if (allToEmails.length === 0 && senderEmail.includes("@")) {
+    allToEmails.push(senderEmail);
+  }
+  const finalRecipients = allToEmails.join(", ");
 
   // 2. Crear PendingTransfer
   await prisma.pendingTransfer.create({
@@ -73,6 +78,7 @@ export async function confirmarCambioPuestoAction(formData: FormData) {
     `- Empleado: ${empleado.name} (Legajo: ${empleado.legajo})`,
     `- Nuevo Puesto: ${targetProfile.title}`,
     `- Sector Destino: ${targetSector?.name || "-"}`,
+    ...(senderEmail ? [`- Propuesto por: ${senderEmail}`] : []),
     ``,
     `Capacitaciones a Planificar:`,
     ...(cleanGaps.length > 0
@@ -83,6 +89,7 @@ export async function confirmarCambioPuestoAction(formData: FormData) {
   ].join("\r\n");
 
   let emailSent = false;
+  let emailError = "";
   try {
     const templateSetting = await prisma.appSetting.findUnique({
       where: { id: "email_template_transferencia" },
@@ -113,10 +120,13 @@ export async function confirmarCambioPuestoAction(formData: FormData) {
         : `<li>Sin brechas pendientes (cumple con todos los requisitos)</li>`;
     emailBody = emailBody.replace(/\{\{brechas\}\}/g, brechasHtml);
 
+    if (senderEmail) {
+      emailBody += `<hr style="margin-top:20px;border:none;border-top:1px solid #e2e8f0;" /><p style="font-size:12px;color:#64748b;">Notificación generada por: <strong>${senderEmail}</strong> | <a href="https://formacion-y-competencia.vercel.app/transferencias">Ir a Transferencias</a></p>`;
+    }
+
     if (finalRecipients) {
       const { sendMail } = await import("@/lib/mailer");
       const res = await sendMail({
-        from: `"RRHH - SGC" <${senderEmail || "rrhh@aubasa.com.ar"}>`,
         replyTo: senderEmail || undefined,
         to: finalRecipients,
         cc: senderEmail || undefined,
@@ -124,9 +134,11 @@ export async function confirmarCambioPuestoAction(formData: FormData) {
         html: emailBody,
       });
       emailSent = res.sent;
+      emailError = res.error || "";
     }
-  } catch (error) {
+  } catch (error: any) {
     console.error("Error enviando email de transferencia:", error);
+    emailError = error?.message || "ERROR";
   }
 
   revalidatePath("/transferencias");
@@ -135,6 +147,7 @@ export async function confirmarCambioPuestoAction(formData: FormData) {
   return {
     success: true,
     emailSent,
+    emailError,
     mailtoData: {
       to: finalRecipients,
       cc: senderEmail || "",

@@ -1,14 +1,14 @@
 import nodemailer from 'nodemailer';
 import { prisma } from './prisma';
 
-function normalizeEmailList(input?: string | string[]): string {
-  if (!input) return '';
+function parseEmailArray(input?: string | string[]): string[] {
+  if (!input) return [];
   const raw = Array.isArray(input) ? input.join(',') : input;
-  return raw
-    .split(/[,;]+/)
+  const parts = raw
+    .split(/[,;\s]+/)
     .map(e => e.trim())
-    .filter(Boolean)
-    .join(', ');
+    .filter(e => e.includes('@'));
+  return Array.from(new Set(parts));
 }
 
 export async function sendMail({
@@ -25,15 +25,15 @@ export async function sendMail({
   cc?: string | string[];
   from?: string;
   replyTo?: string;
-}): Promise<{ sent: boolean; method?: string; error?: string }> {
-  const cleanTo = normalizeEmailList(to);
-  const cleanCc = normalizeEmailList(cc);
+}): Promise<{ sent: boolean; method?: string; error?: string; recipients?: string[] }> {
+  const toList = parseEmailArray(to);
+  const ccList = parseEmailArray(cc);
 
-  if (!cleanTo) {
-    return { sent: false, error: 'Sin destinatarios' };
+  if (toList.length === 0) {
+    return { sent: false, error: 'Sin destinatarios válidos' };
   }
 
-  // Cargar configuración de correo desde AppSetting o variables de entorno
+  // Cargar configuración opcional desde AppSetting o usar variables de entorno de Vercel
   let dbSettings: Record<string, string> = {};
   try {
     const rows = await prisma.appSetting.findMany({
@@ -53,51 +53,36 @@ export async function sendMail({
       if (r.value) dbSettings[r.id] = r.value.trim();
     }
   } catch (e) {
-    // Continuar con variables de entorno si falla lectura de AppSetting
+    // Ignorar error de lectura de AppSetting
   }
 
-  const webhookUrl =
-    dbSettings['email_webhook_url'] ||
-    process.env.POWER_AUTOMATE_EMAIL_WEBHOOK_URL ||
-    '';
-
-  // 1. Intentar envío mediante Webhook de Power Automate (Office 365 Outlook) si está configurado
-  if (webhookUrl) {
-    try {
-      const res = await fetch(webhookUrl, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          to: cleanTo,
-          cc: cleanCc || '',
-          from: from || replyTo || 'rrhh@aubasa.com.ar',
-          subject,
-          html,
-        }),
-      });
-      if (res.ok) {
-        return { sent: true, method: 'webhook' };
-      }
-    } catch (err) {
-      console.error('Error enviando correo por Webhook:', err);
-    }
-  }
-
-  // 2. Intentar envío mediante SMTP (Gmail / Office 365)
   const smtpHost = dbSettings['smtp_host'] || process.env.SMTP_HOST || 'smtp.gmail.com';
   const smtpPort = parseInt(dbSettings['smtp_port'] || process.env.SMTP_PORT || '587', 10);
   const smtpUser = dbSettings['smtp_user'] || process.env.SMTP_USER || '';
   const smtpPass = dbSettings['smtp_pass'] || process.env.SMTP_PASS || '';
 
   if (!smtpUser || !smtpPass) {
-    console.log('------------------------------------------');
-    console.log('Email pendiente de configuración SMTP/Webhook:');
-    console.log(`From: ${from || 'Default'}`);
-    console.log(`To: ${cleanTo}`);
-    console.log(`Cc: ${cleanCc || '-'}`);
-    console.log(`Subject: ${subject}`);
-    console.log('------------------------------------------');
-    return { sent: false, error: 'SMTP_NOT_CONFIGURED' };
+    try {
+      await prisma.appSetting.upsert({
+        where: { id: 'last_email_log' },
+        update: {
+          value: JSON.stringify({
+            time: new Date().toISOString(),
+            status: 'NO_SMTP_CREDENTIALS',
+            to: toList,
+          }),
+        },
+        create: {
+          id: 'last_email_log',
+          value: JSON.stringify({
+            time: new Date().toISOString(),
+            status: 'NO_SMTP_CREDENTIALS',
+            to: toList,
+          }),
+        },
+      });
+    } catch {}
+    return { sent: false, error: 'SMTP_NOT_CONFIGURED', recipients: toList };
   }
 
   try {
@@ -111,18 +96,79 @@ export async function sendMail({
       },
     });
 
+    // IMPORTANTE: El correo dentro de <...> en 'from' SIEMPRE debe ser smtpUser (ej. sgiaubasa@gmail.com)
+    // para que el servidor de correo corporativo (@aubasa.com.ar) no bloquee el mensaje por Anti-Spoofing (SPF/DMARC).
+    const cleanReplyTo = replyTo ? parseEmailArray(replyTo)[0] : undefined;
+    const fromHeader = cleanReplyTo
+      ? `"SGCySV - RRHH (${cleanReplyTo})" <${smtpUser}>`
+      : `"SGCySV - Capacitaciones" <${smtpUser}>`;
+
     const info = await transporter.sendMail({
-      from: from ? from : `"SGCySV - Capacitaciones" <${smtpUser}>`,
-      replyTo: replyTo || undefined,
-      to: cleanTo,
-      cc: cleanCc || undefined,
+      from: fromHeader,
+      replyTo: cleanReplyTo,
+      to: toList.join(', '),
+      cc: ccList.length > 0 ? ccList.join(', ') : undefined,
       subject,
       html,
     });
+
+    try {
+      await prisma.appSetting.upsert({
+        where: { id: 'last_email_log' },
+        update: {
+          value: JSON.stringify({
+            time: new Date().toISOString(),
+            status: 'SENT',
+            messageId: info.messageId,
+            accepted: info.accepted,
+            rejected: info.rejected,
+            from: fromHeader,
+            to: toList,
+            cc: ccList,
+          }),
+        },
+        create: {
+          id: 'last_email_log',
+          value: JSON.stringify({
+            time: new Date().toISOString(),
+            status: 'SENT',
+            messageId: info.messageId,
+            accepted: info.accepted,
+            rejected: info.rejected,
+            from: fromHeader,
+            to: toList,
+            cc: ccList,
+          }),
+        },
+      });
+    } catch {}
+
     console.log('Email sent: %s', info.messageId);
-    return { sent: true, method: 'smtp' };
+    return { sent: true, method: 'smtp', recipients: toList };
   } catch (error: any) {
     console.error('Error sending email via SMTP:', error);
-    return { sent: false, error: error?.message || 'SMTP_ERROR' };
+    try {
+      await prisma.appSetting.upsert({
+        where: { id: 'last_email_log' },
+        update: {
+          value: JSON.stringify({
+            time: new Date().toISOString(),
+            status: 'ERROR',
+            error: error?.message || String(error),
+            to: toList,
+          }),
+        },
+        create: {
+          id: 'last_email_log',
+          value: JSON.stringify({
+            time: new Date().toISOString(),
+            status: 'ERROR',
+            error: error?.message || String(error),
+            to: toList,
+          }),
+        },
+      });
+    } catch {}
+    return { sent: false, error: error?.message || 'SMTP_ERROR', recipients: toList };
   }
 }

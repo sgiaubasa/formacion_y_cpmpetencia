@@ -29,6 +29,12 @@ export default function ConfirmGapForm({
   const [loading, setLoading] = useState(false);
   const [selectedSectorId, setSelectedSectorId] = useState<number>(defaultTargetSectorId);
   const [emails, setEmails] = useState<string>("");
+  const [fallbackMail, setFallbackMail] = useState<{
+    to: string;
+    cc: string;
+    subject: string;
+    body: string;
+  } | null>(null);
 
   useEffect(() => {
     const s = allSectors.find(sec => sec.id === defaultTargetSectorId);
@@ -36,10 +42,30 @@ export default function ConfirmGapForm({
   }, [defaultTargetSectorId, allSectors]);
 
   const handleSectorChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
+    const prevSector = allSectors.find(sec => sec.id === selectedSectorId);
+    const prevSectorMails = new Set(
+      (prevSector?.mail || "")
+        .split(/[,;]+/)
+        .map(m => m.trim().toLowerCase())
+        .filter(Boolean)
+    );
+
+    // Conservar los correos que el usuario haya agregado manualmente
+    const manualKept = emails
+      .split(/[,;]+/)
+      .map(m => m.trim())
+      .filter(m => m && !prevSectorMails.has(m.toLowerCase()));
+
     const newId = parseInt(e.target.value);
     setSelectedSectorId(newId);
     const s = allSectors.find(sec => sec.id === newId);
-    setEmails(s?.mail || "");
+    const newSectorMails = (s?.mail || "")
+      .split(/[,;]+/)
+      .map(m => m.trim())
+      .filter(Boolean);
+
+    const merged = Array.from(new Set([...newSectorMails, ...manualKept]));
+    setEmails(merged.join(", "));
   };
 
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
@@ -51,32 +77,15 @@ export default function ConfirmGapForm({
       if (result.success) {
         if (result.emailSent) {
           alert(
-            `¡Propuesta de cambio enviada!\nSe envió automáticamente el correo de notificación a: ${result.mailtoData?.to || "los destinatarios indicados"}.`
+            `¡Propuesta de cambio enviada!\nSe envió automáticamente el correo de notificación a:\n${result.mailtoData?.to || "los destinatarios indicados"}${result.mailtoData?.cc ? `\n(CC: ${result.mailtoData.cc})` : ""}`
           );
+          router.push("/brechas");
         } else if (result.mailtoData?.to) {
-          const toFormatted = result.mailtoData.to
-            .split(/[,;]+/)
-            .map((x: string) => x.trim())
-            .filter(Boolean)
-            .join(";");
-          const params = new URLSearchParams();
-          if (result.mailtoData.cc) {
-            params.set("cc", result.mailtoData.cc);
-          }
-          params.set("subject", result.mailtoData.subject);
-          params.set("body", result.mailtoData.body);
-          const mailtoUrl = `mailto:${toFormatted}?${params
-            .toString()
-            .replace(/\+/g, "%20")}`;
-
-          alert(
-            `¡Propuesta de cambio registrada en Transferencias!\n\nA continuación se abrirá su correo (Outlook) con el mensaje ya redactado para enviar la notificación a: ${result.mailtoData.to}`
-          );
-          window.location.href = mailtoUrl;
+          setFallbackMail(result.mailtoData);
         } else {
           alert(`¡Propuesta de cambio registrada en Transferencias!`);
+          router.push("/brechas");
         }
-        router.push("/brechas");
       }
     } catch (err) {
       alert("Hubo un error al confirmar el cambio.");
@@ -84,6 +93,65 @@ export default function ConfirmGapForm({
       setLoading(false);
     }
   };
+
+  if (fallbackMail) {
+    const toFormatted = fallbackMail.to
+      .split(/[,;]+/)
+      .map((x: string) => x.trim())
+      .filter(Boolean)
+      .join(";");
+
+    const mailtoParams = new URLSearchParams();
+    if (fallbackMail.cc) mailtoParams.set("cc", fallbackMail.cc);
+    mailtoParams.set("subject", fallbackMail.subject);
+    mailtoParams.set("body", fallbackMail.body);
+    const mailtoUrl = `mailto:${toFormatted}?${mailtoParams.toString().replace(/\+/g, "%20")}`;
+
+    const owaParams = new URLSearchParams();
+    owaParams.set("to", toFormatted);
+    if (fallbackMail.cc) owaParams.set("cc", fallbackMail.cc);
+    owaParams.set("subject", fallbackMail.subject);
+    owaParams.set("body", fallbackMail.body);
+    const owaUrl = `https://outlook.office.com/mail/deeplink/compose?${owaParams.toString()}`;
+
+    return (
+      <div className="card" style={{ borderLeft: "4px solid var(--primary-color)", padding: "1.5rem" }}>
+        <h2 style={{ color: "var(--primary-color)", marginBottom: "0.75rem" }}>
+          ✅ Propuesta Registrada en Transferencias
+        </h2>
+        <p style={{ marginBottom: "1rem", color: "var(--text-secondary)" }}>
+          La solicitud de cambio de puesto de <strong>{employeeName}</strong> ya quedó cargada en la pestaña <b>Transferencias</b>.
+          <br />
+          Seleccione cómo desea enviar el correo de aviso a <strong>{fallbackMail.to}</strong>:
+        </p>
+        <div style={{ display: "flex", gap: "1rem", flexWrap: "wrap", marginBottom: "1.5rem" }}>
+          <a
+            href={owaUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="btn btn-primary"
+            style={{ textDecoration: "none" }}
+          >
+            🌐 Enviar por Outlook Web (Office 365)
+          </a>
+          <a
+            href={mailtoUrl}
+            className="btn btn-secondary"
+            style={{ textDecoration: "none" }}
+          >
+            📧 Abrir en Outlook de Escritorio
+          </a>
+          <button
+            type="button"
+            className="btn btn-secondary"
+            onClick={() => router.push("/brechas")}
+          >
+            Finalizar y Volver a Cambio de Puesto
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <form onSubmit={handleSubmit} className="card">
@@ -118,7 +186,7 @@ export default function ConfirmGapForm({
           required
         />
         <small style={{ color: 'var(--text-secondary)' }}>
-          Se cargan automáticamente los responsables del sector seleccionado. También puedes agregar o escribir correos manualmente separados por comas.
+          Se cargan automáticamente los responsables del sector seleccionado. También puedes agregar correos manualmente separados por comas.
         </small>
       </div>
 
