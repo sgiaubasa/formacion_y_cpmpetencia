@@ -8,6 +8,8 @@ import { join } from "path";
 import fs from "fs";
 import { RowActions } from "./RowActions";
 import { getUniqueActiveProfiles } from "@/lib/profileUtils";
+import { getTrainingMaterialsMap, saveTrainingMaterialForRecords } from "@/lib/trainingMaterials";
+import { MaterialViewerButton } from "@/components/MaterialViewerButton";
 
 export default async function PlanAnualPage({ searchParams }: { searchParams: Promise<{ tab?: string, q?: string, employeeId?: string, sectorId?: string, jobProfileId?: string, statusFilter?: string }> }) {
   const role = await getCurrentRole();
@@ -30,15 +32,18 @@ export default async function PlanAnualPage({ searchParams }: { searchParams: Pr
     ...(statusFilter && { status: statusFilter })
   };
 
-  const records = await prisma.employeeTrainingRecord.findMany({
-    where: {
-      trainingName: { contains: q, mode: 'insensitive' },
-      ...globalFilters
-    },
-    include: { employee: { include: { sector: true } } },
-    orderBy: { id: 'desc' },
-    take: 300
-  });
+  const [records, materialsMap] = await Promise.all([
+    prisma.employeeTrainingRecord.findMany({
+      where: {
+        trainingName: { contains: q, mode: 'insensitive' },
+        ...globalFilters
+      },
+      include: { employee: { include: { sector: true } } },
+      orderBy: { id: 'desc' },
+      take: 300
+    }),
+    getTrainingMaterialsMap()
+  ]);
 
   // Server Action para Agregar Ad-Hoc masivamente
   async function addAdHocNeed(formData: FormData) {
@@ -47,24 +52,30 @@ export default async function PlanAnualPage({ searchParams }: { searchParams: Pr
     const trainingName = formData.get("trainingName") as string;
     const objective = formData.get("objective") as string;
     const scheduledDate = formData.get("scheduledDate") as string;
+    const materialUrl = formData.get("materialUrl") as string | null;
+    const materialName = formData.get("materialName") as string | null;
     const dateObj = scheduledDate ? new Date(scheduledDate) : null;
     const status = dateObj ? 'IN_PLAN' : 'GAP';
+
+    const createdIds: number[] = [];
 
     if (assignmentType === "empleado") {
       const empId = parseInt(formData.get("employeeId") as string);
       if (empId) {
-        await prisma.employeeTrainingRecord.create({
+        const created = await prisma.employeeTrainingRecord.create({
           data: { employeeId: empId, trainingName, objective, status, scheduledDate: dateObj }
         });
+        createdIds.push(created.id);
       }
     } else if (assignmentType === "puesto") {
       const profileId = parseInt(formData.get("jobProfileId") as string);
       if (profileId) {
         const emps = await prisma.employee.findMany({ where: { jobProfileId: profileId, isActive: true } });
         for (const e of emps) {
-          await prisma.employeeTrainingRecord.create({
+          const created = await prisma.employeeTrainingRecord.create({
             data: { employeeId: e.id, trainingName, objective, status, scheduledDate: dateObj }
           });
+          createdIds.push(created.id);
         }
       }
     } else if (assignmentType === "sector") {
@@ -72,12 +83,21 @@ export default async function PlanAnualPage({ searchParams }: { searchParams: Pr
       if (sectorIdVal) {
         const emps = await prisma.employee.findMany({ where: { sectorId: sectorIdVal, isActive: true } });
         for (const e of emps) {
-          await prisma.employeeTrainingRecord.create({
+          const created = await prisma.employeeTrainingRecord.create({
             data: { employeeId: e.id, trainingName, objective, status, scheduledDate: dateObj }
           });
+          createdIds.push(created.id);
         }
       }
     }
+
+    if (materialUrl && createdIds.length > 0) {
+      await saveTrainingMaterialForRecords(createdIds, {
+        url: materialUrl,
+        name: materialName || "Material de Capacitación"
+      });
+    }
+
     revalidatePath('/plan-anual');
   }
 
@@ -356,11 +376,19 @@ export default async function PlanAnualPage({ searchParams }: { searchParams: Pr
           <tbody>
             {records.map(r => {
               const isCompleted = r.status === 'COMPLETED';
+              const material = materialsMap[`record_${r.id}`] || null;
               return (
                 <tr key={r.id}>
                   <td style={{ fontWeight: 500 }}>{r.employee.name}</td>
                   <td>{r.employee.sector.name}</td>
-                  <td style={{ maxWidth: '250px' }}>{r.trainingName}</td>
+                  <td style={{ maxWidth: '250px' }}>
+                    <div>{r.trainingName}</div>
+                    {material && (
+                      <div style={{ marginTop: '0.35rem' }}>
+                        <MaterialViewerButton material={material} trainingName={r.trainingName} />
+                      </div>
+                    )}
+                  </td>
                   <td>{getStateBadge(r)}</td>
                   <td>
                     {r.scheduledDate ? new Date(r.scheduledDate).toLocaleDateString('es-AR') : '-'}
@@ -377,15 +405,24 @@ export default async function PlanAnualPage({ searchParams }: { searchParams: Pr
                       <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
                         <div style={{ fontSize: '0.875rem' }}>Realizada el: <strong>{r.completedAt ? new Date(r.completedAt).toLocaleDateString('es-AR') : '-'}</strong></div>
                         {r.score && <div style={{ fontSize: '0.875rem' }}>Nota: <strong>{r.score}</strong>/10</div>}
+                        {r.instructorName && <div style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>Instructor: <strong>{r.instructorName}</strong></div>}
+                        {material && (
+                          <MaterialViewerButton material={material} trainingName={r.trainingName} />
+                        )}
                         {r.evidencePath && (
                           <a href={r.evidencePath} target="_blank" rel="noopener noreferrer" className="btn btn-secondary" style={{ padding: '0.25rem 0.5rem', fontSize: '0.75rem', width: 'fit-content' }}>
                             Ver Evidencia
                           </a>
                         )}
-                        {!r.evidencePath && r.employeeSignature && (
-                          <a href={`/plan-anual/planilla/${r.id}`} target="_blank" rel="noopener noreferrer" className="btn btn-secondary" style={{ padding: '0.25rem 0.5rem', fontSize: '0.75rem', width: 'fit-content' }}>
-                            Ver Planilla Firmada
-                          </a>
+                        {!r.evidencePath && (r.employeeSignature || r.instructorSignature) && (
+                          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.3rem' }}>
+                            <a href={`/plan-anual/planilla/${r.id}`} target="_blank" rel="noopener noreferrer" className="btn btn-secondary" style={{ padding: '0.25rem 0.5rem', fontSize: '0.75rem', width: 'fit-content' }}>
+                              Ver Planilla Firmada
+                            </a>
+                            <div style={{ fontSize: '0.72rem', color: '#475569' }}>
+                              Firma Empleado: {r.employeeSignature ? '✅' : '⏳ Pendiente'} | Instructor: {r.instructorSignature ? '✅' : '⏳ Pendiente'}
+                            </div>
+                          </div>
                         )}
                         {r.effectiveness === 'PENDING' && (
                           <Link href={`/brechas/${r.employeeId}/evaluar`} className="btn btn-warning" style={{ padding: '0.25rem 0.5rem', fontSize: '0.75rem', width: 'fit-content' }}>
@@ -395,19 +432,17 @@ export default async function PlanAnualPage({ searchParams }: { searchParams: Pr
                         {r.effectiveness === 'EFFECTIVE' && <span className="badge badge-success" style={{ width: 'fit-content' }}>Eficaz</span>}
                         {r.effectiveness === 'INEFFECTIVE' && <span className="badge badge-secondary" style={{ backgroundColor: '#ef4444', width: 'fit-content' }}>No Eficaz</span>}
                         
-                        {role === 'SGI' && (
-                          <div style={{ marginTop: '0.5rem' }}>
-                            <RowActions 
-                              recordId={r.id} 
-                              currentDate={r.scheduledDate ? r.scheduledDate.toISOString().split('T')[0] : ''} 
-                              status={r.status}
-                              isSgi={true}
-                              isCompleted={true}
-                              currentCompletedDate={r.completedAt ? r.completedAt.toISOString().split('T')[0] : ''}
-                              currentScore={r.score || ""}
-                            />
-                          </div>
-                        )}
+                        <div style={{ marginTop: '0.25rem' }}>
+                          <RowActions 
+                            recordId={r.id} 
+                            currentDate={r.scheduledDate ? r.scheduledDate.toISOString().split('T')[0] : ''} 
+                            status={r.status}
+                            isSgi={role === 'SGI'}
+                            isCompleted={true}
+                            currentCompletedDate={r.completedAt ? r.completedAt.toISOString().split('T')[0] : ''}
+                            currentScore={r.score || ""}
+                          />
+                        </div>
                       </div>
                     )}
                   </td>

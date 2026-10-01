@@ -2,14 +2,24 @@ import { decryptRecordId } from "@/lib/crypto";
 import { prisma } from "@/lib/prisma";
 import RemoteSignatureClient from "./RemoteSignatureClient";
 import { notFound } from "next/navigation";
+import { getTrainingMaterialForRecord } from "@/lib/trainingMaterials";
 
-export default async function FirmaPage({ params }: { params: { token: string } }) {
-  const recordId = decryptRecordId(params.token);
-  
+export default async function FirmaPage({
+  params,
+  searchParams
+}: {
+  params: Promise<{ token: string }>;
+  searchParams: Promise<{ rol?: string }>;
+}) {
+  const resolvedParams = await params;
+  const sp = await searchParams;
+  const recordId = decryptRecordId(resolvedParams.token);
+
   if (!recordId) {
     return (
-      <div style={{ padding: '2rem', textAlign: 'center', fontFamily: 'sans-serif' }}>
-        <h2 style={{ color: 'var(--danger-color, #dc2626)' }}>Enlace inválido o expirado.</h2>
+      <div style={{ padding: "2rem", textAlign: "center", fontFamily: "sans-serif" }}>
+        <style>{`.sidebar { display: none !important; } .main-content { margin-left: 0 !important; width: 100% !important; padding: 1rem !important; }`}</style>
+        <h2 style={{ color: "var(--danger-color, #dc2626)" }}>Enlace inválido o expirado.</h2>
         <p>Por favor, solicitá un nuevo enlace a tu supervisor.</p>
       </div>
     );
@@ -26,21 +36,36 @@ export default async function FirmaPage({ params }: { params: { token: string } 
     notFound();
   }
 
-  if (record.status === 'COMPLETED') {
-    return (
-      <div style={{ padding: '2rem', textAlign: 'center', fontFamily: 'sans-serif' }}>
-        <h2 style={{ color: 'var(--success-color, #10b981)' }}>¡Capacitación ya completada!</h2>
-        <p>Esta capacitación ya fue firmada y registrada en el sistema.</p>
-      </div>
-    );
-  }
+  const material = await getTrainingMaterialForRecord(record.id);
+
+  const initialRole =
+    sp.rol === "instructor"
+      ? "instructor"
+      : sp.rol === "ambos"
+      ? "ambos"
+      : "empleado";
 
   return (
-    <RemoteSignatureClient 
-      recordId={record.id}
-      trainingName={record.trainingName}
-      employeeName={record.employee.name}
-      legajo={record.employee.legajo}
-    />
+    <>
+      <style>{`.sidebar { display: none !important; } .main-content { margin-left: 0 !important; width: 100% !important; padding: 1rem !important; }`}</style>
+      <RemoteSignatureClient
+        recordId={record.id}
+        trainingName={record.trainingName}
+        objective={record.objective || ""}
+        employeeName={record.employee.name}
+        legajo={record.employee.legajo}
+        initialRole={initialRole}
+        hasEmployeeSignature={Boolean(record.employeeSignature)}
+        hasInstructorSignature={Boolean(record.instructorSignature)}
+        existingInstructorName={record.instructorName || ""}
+        existingScore={record.score || ""}
+        existingCompletedDate={
+          record.completedAt
+            ? new Date(record.completedAt).toISOString().split("T")[0]
+            : new Date().toISOString().split("T")[0]
+        }
+        material={material}
+      />
+    </>
   );
 }

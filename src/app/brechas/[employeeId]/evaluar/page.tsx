@@ -2,21 +2,26 @@ import { prisma } from "@/lib/prisma";
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
+import { getTrainingMaterialsMap } from "@/lib/trainingMaterials";
+import { MaterialViewerButton } from "@/components/MaterialViewerButton";
 
 export default async function EvaluacionEficaciaPage({ params }: { params: Promise<{ employeeId: string }> }) {
   const { employeeId } = await params;
   
-  const emp = await prisma.employee.findUnique({
-    where: { id: parseInt(employeeId) },
-    include: {
-      sector: true,
-      trainingRecords: {
-        where: { status: 'COMPLETED' },
-        orderBy: { completedAt: 'desc' },
-        include: { sourceProfile: true }
+  const [emp, materialsMap] = await Promise.all([
+    prisma.employee.findUnique({
+      where: { id: parseInt(employeeId) },
+      include: {
+        sector: true,
+        trainingRecords: {
+          where: { status: 'COMPLETED' },
+          orderBy: { completedAt: 'desc' },
+          include: { sourceProfile: true }
+        }
       }
-    }
-  });
+    }),
+    getTrainingMaterialsMap()
+  ]);
 
   if (!emp) return notFound();
 
@@ -127,6 +132,11 @@ export default async function EvaluacionEficaciaPage({ params }: { params: Promi
                       {record.objective && (
                         <div style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', marginTop: '0.25rem', padding: '0.25rem', background: '#f8fafc', borderRadius: '4px' }}>
                           <strong>Objetivo:</strong> {record.objective}
+                        </div>
+                      )}
+                      {materialsMap[`record_${record.id}`] && (
+                        <div style={{ marginTop: '0.35rem' }}>
+                          <MaterialViewerButton material={materialsMap[`record_${record.id}`]} trainingName={record.trainingName} />
                         </div>
                       )}
                     </td>

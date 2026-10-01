@@ -1,60 +1,74 @@
 "use client";
 
-import { useState, useRef } from "react";
+import { useState, useRef, useEffect } from "react";
 import SignatureCanvas from "react-signature-canvas";
 import { marcarEjecutada, generarLinkFirma } from "./actions";
 import { supabase } from "@/lib/supabase";
 
 export function ConfirmExecutionModal({
   recordId,
+  initialMode = "upload",
   onClose
 }: {
   recordId: number;
+  initialMode?: "upload" | "sign" | "link";
   onClose: () => void;
 }) {
-  const [mode, setMode] = useState<"upload" | "sign" | "link">("upload");
+  const [mode, setMode] = useState<"upload" | "sign" | "link">(initialMode);
   const employeeSigRef = useRef<any>(null);
   const instructorSigRef = useRef<any>(null);
-  
+
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState("");
-  const [shareLink, setShareLink] = useState("");
+  const [baseShareLink, setBaseShareLink] = useState("");
+  const [copiedType, setCopiedType] = useState<"" | "empleado" | "instructor">("");
 
   const handleGenerateLink = async () => {
     setIsSubmitting(true);
+    setError("");
     try {
       const token = await generarLinkFirma(recordId);
       const url = `${window.location.origin}/firma/${token}`;
-      setShareLink(url);
+      setBaseShareLink(url);
     } catch (err) {
-      setError("Error al generar el link.");
+      setError("Error al generar el enlace.");
     } finally {
       setIsSubmitting(false);
     }
   };
 
-  const copyToClipboard = () => {
-    navigator.clipboard.writeText(shareLink);
-    alert("Enlace copiado al portapapeles.");
+  useEffect(() => {
+    if (initialMode === "link" && !baseShareLink) {
+      handleGenerateLink();
+    }
+  }, [initialMode]);
+
+  const employeeLink = baseShareLink ? `${baseShareLink}?rol=empleado` : "";
+  const instructorLink = baseShareLink ? `${baseShareLink}?rol=instructor` : "";
+
+  const copyToClipboard = (url: string, type: "empleado" | "instructor") => {
+    navigator.clipboard.writeText(url);
+    setCopiedType(type);
+    setTimeout(() => setCopiedType(""), 2500);
   };
 
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
-    if (mode === "link") return; // Link mode doesn't submit here
+    if (mode === "link") return;
 
     setIsSubmitting(true);
     setError("");
 
     const formData = new FormData(e.currentTarget);
-    
+
     if (mode === "sign") {
       if (employeeSigRef.current?.isEmpty() || instructorSigRef.current?.isEmpty()) {
-        setError("Ambas firmas son requeridas en modo digital.");
+        setError("Ambas firmas son requeridas en modo presencial.");
         setIsSubmitting(false);
         return;
       }
-      formData.set("employeeSignature", employeeSigRef.current.getTrimmedCanvas().toDataURL('image/png'));
-      formData.set("instructorSignature", instructorSigRef.current.getTrimmedCanvas().toDataURL('image/png'));
+      formData.set("employeeSignature", employeeSigRef.current.getTrimmedCanvas().toDataURL("image/png"));
+      formData.set("instructorSignature", instructorSigRef.current.getTrimmedCanvas().toDataURL("image/png"));
     }
 
     if (mode === "upload") {
@@ -105,72 +119,131 @@ export function ConfirmExecutionModal({
   };
 
   return (
-    <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 }}>
-      <div style={{ backgroundColor: 'white', padding: '2rem', borderRadius: '8px', maxWidth: '500px', width: '100%', maxHeight: '90vh', overflowY: 'auto' }}>
-        <h2 style={{ marginBottom: '1rem', color: 'var(--teal-color)' }}>Confirmar Ejecución</h2>
-        
-        <div style={{ display: 'flex', gap: '1rem', marginBottom: '1.5rem' }}>
-          <button 
-            type="button" 
-            onClick={() => setMode("upload")} 
+    <div style={{ position: "fixed", top: 0, left: 0, right: 0, bottom: 0, backgroundColor: "rgba(0,0,0,0.5)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 1000, padding: "1rem" }}>
+      <div style={{ backgroundColor: "white", padding: "2rem", borderRadius: "10px", maxWidth: "540px", width: "100%", maxHeight: "92vh", overflowY: "auto" }}>
+        <h2 style={{ marginBottom: "1rem", color: "var(--teal-color)" }}>Confirmar Ejecución</h2>
+
+        <div style={{ display: "flex", gap: "0.75rem", marginBottom: "1.5rem" }}>
+          <button
+            type="button"
+            onClick={() => setMode("upload")}
             className={mode === "upload" ? "btn btn-primary" : "btn btn-secondary"}
-            style={{ flex: 1, padding: '0.5rem', fontSize: '0.9rem' }}
+            style={{ flex: 1, padding: "0.5rem", fontSize: "0.88rem" }}
           >
             Subir Archivo
           </button>
-          <button 
-            type="button" 
-            onClick={() => setMode("sign")} 
+          <button
+            type="button"
+            onClick={() => setMode("sign")}
             className={mode === "sign" ? "btn btn-primary" : "btn btn-secondary"}
-            style={{ flex: 1, padding: '0.5rem', fontSize: '0.9rem' }}
+            style={{ flex: 1, padding: "0.5rem", fontSize: "0.88rem" }}
           >
             Firma App
           </button>
-          <button 
-            type="button" 
-            onClick={() => setMode("link")} 
+          <button
+            type="button"
+            onClick={() => {
+              setMode("link");
+              if (!baseShareLink) handleGenerateLink();
+            }}
             className={mode === "link" ? "btn btn-primary" : "btn btn-secondary"}
-            style={{ flex: 1, padding: '0.5rem', fontSize: '0.9rem' }}
+            style={{ flex: 1, padding: "0.5rem", fontSize: "0.88rem" }}
           >
             Firma a Distancia
           </button>
         </div>
 
         {mode === "link" ? (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-            <p style={{ fontSize: '0.9rem', color: '#4b5563' }}>
-              Generá un enlace seguro para enviarle a la persona por WhatsApp o correo. Al firmar desde su celular, la capacitación se marcará como realizada automáticamente.
-            </p>
-            {!shareLink ? (
+          <div style={{ display: "flex", flexDirection: "column", gap: "1rem" }}>
+            <div style={{ background: "#f0fdfa", border: "1px solid #99f6e4", padding: "0.75rem 1rem", borderRadius: "8px", fontSize: "0.85rem", color: "#0f766e", lineHeight: 1.4 }}>
+              <strong>🔓 Sin necesidad de acceso a la aplicación:</strong> Tanto el empleado como el instructor pueden abrir su enlace desde el celular o PC sin tener usuario ni contraseña.
+            </div>
+
+            {!baseShareLink ? (
               <button type="button" onClick={handleGenerateLink} className="btn btn-primary" disabled={isSubmitting}>
-                {isSubmitting ? 'Generando...' : 'Generar Enlace Seguro'}
+                {isSubmitting ? "Generando enlaces..." : "Generar Enlaces Seguros"}
               </button>
             ) : (
-              <div style={{ padding: '1rem', background: '#f3f4f6', borderRadius: '8px', display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
-                <input type="text" readOnly value={shareLink} className="form-input" style={{ fontSize: '0.8rem' }} />
-                <div style={{ display: 'flex', gap: '0.5rem' }}>
-                  <button type="button" onClick={copyToClipboard} className="btn btn-secondary" style={{ flex: 1, fontSize: '0.85rem' }}>Copiar Enlace</button>
-                  <a href={`https://wa.me/?text=${encodeURIComponent('Hola! Por favor firmá la capacitación ingresando a este enlace: ' + shareLink)}`} target="_blank" rel="noreferrer" className="btn btn-primary" style={{ flex: 1, fontSize: '0.85rem', textAlign: 'center', textDecoration: 'none' }}>
-                    Enviar por WhatsApp
-                  </a>
+              <div style={{ display: "flex", flexDirection: "column", gap: "1rem" }}>
+                {/* Enlace para el Empleado */}
+                <div style={{ padding: "1rem", background: "#f8fafc", borderRadius: "8px", border: "1px solid #cbd5e1", display: "flex", flexDirection: "column", gap: "0.5rem" }}>
+                  <div style={{ fontWeight: 700, fontSize: "0.9rem", color: "#1e293b" }}>
+                    👤 1. Enlace para el Empleado (Capacitado)
+                  </div>
+                  <div style={{ fontSize: "0.78rem", color: "#64748b" }}>
+                    Permite ver el material de capacitación (si fue cargado) y firmar su asistencia.
+                  </div>
+                  <input type="text" readOnly value={employeeLink} className="form-input" style={{ fontSize: "0.78rem", background: "white" }} />
+                  <div style={{ display: "flex", gap: "0.5rem" }}>
+                    <button
+                      type="button"
+                      onClick={() => copyToClipboard(employeeLink, "empleado")}
+                      className="btn btn-secondary"
+                      style={{ flex: 1, fontSize: "0.82rem" }}
+                    >
+                      {copiedType === "empleado" ? "✓ ¡Copiado!" : "📋 Copiar Enlace Empleado"}
+                    </button>
+                    <a
+                      href={`https://wa.me/?text=${encodeURIComponent("Hola! Por favor confirmá y firmá tu asistencia a la capacitación ingresando a este enlace (no requiere usuario): " + employeeLink)}`}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="btn btn-primary"
+                      style={{ flex: 1, fontSize: "0.82rem", textAlign: "center", textDecoration: "none" }}
+                    >
+                      📱 Enviar por WhatsApp
+                    </a>
+                  </div>
+                </div>
+
+                {/* Enlace para el Instructor */}
+                <div style={{ padding: "1rem", background: "#f8fafc", borderRadius: "8px", border: "1px solid #cbd5e1", display: "flex", flexDirection: "column", gap: "0.5rem" }}>
+                  <div style={{ fontWeight: 700, fontSize: "0.9rem", color: "#1e293b" }}>
+                    👨‍🏫 2. Enlace para el Instructor
+                  </div>
+                  <div style={{ fontSize: "0.78rem", color: "#64748b" }}>
+                    Permite al instructor cargar la <strong>Fecha de Realización</strong>, la <strong>Nota (0-10)</strong>, su nombre y su <strong>Firma Digital</strong> sin ingresar al sistema.
+                  </div>
+                  <input type="text" readOnly value={instructorLink} className="form-input" style={{ fontSize: "0.78rem", background: "white" }} />
+                  <div style={{ display: "flex", gap: "0.5rem" }}>
+                    <button
+                      type="button"
+                      onClick={() => copyToClipboard(instructorLink, "instructor")}
+                      className="btn btn-secondary"
+                      style={{ flex: 1, fontSize: "0.82rem" }}
+                    >
+                      {copiedType === "instructor" ? "✓ ¡Copiado!" : "📋 Copiar Enlace Instructor"}
+                    </button>
+                    <a
+                      href={`https://wa.me/?text=${encodeURIComponent("Hola! Por favor registrá la fecha de realización, nota y firma de instructor de la capacitación en este enlace (no requiere usuario): " + instructorLink)}`}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="btn btn-primary"
+                      style={{ flex: 1, fontSize: "0.82rem", textAlign: "center", textDecoration: "none" }}
+                    >
+                      📱 Enviar por WhatsApp
+                    </a>
+                  </div>
                 </div>
               </div>
             )}
-            <div style={{ display: 'flex', gap: '0.5rem', marginTop: '1rem' }}>
-              <button type="button" onClick={onClose} className="btn btn-secondary" style={{ width: '100%' }}>
+
+            {error && <div style={{ color: "var(--danger-color)", fontSize: "0.875rem" }}>{error}</div>}
+
+            <div style={{ display: "flex", gap: "0.5rem", marginTop: "0.5rem" }}>
+              <button type="button" onClick={onClose} className="btn btn-secondary" style={{ width: "100%" }}>
                 Cerrar
               </button>
             </div>
           </div>
         ) : (
-          <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+          <form onSubmit={handleSubmit} style={{ display: "flex", flexDirection: "column", gap: "1rem" }}>
             <input type="hidden" name="recordId" value={recordId} />
             <input type="hidden" name="mode" value={mode} />
-            
-            <div style={{ display: 'flex', gap: '1rem' }}>
+
+            <div style={{ display: "flex", gap: "1rem" }}>
               <div style={{ flex: 1 }}>
                 <label className="form-label">Fecha de Realización</label>
-                <input type="date" name="completedAt" className="form-input" defaultValue={new Date().toISOString().split('T')[0]} required />
+                <input type="date" name="completedAt" className="form-input" defaultValue={new Date().toISOString().split("T")[0]} required />
               </div>
               <div style={{ flex: 1 }}>
                 <label className="form-label">Nota (Opcional, 0 a 10)</label>
@@ -187,10 +260,12 @@ export function ConfirmExecutionModal({
               <>
                 <div>
                   <label className="form-label">Firma del Capacitado</label>
-                  <div style={{ border: '1px solid #ccc', borderRadius: '4px', background: '#f9fafb' }}>
-                    <SignatureCanvas ref={employeeSigRef} canvasProps={{ width: 430, height: 150, className: 'sigCanvas' }} />
+                  <div style={{ border: "1px solid #ccc", borderRadius: "4px", background: "#f9fafb" }}>
+                    <SignatureCanvas ref={employeeSigRef} canvasProps={{ width: 430, height: 150, className: "sigCanvas" }} />
                   </div>
-                  <button type="button" onClick={() => employeeSigRef.current?.clear()} style={{ fontSize: '0.75rem', marginTop: '0.25rem', color: 'var(--danger-color)', background: 'none', border: 'none', cursor: 'pointer' }}>Borrar Firma</button>
+                  <button type="button" onClick={() => employeeSigRef.current?.clear()} style={{ fontSize: "0.75rem", marginTop: "0.25rem", color: "var(--danger-color)", background: "none", border: "none", cursor: "pointer" }}>
+                    Borrar Firma
+                  </button>
                 </div>
 
                 <div>
@@ -200,19 +275,21 @@ export function ConfirmExecutionModal({
 
                 <div>
                   <label className="form-label">Firma del Instructor</label>
-                  <div style={{ border: '1px solid #ccc', borderRadius: '4px', background: '#f9fafb' }}>
-                    <SignatureCanvas ref={instructorSigRef} canvasProps={{ width: 430, height: 150, className: 'sigCanvas' }} />
+                  <div style={{ border: "1px solid #ccc", borderRadius: "4px", background: "#f9fafb" }}>
+                    <SignatureCanvas ref={instructorSigRef} canvasProps={{ width: 430, height: 150, className: "sigCanvas" }} />
                   </div>
-                  <button type="button" onClick={() => instructorSigRef.current?.clear()} style={{ fontSize: '0.75rem', marginTop: '0.25rem', color: 'var(--danger-color)', background: 'none', border: 'none', cursor: 'pointer' }}>Borrar Firma</button>
+                  <button type="button" onClick={() => instructorSigRef.current?.clear()} style={{ fontSize: "0.75rem", marginTop: "0.25rem", color: "var(--danger-color)", background: "none", border: "none", cursor: "pointer" }}>
+                    Borrar Firma
+                  </button>
                 </div>
               </>
             )}
 
-            {error && <div style={{ color: 'var(--danger-color)', fontSize: '0.875rem' }}>{error}</div>}
+            {error && <div style={{ color: "var(--danger-color)", fontSize: "0.875rem" }}>{error}</div>}
 
-            <div style={{ display: 'flex', gap: '0.5rem', marginTop: '1rem' }}>
+            <div style={{ display: "flex", gap: "0.5rem", marginTop: "1rem" }}>
               <button type="submit" className="btn btn-primary" style={{ flex: 1 }} disabled={isSubmitting}>
-                {isSubmitting ? 'Guardando...' : 'Confirmar'}
+                {isSubmitting ? "Guardando..." : "Confirmar"}
               </button>
               <button type="button" onClick={onClose} className="btn btn-secondary" style={{ flex: 1 }} disabled={isSubmitting}>
                 Cancelar

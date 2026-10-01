@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import Cookies from "js-cookie";
-import { useRouter } from "next/navigation";
+import { useRouter, usePathname } from "next/navigation";
 import { supabase } from "@/lib/supabase";
 import { getRoleForEmail } from "@/app/auth-actions";
 
@@ -16,11 +16,17 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [msg, setMsg] = useState("");
   const [isLoggingIn, setIsLoggingIn] = useState(false);
   const router = useRouter();
+  const pathname = usePathname();
+  const isPublicFirmaRoute = pathname?.startsWith("/firma");
 
   const [isRecovery, setIsRecovery] = useState(false);
   const [newPassword, setNewPassword] = useState("");
 
   useEffect(() => {
+    if (typeof window !== 'undefined' && window.location.pathname.startsWith("/firma")) {
+      setLoading(false);
+      return;
+    }
     if (typeof window !== 'undefined') {
       const hash = window.location.hash;
       const href = window.location.href;
@@ -42,6 +48,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     });
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+      if (typeof window !== 'undefined' && window.location.pathname.startsWith("/firma")) {
+        return;
+      }
       if (event === 'PASSWORD_RECOVERY') {
         setIsRecovery(true);
       }
@@ -139,6 +148,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
     setIsLoggingIn(false);
   };
+
+  if (isPublicFirmaRoute) {
+    return <>{children}</>;
+  }
 
   if (loading) {
     return (

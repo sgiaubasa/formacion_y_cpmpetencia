@@ -8,6 +8,7 @@ import fs from "fs";
 import { encryptRecordId } from "@/lib/crypto";
 import { syncRecordToPowerAutomate } from "@/lib/powerAutomate";
 import { createClient } from "@supabase/supabase-js";
+import { saveTrainingMaterialForRecords } from "@/lib/trainingMaterials";
 
 async function saveEvidenceFile(file: File, recordId: number): Promise<string> {
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
@@ -65,6 +66,8 @@ async function saveEvidenceFile(file: File, recordId: number): Promise<string> {
 export async function programarFecha(formData: FormData) {
   const recordId = parseInt(formData.get("recordId") as string);
   const dateStr = formData.get("scheduledDate") as string;
+  const materialUrl = formData.get("materialUrl") as string | null;
+  const materialName = formData.get("materialName") as string | null;
   
   const existing = await prisma.employeeTrainingRecord.findUnique({ where: { id: recordId } });
   const newDate = dateStr ? new Date(dateStr) : null;
@@ -82,6 +85,13 @@ export async function programarFecha(formData: FormData) {
     where: { id: recordId },
     data: updateData
   });
+
+  if (materialUrl) {
+    await saveTrainingMaterialForRecords([recordId], {
+      url: materialUrl,
+      name: materialName || "Material de Capacitación"
+    });
+  }
 
   syncRecordToPowerAutomate(recordId).catch(() => {});
   revalidatePath('/plan-anual');
@@ -144,6 +154,8 @@ export async function sgiEditRecord(formData: FormData) {
     const scoreStr = formData.get("score") as string;
     const file = formData.get("evidence") as File | null;
     const evidenceUrl = formData.get("evidenceUrl") as string | null;
+    const materialUrl = formData.get("materialUrl") as string | null;
+    const materialName = formData.get("materialName") as string | null;
 
     let updateData: any = {};
 
@@ -163,6 +175,13 @@ export async function sgiEditRecord(formData: FormData) {
         data: updateData
       });
       syncRecordToPowerAutomate(recordId).catch(() => {});
+    }
+
+    if (materialUrl) {
+      await saveTrainingMaterialForRecords([recordId], {
+        url: materialUrl,
+        name: materialName || "Material de Capacitación"
+      });
     }
     
     revalidatePath('/plan-anual');
