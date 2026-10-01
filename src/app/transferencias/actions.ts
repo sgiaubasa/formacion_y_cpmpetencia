@@ -56,16 +56,20 @@ export async function confirmarTransferenciaAction(formData: FormData) {
   });
 
   // Sincronizar las nuevas brechas creadas con Power Automate
-  const createdRecords = await prisma.employeeTrainingRecord.findMany({
-    where: {
-      employeeId: pending.employeeId,
-      sourceProfileId: pending.targetProfileId,
-      trainingName: { in: gaps }
+  const { syncRecordToPowerAutomate, syncNoGapTransferToPowerAutomate } = await import("@/lib/powerAutomate");
+  if (gaps.length > 0) {
+    const createdRecords = await prisma.employeeTrainingRecord.findMany({
+      where: {
+        employeeId: pending.employeeId,
+        sourceProfileId: pending.targetProfileId,
+        trainingName: { in: gaps }
+      }
+    });
+    for (const rec of createdRecords) {
+      syncRecordToPowerAutomate(rec.id).catch(() => {});
     }
-  });
-  const { syncRecordToPowerAutomate } = await import("@/lib/powerAutomate");
-  for (const rec of createdRecords) {
-    syncRecordToPowerAutomate(rec.id).catch(() => {});
+  } else {
+    syncNoGapTransferToPowerAutomate(transferId).catch(() => {});
   }
 
   revalidatePath('/transferencias');
