@@ -56,10 +56,13 @@ export async function sendMail({
     // Ignorar error de lectura de AppSetting
   }
 
+  const DEFAULT_EMAIL_WEBHOOK_URL =
+    'https://script.google.com/macros/s/AKfycbyw-ueKzjMoOovNzELKE6H1BT2iHkgJzUEJpFwLF07iydC4g48VodR7oflMeYozG7UTQg/exec';
+
   const webhookUrl =
     dbSettings['email_webhook_url'] ||
     process.env.POWER_AUTOMATE_EMAIL_WEBHOOK_URL ||
-    '';
+    DEFAULT_EMAIL_WEBHOOK_URL;
 
   // 1. Si hay un Webhook configurado (Google Apps Script o Power Automate), enviar por HTTPS
   if (webhookUrl) {
