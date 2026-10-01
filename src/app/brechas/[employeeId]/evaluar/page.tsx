@@ -35,6 +35,9 @@ export default async function EvaluacionEficaciaPage({ params }: { params: Promi
       }
     });
 
+    const { syncRecordToPowerAutomate } = await import("@/lib/powerAutomate");
+    syncRecordToPowerAutomate(recordId).catch(() => {});
+
     revalidatePath(`/brechas/${emp!.id}/evaluar`);
   }
 

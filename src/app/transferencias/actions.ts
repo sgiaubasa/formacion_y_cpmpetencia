@@ -55,6 +55,19 @@ export async function confirmarTransferenciaAction(formData: FormData) {
     });
   });
 
+  // Sincronizar las nuevas brechas creadas con Power Automate
+  const createdRecords = await prisma.employeeTrainingRecord.findMany({
+    where: {
+      employeeId: pending.employeeId,
+      sourceProfileId: pending.targetProfileId,
+      trainingName: { in: gaps }
+    }
+  });
+  const { syncRecordToPowerAutomate } = await import("@/lib/powerAutomate");
+  for (const rec of createdRecords) {
+    syncRecordToPowerAutomate(rec.id).catch(() => {});
+  }
+
   revalidatePath('/transferencias');
   revalidatePath('/personal');
   revalidatePath('/brechas');

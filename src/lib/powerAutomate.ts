@@ -32,7 +32,10 @@ export async function syncRecordToPowerAutomate(recordId: number) {
       instructorName: String(record.instructorName ?? ""),
       instructorSignature: sanitizeSig(record.instructorSignature),
       effectiveness: String(record.effectiveness ?? ""),
+      evaluatedAt: record.evaluatedAt ? record.evaluatedAt.toISOString() : "",
+      effectivenessJustification: String(record.effectivenessJustification ?? ""),
       score: String(record.score ?? ""),
+      sourceProfileId: String(record.sourceProfileId ?? ""),
       scheduledDate: record.scheduledDate ? record.scheduledDate.toISOString() : "",
       rescheduledDate: record.rescheduledDate ? record.rescheduledDate.toISOString() : ""
     };
