@@ -44,8 +44,11 @@ export async function confirmarCambioPuestoAction(formData: FormData) {
       .filter(e => e.includes("@"));
   }
 
-  // Unificar correos manuales + correos del sector destino (y si ambos están vacíos, usar senderEmail)
-  const allToEmails = Array.from(new Set([...manualEmails, ...sectorEmails]));
+  // El campo notificationEmails ya trae los del sector + los agregados manualmente
+  const allToEmails =
+    manualEmails.length > 0
+      ? Array.from(new Set(manualEmails))
+      : Array.from(new Set(sectorEmails));
   if (allToEmails.length === 0 && senderEmail.includes("@")) {
     allToEmails.push(senderEmail);
   }

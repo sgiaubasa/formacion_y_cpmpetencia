@@ -72,8 +72,8 @@ export async function sendMail({
         redirect: 'follow',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          to: toList.join(', '),
-          cc: ccList.join(', '),
+          to: toList.join(','),
+          cc: ccList.join(','),
           from: 'RRHH - AUBASA (No Responder)',
           subject,
           html,
