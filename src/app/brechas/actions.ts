@@ -66,64 +66,73 @@ export async function confirmarCambioPuestoAction(formData: FormData) {
     },
   });
 
-  const emailSubject = `Atención: Transferencia pendiente de aprobación para ${empleado.name}`;
+  const emailSubject = `Comunicación de Cambio de Puesto: ${empleado.name} (Legajo ${empleado.legajo})`;
   const cleanGaps = gapsToCreate.map(g => g.trim()).filter(Boolean);
+  const hasGaps = cleanGaps.length > 0;
 
-  const plainTextBody = [
-    `Hola, RRHH ha propuesto a ${empleado.name} para el puesto de "${targetProfile.title}" en su sector (${targetSector?.name || ""}).`,
-    ``,
-    `Para que este cambio se haga efectivo, usted DEBE ingresar al sistema de Formación y Competencia (sección Transferencias) y CONFIRMAR la recepción:`,
-    `https://formacion-y-competencia.vercel.app/transferencias`,
-    ``,
-    `IMPORTANTE: Cuenta con un plazo de 90 días como máximo para programar y completar las capacitaciones faltantes, de manera que se cumpla con la evaluación inicial obligatoria.`,
-    ``,
-    `Detalles:`,
-    `- Empleado: ${empleado.name} (Legajo: ${empleado.legajo})`,
-    `- Nuevo Puesto: ${targetProfile.title}`,
-    `- Sector Destino: ${targetSector?.name || "-"}`,
-    ...(senderEmail ? [`- Propuesto por: ${senderEmail}`] : []),
-    ``,
-    `Capacitaciones a Planificar:`,
-    ...(cleanGaps.length > 0
-      ? cleanGaps.map(g => `  • ${g}`)
-      : [`  • Sin brechas pendientes (cumple todos los requisitos del perfil)`]),
-    ``,
-    `Por favor, ingrese al sistema para confirmar el cambio.`,
-  ].join("\r\n");
+  const plainTextBody = hasGaps
+    ? [
+        `Hola, se informa que RRHH ha evaluado a ${empleado.name} (Legajo: ${empleado.legajo}) para el cambio al puesto de "${targetProfile.title}" en el sector ${targetSector?.name || ""}.`,
+        ``,
+        `Las brechas detectadas según la evaluación inicial son las siguientes capacitaciones que debe realizar:`,
+        ...cleanGaps.map(g => `  • ${g}`),
+        ``,
+        `IMPORTANTE: Tiene un plazo máximo de 90 días para realizar las capacitaciones indicadas y su correspondiente evaluación de eficacia para la liberación del puesto.`,
+        ``,
+        `Por favor, ingrese al sistema de Formación y Competencia (sección Transferencias) para confirmar la recepción y programar las fechas de dichas capacitaciones.`,
+        ``,
+        `---`,
+        `Este es un mensaje automático de comunicación interna (No Responder).`,
+      ].join("\r\n")
+    : [
+        `Hola, se informa que RRHH ha evaluado a ${empleado.name} (Legajo: ${empleado.legajo}) para el cambio al puesto de "${targetProfile.title}" en el sector ${targetSector?.name || ""}.`,
+        ``,
+        `Resultado de la evaluación: El empleado NO presenta brechas de capacitación para este perfil, por lo que puede ser liberado al puesto cuando el Jefe del Sector lo desee.`,
+        ``,
+        `Por favor, ingrese al sistema de Formación y Competencia (sección Transferencias) para confirmar la recepción del pase al nuevo puesto.`,
+        ``,
+        `---`,
+        `Este es un mensaje automático de comunicación interna (No Responder).`,
+      ].join("\r\n");
 
   let emailSent = false;
   let emailError = "";
   try {
-    const templateSetting = await prisma.appSetting.findUnique({
-      where: { id: "email_template_transferencia" },
-    });
+    const brechasHtml = cleanGaps.map(g => `<li style="margin-bottom: 6px;">${g}</li>`).join("");
 
-    let emailBody =
-      templateSetting?.value ||
-      `<p>Hola, RRHH ha propuesto a <strong>{{nombre}}</strong> para el puesto de <strong>{{puesto}}</strong> en su sector.</p>
-<p>Para que este cambio se haga efectivo, usted <strong>DEBE ingresar al sistema (sección Transferencias) y CONFIRMAR la recepción</strong>.</p>
-<p style="color: red; font-weight: bold;">IMPORTANTE: Cuenta con un plazo de 90 días como máximo para programar y completar estas capacitaciones.</p>
-<h3>Detalles:</h3>
-<ul>
-  <li><strong>Empleado:</strong> {{nombre}} (Legajo: {{legajo}})</li>
-  <li><strong>Nuevo Puesto:</strong> {{puesto}}</li>
-</ul>
-<h3>Capacitaciones a Planificar:</h3>
-<ul>
-  {{brechas}}
-</ul>`;
+    const emailBody = hasGaps
+      ? `
+<div style="font-family: Arial, sans-serif; color: #1e293b; line-height: 1.6;">
+  <p>Hola,</p>
+  <p>Se informa que RRHH ha evaluado a <strong>${empleado.name}</strong> (Legajo: <strong>${empleado.legajo}</strong>) para el cambio al puesto de <strong>${targetProfile.title}</strong> en el sector <strong>${targetSector?.name || "-"}</strong>.</p>
+  
+  <h3 style="color: #0f172a; margin-top: 16px; margin-bottom: 8px;">Brechas detectadas según la evaluación:</h3>
+  <p style="margin-top: 0;">Las capacitaciones que debe realizar según la evaluación inicial son las siguientes:</p>
+  <ul style="background: #f8fafc; padding: 12px 12px 12px 32px; border-left: 4px solid #0284c7; border-radius: 4px;">
+    ${brechasHtml}
+  </ul>
 
-    emailBody = emailBody.replace(/\{\{nombre\}\}/g, empleado.name);
-    emailBody = emailBody.replace(/\{\{puesto\}\}/g, targetProfile.title);
-    emailBody = emailBody.replace(/\{\{legajo\}\}/g, empleado.legajo);
+  <p style="color: #b91c1c; font-weight: bold; background: #fef2f2; padding: 12px; border-radius: 4px; border: 1px solid #fecaca;">
+    IMPORTANTE: Cuenta con un plazo de 90 días para realizar las capacitaciones indicadas y su correspondiente evaluación de eficacia para la liberación del puesto.
+  </p>
 
-    const brechasHtml =
-      cleanGaps.length > 0
-        ? cleanGaps.map(g => `<li>${g}</li>`).join("")
-        : `<li>Sin brechas pendientes (cumple con todos los requisitos)</li>`;
-    emailBody = emailBody.replace(/\{\{brechas\}\}/g, brechasHtml);
+  <p>Por favor, ingrese al sistema (sección <strong>Transferencias</strong>) para confirmar la recepción y programar las fechas de estas capacitaciones.</p>
+  <hr style="margin-top: 24px; border: none; border-top: 1px solid #e2e8f0;" />
+  <p style="font-size: 12px; color: #64748b;"><em>Comunicación automática del Sistema de Formación y Competencia - AUBASA. Por favor, no responda a este mensaje.</em></p>
+</div>`
+      : `
+<div style="font-family: Arial, sans-serif; color: #1e293b; line-height: 1.6;">
+  <p>Hola,</p>
+  <p>Se informa que RRHH ha evaluado a <strong>${empleado.name}</strong> (Legajo: <strong>${empleado.legajo}</strong>) para el cambio al puesto de <strong>${targetProfile.title}</strong> en el sector <strong>${targetSector?.name || "-"}</strong>.</p>
 
-    emailBody += `<hr style="margin-top:20px;border:none;border-top:1px solid #e2e8f0;" /><p style="font-size:12px;color:#64748b;"><em>Este es un aviso automático del Sistema de Formación y Competencia (RRHH - AUBASA). Por favor, no responda a este correo.</em></p>`;
+  <p style="color: #166534; font-weight: bold; background: #f0fdf4; padding: 12px; border-radius: 4px; border: 1px solid #bbf7d0;">
+    ✓ Resultado de la evaluación: El empleado NO tiene brechas pendientes para este perfil, por lo que puede ser liberado al puesto cuando el Jefe del Sector lo desee.
+  </p>
+
+  <p>Por favor, ingrese al sistema (sección <strong>Transferencias</strong>) para confirmar el pase al nuevo puesto.</p>
+  <hr style="margin-top: 24px; border: none; border-top: 1px solid #e2e8f0;" />
+  <p style="font-size: 12px; color: #64748b;"><em>Comunicación automática del Sistema de Formación y Competencia - AUBASA. Por favor, no responda a este mensaje.</em></p>
+</div>`;
 
     if (finalRecipients) {
       const { sendMail } = await import("@/lib/mailer");
@@ -149,7 +158,7 @@ export async function confirmarCambioPuestoAction(formData: FormData) {
     emailError,
     mailtoData: {
       to: finalRecipients,
-      cc: senderEmail || "",
+      cc: "",
       subject: emailSubject,
       body: plainTextBody,
     },
