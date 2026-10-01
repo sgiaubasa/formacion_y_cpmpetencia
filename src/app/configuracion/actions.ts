@@ -34,8 +34,8 @@ export async function updateSmtpSettingsAction(formData: FormData) {
 
   for (const key of keys) {
     const val = ((formData.get(key) as string) || "").trim();
-    // Si smtp_pass viene vacío y ya existía, no lo pisamos a menos que se borre el usuario
-    if (key === "smtp_pass" && !val && ((formData.get("smtp_user") as string) || "").trim()) {
+    // Si smtp_pass o email_webhook_url vienen vacíos, no pisar el valor protegido existente
+    if ((key === "smtp_pass" || key === "email_webhook_url") && !val) {
       continue;
     }
     await prisma.appSetting.upsert({

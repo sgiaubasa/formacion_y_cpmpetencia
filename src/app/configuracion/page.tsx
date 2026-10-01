@@ -79,13 +79,12 @@ export default async function ConfiguracionPage() {
           </div>
 
           <div className="form-group" style={{ gridColumn: '1 / -1', marginBottom: 0 }}>
-            <label className="form-label">Opcional: URL Webhook Power Automate (Envío por Office 365 Outlook)</label>
+            <label className="form-label">Opcional: URL Webhook de Correo (Protegido en Base de Datos)</label>
             <input
-              type="text"
+              type="password"
               name="email_webhook_url"
               className="form-input"
-              defaultValue={map['email_webhook_url'] || ''}
-              placeholder="https://.../powerautomate/automations/direct/..."
+              placeholder={map['email_webhook_url'] ? '•••••••••••••••••••••••••••• (Webhook activo y protegido)' : 'https://...'}
             />
           </div>
 

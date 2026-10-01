@@ -1,11 +1,5 @@
 import { prisma } from "./prisma";
 
-const DEFAULT_WEBHOOK_URL =
-  "https://default9444ead097714ed8a608802faff70d.4f.environment.api.powerplatform.com:443/powerautomate/automations/direct/cu/21/workflows/c0fb845ad3294f5b9e1b767e3ad73a0f/triggers/manual/paths/invoke?api-version=1&sp=%2Ftriggers%2Fmanual%2Frun&sv=1.0&sig=M40CRgRv1BUe1CgwHpPwBJE6qxXquHtEgfoIUgio4QI";
-
-const DEFAULT_BRECHAS_WEBHOOK_URL =
-  "https://default9444ead097714ed8a608802faff70d.4f.environment.api.powerplatform.com:443/powerautomate/automations/direct/cu/04/workflows/205c4b3974b14191abc58412df67f365/triggers/manual/paths/invoke?api-version=1&sp=%2Ftriggers%2Fmanual%2Frun&sv=1.0&sig=P6fTBgX19ruWSAKW_38J1po2glAnAw1kFyxBeCJmDSw";
-
 function formatEffectiveness(eff: string | null): string {
   if (eff === "EFFECTIVE") return "Eficaz";
   if (eff === "INEFFECTIVE") return "No Eficaz";
@@ -18,9 +12,39 @@ function formatStatus(status: string | null): string {
   return status || "Pendiente";
 }
 
+async function getWebhookUrls(): Promise<{
+  planUrl: string;
+  brechasUrl: string;
+}> {
+  let planUrl = process.env.POWER_AUTOMATE_WEBHOOK_URL || "";
+  let brechasUrl = process.env.POWER_AUTOMATE_BRECHAS_WEBHOOK_URL || "";
+
+  try {
+    const settings = await prisma.appSetting.findMany({
+      where: {
+        id: {
+          in: ["power_automate_webhook_url", "power_automate_brechas_webhook_url"],
+        },
+      },
+    });
+    for (const s of settings) {
+      if (s.id === "power_automate_webhook_url" && s.value) {
+        planUrl = s.value.trim();
+      }
+      if (s.id === "power_automate_brechas_webhook_url" && s.value) {
+        brechasUrl = s.value.trim();
+      }
+    }
+  } catch {
+    // Continuar con variables de entorno si falla lectura
+  }
+
+  return { planUrl, brechasUrl };
+}
+
 export async function syncRecordToPowerAutomate(recordId: number) {
   try {
-    const url = process.env.POWER_AUTOMATE_WEBHOOK_URL || DEFAULT_WEBHOOK_URL;
+    const { planUrl: url, brechasUrl } = await getWebhookUrls();
 
     const record = await prisma.employeeTrainingRecord.findUnique({
       where: { id: recordId },
@@ -83,9 +107,6 @@ export async function syncRecordToPowerAutomate(recordId: number) {
     }
 
     // Si el registro proviene de una Brecha de Cambio de Puesto (sourceProfileId), enviarlo también al flujo de Brechas
-    const brechasUrl =
-      process.env.POWER_AUTOMATE_BRECHAS_WEBHOOK_URL || DEFAULT_BRECHAS_WEBHOOK_URL;
-
     if (brechasUrl && record.sourceProfileId) {
       const matchingTransfer =
         record.employee.pendingTransfers.find(
@@ -136,8 +157,7 @@ export async function syncRecordToPowerAutomate(recordId: number) {
 
 export async function syncNoGapTransferToPowerAutomate(transferId: number) {
   try {
-    const brechasUrl =
-      process.env.POWER_AUTOMATE_BRECHAS_WEBHOOK_URL || DEFAULT_BRECHAS_WEBHOOK_URL;
+    const { brechasUrl } = await getWebhookUrls();
     if (!brechasUrl) return;
 
     const pt = await prisma.pendingTransfer.findUnique({
