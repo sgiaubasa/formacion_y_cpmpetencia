@@ -33,7 +33,7 @@ export async function sendMail({
     return { sent: false, error: 'Sin destinatarios válidos' };
   }
 
-  // Cargar configuración opcional desde AppSetting o usar variables de entorno de Vercel
+  // Cargar configuración desde AppSetting o variables de entorno de Vercel
   let dbSettings: Record<string, string> = {};
   try {
     const rows = await prisma.appSetting.findMany({
@@ -56,10 +56,59 @@ export async function sendMail({
     // Ignorar error de lectura de AppSetting
   }
 
+  const webhookUrl =
+    dbSettings['email_webhook_url'] ||
+    process.env.POWER_AUTOMATE_EMAIL_WEBHOOK_URL ||
+    '';
+
+  // 1. Si hay un Webhook configurado (Google Apps Script o Power Automate), enviar por HTTPS
+  if (webhookUrl) {
+    try {
+      const res = await fetch(webhookUrl, {
+        method: 'POST',
+        redirect: 'follow',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          to: toList.join(', '),
+          cc: ccList.join(', '),
+          from: 'RRHH - AUBASA (No Responder)',
+          subject,
+          html,
+        }),
+      });
+      if (res.ok) {
+        try {
+          await prisma.appSetting.upsert({
+            where: { id: 'last_email_log' },
+            update: {
+              value: JSON.stringify({
+                time: new Date().toISOString(),
+                status: 'SENT_WEBHOOK',
+                to: toList,
+              }),
+            },
+            create: {
+              id: 'last_email_log',
+              value: JSON.stringify({
+                time: new Date().toISOString(),
+                status: 'SENT_WEBHOOK',
+                to: toList,
+              }),
+            },
+          });
+        } catch {}
+        return { sent: true, method: 'webhook', recipients: toList };
+      }
+    } catch (err: any) {
+      console.error('Error enviando correo por Webhook:', err);
+    }
+  }
+
+  // 2. Envío mediante SMTP (Gmail / Office 365)
   const smtpHost = dbSettings['smtp_host'] || process.env.SMTP_HOST || 'smtp.gmail.com';
   const smtpPort = parseInt(dbSettings['smtp_port'] || process.env.SMTP_PORT || '587', 10);
   const smtpUser = dbSettings['smtp_user'] || process.env.SMTP_USER || '';
-  const smtpPass = dbSettings['smtp_pass'] || process.env.SMTP_PASS || '';
+  const smtpPass = (dbSettings['smtp_pass'] || process.env.SMTP_PASS || '').replace(/\s+/g, '');
 
   if (!smtpUser || !smtpPass) {
     try {
@@ -96,8 +145,6 @@ export async function sendMail({
       },
     });
 
-    // IMPORTANTE: El correo dentro de <...> en 'from' SIEMPRE debe ser smtpUser (ej. sgiaubasa@gmail.com)
-    // para que el servidor de correo corporativo (@aubasa.com.ar) no bloquee el mensaje por Anti-Spoofing (SPF/DMARC).
     const cleanReplyTo = replyTo ? parseEmailArray(replyTo)[0] : undefined;
     const fromHeader = `"RRHH - AUBASA (No Responder)" <${smtpUser}>`;
 
