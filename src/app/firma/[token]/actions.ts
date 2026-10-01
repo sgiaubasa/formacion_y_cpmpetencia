@@ -61,8 +61,8 @@ export async function saveRemoteSignature(formData: FormData) {
       data: updateData
     });
 
-    // Sincronizar en segundo plano con Power Automate (Excel Online)
-    syncRecordToPowerAutomate(recordId).catch(() => {});
+    // Sincronizar con Power Automate (Excel Online)
+    await syncRecordToPowerAutomate(recordId).catch(() => {});
 
     revalidatePath("/plan-anual");
     revalidatePath("/brechas");

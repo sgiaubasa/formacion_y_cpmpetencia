@@ -76,6 +76,8 @@ export async function syncRecordToPowerAutomate(recordId: number) {
       return sig;
     };
 
+    const requests: Promise<any>[] = [];
+
     if (url) {
       const payload = {
         id: String(record.id ?? ""),
@@ -97,13 +99,15 @@ export async function syncRecordToPowerAutomate(recordId: number) {
         rescheduledDate: record.rescheduledDate ? record.rescheduledDate.toISOString() : "",
       };
 
-      fetch(url, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload),
-      }).catch(err => {
-        console.error("Error sending webhook to Power Automate:", err);
-      });
+      requests.push(
+        fetch(url, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload),
+        }).catch(err => {
+          console.error("Error sending webhook to Power Automate:", err);
+        })
+      );
     }
 
     // Si el registro proviene de una Brecha de Cambio de Puesto (sourceProfileId), enviarlo también al flujo de Brechas
@@ -142,13 +146,19 @@ export async function syncRecordToPowerAutomate(recordId: number) {
         eficacia: formatEffectiveness(record.effectiveness),
       };
 
-      fetch(brechasUrl, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(brechaPayload),
-      }).catch(err => {
-        console.error("Error sending brecha webhook to Power Automate:", err);
-      });
+      requests.push(
+        fetch(brechasUrl, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(brechaPayload),
+        }).catch(err => {
+          console.error("Error sending brecha webhook to Power Automate:", err);
+        })
+      );
+    }
+
+    if (requests.length > 0) {
+      await Promise.allSettled(requests);
     }
   } catch (error) {
     console.error("Error in syncRecordToPowerAutomate:", error);

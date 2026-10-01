@@ -93,7 +93,7 @@ export async function programarFecha(formData: FormData) {
     });
   }
 
-  syncRecordToPowerAutomate(recordId).catch(() => {});
+  await syncRecordToPowerAutomate(recordId).catch(() => {});
   revalidatePath('/plan-anual');
 }
 
@@ -129,7 +129,7 @@ export async function marcarEjecutada(formData: FormData) {
       }
     });
 
-    syncRecordToPowerAutomate(recordId).catch(() => {});
+    await syncRecordToPowerAutomate(recordId).catch(() => {});
     revalidatePath('/plan-anual');
     return { success: true };
   } catch (err: any) {
@@ -174,7 +174,7 @@ export async function sgiEditRecord(formData: FormData) {
         where: { id: recordId },
         data: updateData
       });
-      syncRecordToPowerAutomate(recordId).catch(() => {});
+      await syncRecordToPowerAutomate(recordId).catch(() => {});
     }
 
     if (materialUrl) {

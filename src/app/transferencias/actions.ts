@@ -66,10 +66,10 @@ export async function confirmarTransferenciaAction(formData: FormData) {
       }
     });
     for (const rec of createdRecords) {
-      syncRecordToPowerAutomate(rec.id).catch(() => {});
+      await syncRecordToPowerAutomate(rec.id).catch(() => {});
     }
   } else {
-    syncNoGapTransferToPowerAutomate(transferId).catch(() => {});
+    await syncNoGapTransferToPowerAutomate(transferId).catch(() => {});
   }
 
   revalidatePath('/transferencias');

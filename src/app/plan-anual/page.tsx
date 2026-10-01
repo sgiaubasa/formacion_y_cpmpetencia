@@ -100,6 +100,13 @@ export default async function PlanAnualPage({ searchParams }: { searchParams: Pr
       });
     }
 
+    if (createdIds.length > 0) {
+      const { syncRecordToPowerAutomate } = await import("@/lib/powerAutomate");
+      for (const id of createdIds) {
+        await syncRecordToPowerAutomate(id).catch(() => {});
+      }
+    }
+
     revalidatePath('/plan-anual');
   }
 

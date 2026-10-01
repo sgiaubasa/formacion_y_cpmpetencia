@@ -70,7 +70,7 @@ export default async function EvaluacionEficaciaPage({ params }: { params: Promi
     await saveEfficacyTraceForRecord(recordId, evaluatorName, userMail);
 
     const { syncRecordToPowerAutomate } = await import("@/lib/powerAutomate");
-    syncRecordToPowerAutomate(recordId).catch(() => {});
+    await syncRecordToPowerAutomate(recordId).catch(() => {});
 
     revalidatePath(`/brechas/${emp!.id}/evaluar`);
     revalidatePath("/plan-anual");
