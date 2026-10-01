@@ -11,14 +11,16 @@ import { getUniqueActiveProfiles } from "@/lib/profileUtils";
 import { getTrainingMaterialsMap, saveTrainingMaterialForRecords } from "@/lib/trainingMaterials";
 import { MaterialViewerButton } from "@/components/MaterialViewerButton";
 import { getEfficacyTraceMap } from "@/lib/efficacyTraceability";
+import { PlanAnualFilters } from "./PlanAnualFilters";
 
-export default async function PlanAnualPage({ searchParams }: { searchParams: Promise<{ tab?: string, q?: string, employeeId?: string, sectorId?: string, jobProfileId?: string, statusFilter?: string }> }) {
+export default async function PlanAnualPage({ searchParams }: { searchParams: Promise<{ tab?: string, q?: string, employeeId?: string, empName?: string, sectorId?: string, jobProfileId?: string, statusFilter?: string }> }) {
   const role = await getCurrentRole();
   const isSector = await isSectorRole(role);
   const sectorRoleId = await getSectorIdFromRole(role);
 
   const sp = await searchParams;
   const q = sp.q || '';
+  const empName = sp.empName?.trim() || '';
   
   const rawSectorId = sp.sectorId ? parseInt(sp.sectorId) : undefined;
   const sectorId = isSector ? sectorRoleId : rawSectorId;
@@ -26,10 +28,19 @@ export default async function PlanAnualPage({ searchParams }: { searchParams: Pr
   const jobProfileId = sp.jobProfileId ? parseInt(sp.jobProfileId) : undefined;
   const statusFilter = sp.statusFilter || undefined;
 
+  const employeeFilters: any = {};
+  if (sectorId) employeeFilters.sectorId = sectorId;
+  if (jobProfileId) employeeFilters.jobProfileId = jobProfileId;
+  if (empName) {
+    employeeFilters.OR = [
+      { name: { contains: empName, mode: 'insensitive' } },
+      { legajo: { contains: empName, mode: 'insensitive' } }
+    ];
+  }
+
   const globalFilters = {
     ...(employeeId && { employeeId: employeeId }),
-    ...(sectorId && { employee: { sectorId: sectorId } }),
-    ...(jobProfileId && { employee: { jobProfileId: jobProfileId } }),
+    ...(Object.keys(employeeFilters).length > 0 && { employee: employeeFilters }),
     ...(statusFilter && { status: statusFilter })
   };
 
@@ -300,8 +311,38 @@ export default async function PlanAnualPage({ searchParams }: { searchParams: Pr
         </div>
       </div>
 
-      <div className="card" style={{ marginBottom: '2rem' }}>
-        <h3 style={{ marginBottom: '1rem', color: 'var(--primary-color)' }}>Asignar Plan de Capacitación</h3>
+      {/* PANEL 1: PROGRAMAR / ASIGNAR NUEVA CAPACITACIÓN */}
+      <div
+        className="card"
+        style={{
+          marginBottom: '2.25rem',
+          borderLeft: '6px solid var(--teal-color)',
+          background: 'linear-gradient(to right, #f0fdfa, #ffffff 35%)',
+          boxShadow: '0 4px 12px rgba(13, 148, 136, 0.08)'
+        }}
+      >
+        <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem', marginBottom: '0.35rem', flexWrap: 'wrap' }}>
+          <span
+            style={{
+              background: 'var(--teal-color)',
+              color: 'white',
+              fontSize: '0.72rem',
+              fontWeight: 700,
+              padding: '0.25rem 0.6rem',
+              borderRadius: '6px',
+              textTransform: 'uppercase',
+              letterSpacing: '0.04em'
+            }}
+          >
+            ➕ Cargar Nueva Capacitación
+          </span>
+          <h3 style={{ margin: 0, color: 'var(--primary-color)', fontSize: '1.15rem' }}>
+            Programar y Asignar Capacitación al Plan
+          </h3>
+        </div>
+        <p style={{ fontSize: '0.85rem', color: '#475569', marginBottom: '1rem' }}>
+          Completá este formulario para programar una nueva capacitación a un empleado, puesto o sector (y adjuntar opcionalmente el material en PDF o Video).
+        </p>
         <AssignTrainingForm 
           allEmployees={allEmployees}
           allJobProfiles={allJobProfiles}
@@ -313,64 +354,22 @@ export default async function PlanAnualPage({ searchParams }: { searchParams: Pr
         />
       </div>
 
-      <div className="card" style={{ marginBottom: '1rem', padding: '1rem' }}>
-        <form method="get" style={{ display: 'flex', gap: '1rem', alignItems: 'flex-end', flexWrap: 'wrap' }}>
-          
-          {!isSector && (
-            <div style={{ flex: '1 1 150px' }}>
-              <label className="form-label" style={{ fontSize: '0.75rem', marginBottom: '0.25rem' }}>Sector</label>
-              <select name="sectorId" className="form-input" defaultValue={sectorId || ''} style={{ borderRadius: '20px' }}>
-                <option value="">Todos los sectores</option>
-                {allSectors.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
-              </select>
-            </div>
-          )}
+      {/* PANEL 2: FILTROS INTERACTIVOS + TABLA DEL PLAN ANUAL */}
+      <PlanAnualFilters
+        allSectors={allSectors}
+        allJobProfiles={allJobProfiles}
+        allEmployees={allEmployees}
+        allTrainings={allTrainings}
+        isSector={isSector}
+        initialSectorId={sectorId ? String(sectorId) : ''}
+        initialJobProfileId={sp.jobProfileId || ''}
+        initialEmployeeId={sp.employeeId || ''}
+        initialEmpSearch={empName}
+        initialStatusFilter={sp.statusFilter || ''}
+        initialTopicQuery={q}
+      />
 
-          <div style={{ flex: '1 1 150px' }}>
-            <label className="form-label" style={{ fontSize: '0.75rem', marginBottom: '0.25rem' }}>Perfil de Puesto</label>
-            <select name="jobProfileId" className="form-input" defaultValue={sp.jobProfileId || ''} style={{ borderRadius: '20px' }}>
-              <option value="">Todos los puestos</option>
-              {allJobProfiles.map(j => <option key={j.id} value={j.id}>{j.title}</option>)}
-            </select>
-          </div>
-
-          <div style={{ flex: '1 1 150px' }}>
-            <label className="form-label" style={{ fontSize: '0.75rem', marginBottom: '0.25rem' }}>Empleado</label>
-            <select name="employeeId" className="form-input" defaultValue={sp.employeeId || ''} style={{ borderRadius: '20px' }}>
-              <option value="">Todos los empleados</option>
-              {allEmployees.map(e => <option key={e.id} value={e.id}>{e.name}</option>)}
-            </select>
-          </div>
-
-          <div style={{ flex: '1 1 150px' }}>
-            <label className="form-label" style={{ fontSize: '0.75rem', marginBottom: '0.25rem' }}>Estado</label>
-            <select name="statusFilter" className="form-input" defaultValue={sp.statusFilter || ''} style={{ borderRadius: '20px' }}>
-              <option value="">Todos los estados</option>
-              <option value="GAP">Brecha (Pendiente)</option>
-              <option value="IN_PLAN">Programada / Reprogramada</option>
-              <option value="COMPLETED">Realizada</option>
-            </select>
-          </div>
-
-          <div style={{ flex: '2 1 200px' }}>
-            <label className="form-label" style={{ fontSize: '0.75rem', marginBottom: '0.25rem' }}>Tema de Capacitación</label>
-            <select name="q" className="form-input" defaultValue={q} style={{ borderRadius: '20px' }}>
-              <option value="">Todos los temas</option>
-              {allTrainings.map(t => <option key={t.id} value={t.title}>{t.title}</option>)}
-            </select>
-          </div>
-
-          <button type="submit" className="btn btn-dark" style={{ padding: '0.5rem 1.5rem', borderRadius: '20px', height: '38px' }}>Filtrar</button>
-          
-          {(sp.sectorId || sp.jobProfileId || sp.employeeId || sp.statusFilter || q) && (
-            <Link href={`?`} className="btn btn-secondary" style={{ padding: '0.5rem 1rem', textDecoration: 'none', display: 'flex', alignItems: 'center', borderRadius: '20px', height: '38px' }}>
-              Limpiar
-            </Link>
-          )}
-        </form>
-      </div>
-
-      <div className="card" style={{ padding: 0 }}>
+      <div className="card" style={{ padding: 0, borderTopLeftRadius: 0, borderTopRightRadius: 0 }}>
         <table className="data-table">
           <thead>
             <tr>
