@@ -207,3 +207,42 @@ export async function syncNoGapTransferToPowerAutomate(transferId: number) {
     console.error("Error in syncNoGapTransferToPowerAutomate:", error);
   }
 }
+
+export async function syncDeletedRecordToPowerAutomate(record: {
+  id: number;
+  employeeId?: number;
+  trainingName?: string;
+}) {
+  try {
+    const { planUrl: url } = await getWebhookUrls();
+    if (!url) return;
+
+    const payload = {
+      id: String(record.id),
+      employeeId: String(record.employeeId ?? ""),
+      trainingName: String(record.trainingName ?? ""),
+      objective: "REGISTRO ELIMINADO EN LA APP",
+      status: "DELETED",
+      completedAt: "",
+      evidencePath: "",
+      employeeSignature: "",
+      instructorName: "",
+      instructorSignature: "",
+      effectiveness: "",
+      evaluatedAt: "",
+      effectivenessJustification: "",
+      score: "",
+      sourceProfileId: "",
+      scheduledDate: "",
+      rescheduledDate: "",
+    };
+
+    await fetch(url, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+  } catch (error) {
+    console.error("Error in syncDeletedRecordToPowerAutomate:", error);
+  }
+}

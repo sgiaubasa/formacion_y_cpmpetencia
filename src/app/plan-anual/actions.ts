@@ -140,9 +140,20 @@ export async function marcarEjecutada(formData: FormData) {
 
 export async function borrarCapacitacion(formData: FormData) {
   const recordId = parseInt(formData.get("recordId") as string);
+  const existing = await prisma.employeeTrainingRecord.findUnique({
+    where: { id: recordId }
+  });
   await prisma.employeeTrainingRecord.delete({
     where: { id: recordId }
   });
+  if (existing) {
+    const { syncDeletedRecordToPowerAutomate } = await import("@/lib/powerAutomate");
+    await syncDeletedRecordToPowerAutomate({
+      id: existing.id,
+      employeeId: existing.employeeId,
+      trainingName: existing.trainingName
+    }).catch(() => {});
+  }
   revalidatePath('/plan-anual');
 }
 
