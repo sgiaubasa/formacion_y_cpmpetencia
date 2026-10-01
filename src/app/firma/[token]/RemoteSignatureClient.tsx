@@ -11,7 +11,7 @@ export default function RemoteSignatureClient({
   objective,
   employeeName,
   legajo,
-  initialRole = "empleado",
+  role,
   hasEmployeeSignature,
   hasInstructorSignature,
   existingInstructorName,
@@ -24,7 +24,7 @@ export default function RemoteSignatureClient({
   objective?: string;
   employeeName: string;
   legajo: string;
-  initialRole?: "empleado" | "instructor" | "ambos";
+  role: "empleado" | "instructor";
   hasEmployeeSignature: boolean;
   hasInstructorSignature: boolean;
   existingInstructorName?: string;
@@ -32,7 +32,6 @@ export default function RemoteSignatureClient({
   existingCompletedDate?: string;
   material?: MaterialInfo | null;
 }) {
-  const [role, setRole] = useState<"empleado" | "instructor" | "ambos">(initialRole);
   const employeeSigRef = useRef<any>(null);
   const instructorSigRef = useRef<any>(null);
 
@@ -48,16 +47,16 @@ export default function RemoteSignatureClient({
     formData.set("recordId", recordId.toString());
     formData.set("roleMode", role);
 
-    if (role === "empleado" || role === "ambos") {
+    if (role === "empleado") {
       if (employeeSigRef.current?.isEmpty()) {
-        setError("Por favor, ingresá la firma del empleado antes de enviar.");
+        setError("Por favor, ingresá tu firma antes de enviar.");
         return;
       }
       const empSigDataUrl = employeeSigRef.current.getTrimmedCanvas().toDataURL("image/png");
       formData.set("employeeSignature", empSigDataUrl);
     }
 
-    if (role === "instructor" || role === "ambos") {
+    if (role === "instructor") {
       const instName = (formData.get("instructorName") as string)?.trim();
       const compDate = (formData.get("completedAt") as string)?.trim();
       if (!instName) {
@@ -100,8 +99,6 @@ export default function RemoteSignatureClient({
         <h2 style={{ color: "#10b981", marginBottom: "0.75rem" }}>
           {role === "instructor"
             ? "¡Evaluación y Firma de Instructor Registradas!"
-            : role === "ambos"
-            ? "¡Capacitación y Firmas Registradas!"
             : "¡Firma de Asistencia Registrada!"}
         </h2>
         <p style={{ color: "#4b5563", lineHeight: 1.5 }}>
@@ -115,49 +112,33 @@ export default function RemoteSignatureClient({
   }
 
   return (
-    <div style={{ padding: "1rem", fontFamily: "sans-serif", maxWidth: "560px", margin: "0 auto" }}>
+    <div style={{ padding: "1rem", fontFamily: "sans-serif", maxWidth: "540px", margin: "0 auto" }}>
       <div style={{ background: "white", padding: "1.5rem", borderRadius: "12px", boxShadow: "0 4px 20px rgba(0,0,0,0.08)", border: "1px solid #e5e7eb" }}>
         <div style={{ textAlign: "center", marginBottom: "1.25rem" }}>
           <img src="/logo.png" alt="AUBASA" style={{ maxWidth: "150px", marginBottom: "0.75rem" }} />
           <h1 style={{ fontSize: "1.35rem", color: "#0f172a", marginBottom: "0.25rem" }}>
-            Confirmación de Capacitación
+            {role === "instructor"
+              ? "Registro del Instructor"
+              : "Confirmación de Asistencia"}
           </h1>
           <p style={{ color: "#64748b", fontSize: "0.875rem", margin: 0 }}>
-            Acceso externo sin necesidad de usuario en el sistema
+            {role === "instructor"
+              ? "Completá la fecha de realización, calificación y firma del instructor"
+              : "Firmá en el recuadro inferior para registrar tu asistencia a la capacitación"}
           </p>
         </div>
 
-        {/* Estado actual de firmas */}
-        <div style={{ display: "flex", gap: "0.5rem", marginBottom: "1rem", flexWrap: "wrap" }}>
-          <div
-            style={{
-              flex: 1,
-              padding: "0.5rem 0.75rem",
-              borderRadius: "8px",
-              fontSize: "0.78rem",
-              fontWeight: 600,
-              background: hasEmployeeSignature ? "#dcfce7" : "#fef3c7",
-              color: hasEmployeeSignature ? "#166534" : "#92400e",
-              border: `1px solid ${hasEmployeeSignature ? "#bbf7d0" : "#fde68a"}`
-            }}
-          >
-            👤 Firma Empleado: {hasEmployeeSignature ? "✅ Registrada" : "⏳ Pendiente"}
+        {/* Aviso si ya fue firmado previamente por esta misma parte */}
+        {role === "empleado" && hasEmployeeSignature && (
+          <div style={{ marginBottom: "1rem", padding: "0.65rem 0.85rem", borderRadius: "8px", fontSize: "0.82rem", fontWeight: 600, background: "#dcfce7", color: "#166534", border: "1px solid #bbf7d0" }}>
+            ✅ Tu firma de asistencia ya figura registrada. Si firmás nuevamente, se actualizará.
           </div>
-          <div
-            style={{
-              flex: 1,
-              padding: "0.5rem 0.75rem",
-              borderRadius: "8px",
-              fontSize: "0.78rem",
-              fontWeight: 600,
-              background: hasInstructorSignature ? "#dcfce7" : "#fef3c7",
-              color: hasInstructorSignature ? "#166534" : "#92400e",
-              border: `1px solid ${hasInstructorSignature ? "#bbf7d0" : "#fde68a"}`
-            }}
-          >
-            👨‍🏫 Firma Instructor: {hasInstructorSignature ? "✅ Registrada" : "⏳ Pendiente"}
+        )}
+        {role === "instructor" && hasInstructorSignature && (
+          <div style={{ marginBottom: "1rem", padding: "0.65rem 0.85rem", borderRadius: "8px", fontSize: "0.82rem", fontWeight: 600, background: "#dcfce7", color: "#166534", border: "1px solid #bbf7d0" }}>
+            ✅ La firma y evaluación del instructor ya figuran registradas. Si enviás nuevamente, se actualizarán los datos.
           </div>
-        </div>
+        )}
 
         {/* Datos de la Capacitación */}
         <div style={{ background: "#f8fafc", padding: "1rem", borderRadius: "8px", marginBottom: "1.25rem", border: "1px solid #e2e8f0" }}>
@@ -191,73 +172,9 @@ export default function RemoteSignatureClient({
           )}
         </div>
 
-        {/* Selector de Rol */}
-        <div style={{ marginBottom: "1.25rem" }}>
-          <label style={{ display: "block", fontSize: "0.8rem", fontWeight: 600, color: "#475569", marginBottom: "0.4rem" }}>
-            Seleccioná tu perfil para completar:
-          </label>
-          <div style={{ display: "flex", gap: "0.5rem" }}>
-            <button
-              type="button"
-              onClick={() => setRole("empleado")}
-              style={{
-                flex: 1,
-                padding: "0.6rem 0.5rem",
-                borderRadius: "8px",
-                fontSize: "0.85rem",
-                fontWeight: 600,
-                cursor: "pointer",
-                border: role === "empleado" ? "2px solid #0d9488" : "1px solid #cbd5e1",
-                background: role === "empleado" ? "#f0fdfa" : "white",
-                color: role === "empleado" ? "#0f766e" : "#475569"
-              }}
-            >
-              👤 Empleado
-            </button>
-            <button
-              type="button"
-              onClick={() => setRole("instructor")}
-              style={{
-                flex: 1,
-                padding: "0.6rem 0.5rem",
-                borderRadius: "8px",
-                fontSize: "0.85rem",
-                fontWeight: 600,
-                cursor: "pointer",
-                border: role === "instructor" ? "2px solid #0d9488" : "1px solid #cbd5e1",
-                background: role === "instructor" ? "#f0fdfa" : "white",
-                color: role === "instructor" ? "#0f766e" : "#475569"
-              }}
-            >
-              👨‍🏫 Instructor
-            </button>
-            <button
-              type="button"
-              onClick={() => setRole("ambos")}
-              style={{
-                flex: 1,
-                padding: "0.6rem 0.5rem",
-                borderRadius: "8px",
-                fontSize: "0.85rem",
-                fontWeight: 600,
-                cursor: "pointer",
-                border: role === "ambos" ? "2px solid #0d9488" : "1px solid #cbd5e1",
-                background: role === "ambos" ? "#f0fdfa" : "white",
-                color: role === "ambos" ? "#0f766e" : "#475569"
-              }}
-            >
-              👥 Ambos
-            </button>
-          </div>
-        </div>
-
         <form onSubmit={handleSubmit} style={{ display: "flex", flexDirection: "column", gap: "1.25rem" }}>
-          {(role === "instructor" || role === "ambos") && (
+          {role === "instructor" ? (
             <div style={{ background: "#f8fafc", padding: "1rem", borderRadius: "8px", border: "1px solid #e2e8f0", display: "flex", flexDirection: "column", gap: "1rem" }}>
-              <h3 style={{ margin: 0, fontSize: "0.95rem", color: "#0f766e" }}>
-                📋 Datos de Realización y Evaluación (Instructor)
-              </h3>
-
               <div>
                 <label style={{ display: "block", fontSize: "0.85rem", fontWeight: 600, color: "#334155", marginBottom: "0.35rem" }}>
                   Nombre y Apellido del Instructor *
@@ -311,7 +228,7 @@ export default function RemoteSignatureClient({
                   <SignatureCanvas
                     ref={instructorSigRef}
                     canvasProps={{
-                      style: { width: "100%", height: "170px", borderRadius: "8px" },
+                      style: { width: "100%", height: "180px", borderRadius: "8px" },
                       className: "sigCanvas"
                     }}
                   />
@@ -322,14 +239,12 @@ export default function RemoteSignatureClient({
                     onClick={() => instructorSigRef.current?.clear()}
                     style={{ fontSize: "0.8rem", color: "#dc2626", background: "none", border: "none", cursor: "pointer", padding: "0.25rem" }}
                   >
-                    Borrar firma del instructor
+                    Borrar firma
                   </button>
                 </div>
               </div>
             </div>
-          )}
-
-          {(role === "empleado" || role === "ambos") && (
+          ) : (
             <div style={{ background: "#f8fafc", padding: "1rem", borderRadius: "8px", border: "1px solid #e2e8f0" }}>
               <label style={{ display: "block", fontSize: "0.9rem", fontWeight: 600, color: "#334155", marginBottom: "0.5rem" }}>
                 ✍️ Firma del Empleado ({employeeName}) *
@@ -349,7 +264,7 @@ export default function RemoteSignatureClient({
                   onClick={() => employeeSigRef.current?.clear()}
                   style={{ fontSize: "0.8rem", color: "#dc2626", background: "none", border: "none", cursor: "pointer", padding: "0.25rem" }}
                 >
-                  Borrar firma del empleado
+                  Borrar firma
                 </button>
               </div>
             </div>
@@ -380,8 +295,6 @@ export default function RemoteSignatureClient({
               ? "Guardando..."
               : role === "instructor"
               ? "Confirmar Evaluación y Firma del Instructor"
-              : role === "ambos"
-              ? "Confirmar Ambas Firmas y Evaluación"
               : "Confirmar Asistencia del Empleado"}
           </button>
         </form>

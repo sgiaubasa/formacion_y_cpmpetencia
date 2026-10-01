@@ -20,16 +20,17 @@ export function ConfirmExecutionModal({
 
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState("");
-  const [baseShareLink, setBaseShareLink] = useState("");
+  const [employeeLink, setEmployeeLink] = useState("");
+  const [instructorLink, setInstructorLink] = useState("");
   const [copiedType, setCopiedType] = useState<"" | "empleado" | "instructor">("");
 
   const handleGenerateLink = async () => {
     setIsSubmitting(true);
     setError("");
     try {
-      const token = await generarLinkFirma(recordId);
-      const url = `${window.location.origin}/firma/${token}`;
-      setBaseShareLink(url);
+      const { employeeToken, instructorToken } = await generarLinkFirma(recordId);
+      setEmployeeLink(`${window.location.origin}/firma/${employeeToken}`);
+      setInstructorLink(`${window.location.origin}/firma/${instructorToken}`);
     } catch (err) {
       setError("Error al generar el enlace.");
     } finally {
@@ -38,13 +39,10 @@ export function ConfirmExecutionModal({
   };
 
   useEffect(() => {
-    if (initialMode === "link" && !baseShareLink) {
+    if (initialMode === "link" && !employeeLink) {
       handleGenerateLink();
     }
   }, [initialMode]);
-
-  const employeeLink = baseShareLink ? `${baseShareLink}?rol=empleado` : "";
-  const instructorLink = baseShareLink ? `${baseShareLink}?rol=instructor` : "";
 
   const copyToClipboard = (url: string, type: "empleado" | "instructor") => {
     navigator.clipboard.writeText(url);
@@ -144,7 +142,7 @@ export function ConfirmExecutionModal({
             type="button"
             onClick={() => {
               setMode("link");
-              if (!baseShareLink) handleGenerateLink();
+              if (!employeeLink) handleGenerateLink();
             }}
             className={mode === "link" ? "btn btn-primary" : "btn btn-secondary"}
             style={{ flex: 1, padding: "0.5rem", fontSize: "0.88rem" }}
@@ -156,10 +154,10 @@ export function ConfirmExecutionModal({
         {mode === "link" ? (
           <div style={{ display: "flex", flexDirection: "column", gap: "1rem" }}>
             <div style={{ background: "#f0fdfa", border: "1px solid #99f6e4", padding: "0.75rem 1rem", borderRadius: "8px", fontSize: "0.85rem", color: "#0f766e", lineHeight: 1.4 }}>
-              <strong>🔓 Sin necesidad de acceso a la aplicación:</strong> Tanto el empleado como el instructor pueden abrir su enlace desde el celular o PC sin tener usuario ni contraseña.
+              <strong>🔓 Enlaces independientes y sin necesidad de usuario:</strong> El enlace del empleado solo permite firmar asistencia, y el enlace del instructor es exclusivo para cargar la nota, fecha de realización y firma del instructor.
             </div>
 
-            {!baseShareLink ? (
+            {!employeeLink ? (
               <button type="button" onClick={handleGenerateLink} className="btn btn-primary" disabled={isSubmitting}>
                 {isSubmitting ? "Generando enlaces..." : "Generar Enlaces Seguros"}
               </button>

@@ -1,4 +1,4 @@
-import { decryptRecordId } from "@/lib/crypto";
+import { decryptRecordToken } from "@/lib/crypto";
 import { prisma } from "@/lib/prisma";
 import RemoteSignatureClient from "./RemoteSignatureClient";
 import { notFound } from "next/navigation";
@@ -13,9 +13,9 @@ export default async function FirmaPage({
 }) {
   const resolvedParams = await params;
   const sp = await searchParams;
-  const recordId = decryptRecordId(resolvedParams.token);
+  const decoded = decryptRecordToken(resolvedParams.token);
 
-  if (!recordId) {
+  if (!decoded || !decoded.recordId) {
     return (
       <div style={{ padding: "2rem", textAlign: "center", fontFamily: "sans-serif" }}>
         <style>{`.sidebar { display: none !important; } .main-content { margin-left: 0 !important; width: 100% !important; padding: 1rem !important; }`}</style>
@@ -24,6 +24,12 @@ export default async function FirmaPage({
       </div>
     );
   }
+
+  const { recordId } = decoded;
+  const role: "empleado" | "instructor" =
+    decoded.role === "instructor" || sp.rol === "instructor"
+      ? "instructor"
+      : "empleado";
 
   const record = await prisma.employeeTrainingRecord.findUnique({
     where: { id: recordId },
@@ -38,13 +44,6 @@ export default async function FirmaPage({
 
   const material = await getTrainingMaterialForRecord(record.id);
 
-  const initialRole =
-    sp.rol === "instructor"
-      ? "instructor"
-      : sp.rol === "ambos"
-      ? "ambos"
-      : "empleado";
-
   return (
     <>
       <style>{`.sidebar { display: none !important; } .main-content { margin-left: 0 !important; width: 100% !important; padding: 1rem !important; }`}</style>
@@ -54,7 +53,7 @@ export default async function FirmaPage({
         objective={record.objective || ""}
         employeeName={record.employee.name}
         legajo={record.employee.legajo}
-        initialRole={initialRole}
+        role={role}
         hasEmployeeSignature={Boolean(record.employeeSignature)}
         hasInstructorSignature={Boolean(record.instructorSignature)}
         existingInstructorName={record.instructorName || ""}

@@ -193,6 +193,7 @@ export async function sgiEditRecord(formData: FormData) {
 }
 
 export async function generarLinkFirma(recordId: number) {
-  const token = encryptRecordId(recordId);
-  return token;
+  const employeeToken = encryptRecordId(recordId, "empleado");
+  const instructorToken = encryptRecordId(recordId, "instructor");
+  return { employeeToken, instructorToken };
 }
