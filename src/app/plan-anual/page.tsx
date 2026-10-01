@@ -10,6 +10,7 @@ import { RowActions } from "./RowActions";
 import { getUniqueActiveProfiles } from "@/lib/profileUtils";
 import { getTrainingMaterialsMap, saveTrainingMaterialForRecords } from "@/lib/trainingMaterials";
 import { MaterialViewerButton } from "@/components/MaterialViewerButton";
+import { getEfficacyTraceMap } from "@/lib/efficacyTraceability";
 
 export default async function PlanAnualPage({ searchParams }: { searchParams: Promise<{ tab?: string, q?: string, employeeId?: string, sectorId?: string, jobProfileId?: string, statusFilter?: string }> }) {
   const role = await getCurrentRole();
@@ -32,7 +33,7 @@ export default async function PlanAnualPage({ searchParams }: { searchParams: Pr
     ...(statusFilter && { status: statusFilter })
   };
 
-  const [records, materialsMap] = await Promise.all([
+  const [records, materialsMap, traceMap] = await Promise.all([
     prisma.employeeTrainingRecord.findMany({
       where: {
         trainingName: { contains: q, mode: 'insensitive' },
@@ -42,7 +43,8 @@ export default async function PlanAnualPage({ searchParams }: { searchParams: Pr
       orderBy: { id: 'desc' },
       take: 300
     }),
-    getTrainingMaterialsMap()
+    getTrainingMaterialsMap(),
+    getEfficacyTraceMap()
   ]);
 
   // Server Action para Agregar Ad-Hoc masivamente
@@ -431,6 +433,11 @@ export default async function PlanAnualPage({ searchParams }: { searchParams: Pr
                         )}
                         {r.effectiveness === 'EFFECTIVE' && <span className="badge badge-success" style={{ width: 'fit-content' }}>Eficaz</span>}
                         {r.effectiveness === 'INEFFECTIVE' && <span className="badge badge-secondary" style={{ backgroundColor: '#ef4444', width: 'fit-content' }}>No Eficaz</span>}
+                        {traceMap[`record_${r.id}`]?.evaluatorName && (r.effectiveness === 'EFFECTIVE' || r.effectiveness === 'INEFFECTIVE') && (
+                          <div style={{ fontSize: '0.75rem', color: '#166534', fontWeight: 600 }}>
+                            👤 Evaluó eficacia: {traceMap[`record_${r.id}`].evaluatorName}
+                          </div>
+                        )}
                         
                         <div style={{ marginTop: '0.25rem' }}>
                           <RowActions 

@@ -37,9 +37,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     supabase.auth.getSession().then(({ data: { session } }) => {
       if (session?.user) {
         setUser(session.user);
+        Cookies.set("userEmail", session.user.email!.toLowerCase().trim());
         updateUserRoleCookie(session.user.email!).catch(console.error);
       } else {
         Cookies.remove("activeRole");
+        Cookies.remove("userEmail");
       }
       setLoading(false);
     }).catch((err) => {
@@ -57,10 +59,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       
       if (session?.user) {
         setUser(session.user);
+        Cookies.set("userEmail", session.user.email!.toLowerCase().trim());
         updateUserRoleCookie(session.user.email!);
       } else {
         setUser(null);
         Cookies.remove("activeRole");
+        Cookies.remove("userEmail");
         router.refresh();
       }
     });
@@ -94,11 +98,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       // El usuario no está en la base de datos o le quitaron el acceso
       await supabase.auth.signOut();
       Cookies.remove("activeRole");
+      Cookies.remove("userEmail");
       setUser(null);
       alert("Tu acceso ha sido revocado o no tienes permisos para ingresar al sistema.");
       return;
     }
     Cookies.set("activeRole", role); // Session cookie (clears on browser close)
+    Cookies.set("userEmail", email.toLowerCase().trim());
     router.refresh();
   };
 

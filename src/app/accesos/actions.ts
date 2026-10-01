@@ -1,8 +1,9 @@
-"use server"
+"use server";
 
 import { prisma } from "@/lib/prisma";
 import { revalidatePath } from "next/cache";
-import { createClient } from '@supabase/supabase-js';
+import { createClient } from "@supabase/supabase-js";
+import { setEfficacyEvaluatorConfig } from "@/lib/efficacyTraceability";
 
 async function syncSectorMail(sectorId: number | null) {
   if (!sectorId) return;
@@ -11,7 +12,7 @@ async function syncSectorMail(sectorId: number | null) {
       where: { role: "SECTOR", sectorId }
     });
     const emails = Array.from(
-      new Set(sectorUsers.map(u => u.email.trim().toLowerCase()).filter(Boolean))
+      new Set(sectorUsers.map((u) => u.email.trim().toLowerCase()).filter(Boolean))
     );
     await prisma.sector.update({
       where: { id: sectorId },
@@ -24,10 +25,12 @@ async function syncSectorMail(sectorId: number | null) {
 
 export async function addAccess(formData: FormData) {
   const email = formData.get("email") as string;
+  const fullName = (formData.get("fullName") as string | null)?.trim() || "";
   const role = formData.get("role") as string; // "SGI", "RRHH", "SECTOR"
   const sectorIdStr = formData.get("sectorId") as string;
   const sectorId = sectorIdStr ? parseInt(sectorIdStr) : null;
   const isManager = formData.get("isManager") === "on";
+  const canEvaluateEfficacy = formData.get("canEvaluateEfficacy") === "on";
   const cleanEmail = email.toLowerCase().trim();
 
   try {
@@ -45,37 +48,58 @@ export async function addAccess(formData: FormData) {
         isManager
       }
     });
+
+    await setEfficacyEvaluatorConfig(cleanEmail, {
+      canEvaluate: canEvaluateEfficacy,
+      fullName
+    });
+
     if (role === "SECTOR" && sectorId) {
       await syncSectorMail(sectorId);
     }
   } catch (error) {
     console.error("Error al guardar usuario en base de datos:", error);
-    return; // Evitar que rompa la pagina
+    return;
   }
 
   // Enviar invitación oficial por correo vía Supabase Admin
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
   const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!;
-  
+
   if (supabaseServiceKey) {
     const supabaseAdmin = createClient(supabaseUrl, supabaseServiceKey);
     const { error } = await supabaseAdmin.auth.admin.inviteUserByEmail(cleanEmail, {
-      redirectTo: 'https://formacion-y-competencia.vercel.app/'
+      redirectTo: "https://formacion-y-competencia.vercel.app/"
     });
     if (error) {
       console.error("Error al enviar invitación por correo:", error);
-      // No lanzamos error para no interrumpir el flujo si falla el correo,
-      // pero el usuario ya está agregado en la base de datos local.
     }
   }
 
-  revalidatePath('/accesos');
-  revalidatePath('/brechas');
+  revalidatePath("/accesos");
+  revalidatePath("/brechas");
+}
+
+export async function updateUserEfficacyPermission(formData: FormData) {
+  const email = (formData.get("email") as string)?.toLowerCase().trim();
+  const fullName = (formData.get("fullName") as string)?.trim();
+  const canEvaluate = formData.get("canEvaluate") === "true";
+
+  if (!email) return;
+
+  await setEfficacyEvaluatorConfig(email, {
+    canEvaluate,
+    fullName
+  });
+
+  revalidatePath("/accesos");
+  revalidatePath("/brechas");
+  revalidatePath("/plan-anual");
 }
 
 export async function removeAccess(formData: FormData) {
   const id = parseInt(formData.get("id") as string);
-  
+
   try {
     const user = await prisma.appUser.findUnique({ where: { id } });
     await prisma.appUser.delete({
@@ -88,6 +112,6 @@ export async function removeAccess(formData: FormData) {
     console.error("Error al borrar:", error);
   }
 
-  revalidatePath('/accesos');
-  revalidatePath('/brechas');
+  revalidatePath("/accesos");
+  revalidatePath("/brechas");
 }
