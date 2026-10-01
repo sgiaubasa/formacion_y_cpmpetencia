@@ -61,16 +61,17 @@ export async function sendMail({
     process.env.POWER_AUTOMATE_EMAIL_WEBHOOK_URL ||
     '';
 
-  // 1. Si hay un Webhook configurado (Google Apps Script o Power Automate), enviar por HTTPS
+  // 1. Si hay un Webhook configurado (Power Automate Office 365 o Google Apps Script), enviar por HTTPS
   if (webhookUrl) {
     try {
+      const sep = webhookUrl.includes('powerplatform.com') ? ';' : ',';
       const res = await fetch(webhookUrl, {
         method: 'POST',
         redirect: 'follow',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          to: toList.join(','),
-          cc: ccList.join(','),
+          to: toList.join(sep),
+          cc: ccList.join(sep),
           from: 'RRHH - AUBASA (No Responder)',
           subject,
           html,
