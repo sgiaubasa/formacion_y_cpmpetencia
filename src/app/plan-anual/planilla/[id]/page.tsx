@@ -19,10 +19,12 @@ export default async function PlanillaAsistenciaPage({ params, searchParams }: {
     return notFound();
   }
 
-  // Obtenemos la fecha a mostrar (la pasada por parámetro, la programada, o la actual)
+  // Obtenemos la fecha a mostrar (la pasada por parámetro, la de realización cargada por el instructor, o la programada)
   let displayDate = '';
   if (sp.date) {
     displayDate = new Date(sp.date + "T12:00:00").toLocaleDateString('es-AR');
+  } else if (record.completedAt) {
+    displayDate = new Date(record.completedAt).toLocaleDateString('es-AR');
   } else if (record.scheduledDate) {
     displayDate = new Date(record.scheduledDate).toLocaleDateString('es-AR');
   }
