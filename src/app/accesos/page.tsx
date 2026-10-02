@@ -97,7 +97,7 @@ export default async function AccesosPage() {
                   Es Gerente (Puede firmar perfiles)
                 </label>
                 <label style={{ display: "flex", alignItems: "center", cursor: "pointer", fontSize: "0.85rem", fontWeight: 600, color: "var(--teal-color)" }}>
-                  <input type="checkbox" name="canEvaluateEfficacy" defaultChecked style={{ width: "16px", height: "16px", marginRight: "0.5rem" }} />
+                  <input type="checkbox" name="canEvaluateEfficacy" style={{ width: "16px", height: "16px", marginRight: "0.5rem" }} />
                   ✓ Apto para Medir Eficacia
                 </label>
               </div>
@@ -124,7 +124,7 @@ export default async function AccesosPage() {
               {users.map((u) => {
                 const cleanEmail = u.email.toLowerCase().trim();
                 const config = evaluatorsMap[cleanEmail];
-                const canEval = config ? config.canEvaluate : u.role === "SGI" || u.isManager;
+                const canEval = config ? config.canEvaluate : u.role === "SGI";
                 const displayFullName = config?.fullName || formatNameFromEmail(cleanEmail);
 
                 return (

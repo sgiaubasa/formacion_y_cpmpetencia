@@ -13,7 +13,8 @@ export function RowActions({
   isSgi = false,
   isCompleted = false,
   currentScore = "",
-  currentCompletedDate = ""
+  currentCompletedDate = "",
+  currentObjective = ""
 }: {
   recordId: number;
   currentDate: string;
@@ -22,6 +23,7 @@ export function RowActions({
   isCompleted?: boolean;
   currentScore?: string;
   currentCompletedDate?: string;
+  currentObjective?: string;
 }) {
   const [isOpen, setIsOpen] = useState(false);
   const [activeForm, setActiveForm] = useState<
@@ -211,6 +213,7 @@ export function RowActions({
         currentScheduledDate={currentDate}
         currentCompletedDate={currentCompletedDate}
         currentScore={currentScore}
+        currentObjective={currentObjective}
         onClose={() => setActiveForm("none")}
       />
     );
@@ -287,7 +290,7 @@ export function RowActions({
             </button>
           )}
 
-          {isSgi && isCompleted && (
+          {isSgi && (
             <button
               className="dropdown-item"
               onClick={() => {
@@ -295,7 +298,7 @@ export function RowActions({
                 setIsOpen(false);
               }}
             >
-              ✏️ Modificar Registro / Material (SGI)
+              ✏️ Modificar Registro / Objetivo (SGI)
             </button>
           )}
 

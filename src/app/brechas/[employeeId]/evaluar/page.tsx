@@ -42,7 +42,7 @@ export default async function EvaluacionEficaciaPage({ params }: { params: Promi
   const evaluatorConfig = currentEmail ? evaluatorsMap[currentEmail] : undefined;
   const canEvaluate = evaluatorConfig
     ? evaluatorConfig.canEvaluate
-    : currentRole === "SGI" || currentRole === "ADMIN" || Boolean(currentUserDb?.isManager);
+    : currentRole === "SGI";
 
   const defaultEvaluatorName =
     evaluatorConfig?.fullName ||

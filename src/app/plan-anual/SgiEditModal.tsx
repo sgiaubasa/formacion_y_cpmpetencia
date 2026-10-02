@@ -9,12 +9,14 @@ export function SgiEditModal({
   currentScheduledDate,
   currentCompletedDate,
   currentScore,
+  currentObjective = "",
   onClose
 }: {
   recordId: number;
   currentScheduledDate?: string;
   currentCompletedDate?: string;
   currentScore?: string;
+  currentObjective?: string;
   onClose: () => void;
 }) {
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -101,14 +103,25 @@ export function SgiEditModal({
 
   return (
     <div style={{ position: "fixed", top: 0, left: 0, right: 0, bottom: 0, backgroundColor: "rgba(0,0,0,0.5)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 1000 }}>
-      <div style={{ backgroundColor: "white", padding: "2rem", borderRadius: "8px", maxWidth: "500px", width: "100%", maxHeight: "90vh", overflowY: "auto" }}>
-        <h2 style={{ marginBottom: "1rem", color: "var(--teal-color)" }}>SGI: Modificar Registro</h2>
-        <p style={{ color: "var(--text-secondary)", marginBottom: "1.5rem", fontSize: "0.875rem" }}>
-          Puede cambiar las fechas, la nota, adjuntar material de capacitación (PDF/Video) o re-subir la evidencia.
+      <div style={{ backgroundColor: "white", padding: "2rem", borderRadius: "8px", maxWidth: "520px", width: "100%", maxHeight: "90vh", overflowY: "auto" }}>
+        <h2 style={{ marginBottom: "0.75rem", color: "var(--teal-color)" }}>SGI: Modificar Registro</h2>
+        <p style={{ color: "var(--text-secondary)", marginBottom: "1.25rem", fontSize: "0.875rem" }}>
+          Puede modificar el objetivo, las fechas, la nota, adjuntar material de capacitación (PDF/Video) o re-subir la evidencia.
         </p>
 
         <form onSubmit={handleSubmit} style={{ display: "flex", flexDirection: "column", gap: "1rem" }}>
           <input type="hidden" name="recordId" value={recordId} />
+
+          <div>
+            <label className="form-label">Objetivo de la Capacitación</label>
+            <input
+              type="text"
+              name="objective"
+              className="form-input"
+              defaultValue={currentObjective}
+              placeholder="Escriba o modifique el objetivo..."
+            />
+          </div>
 
           <div style={{ display: "flex", gap: "1rem" }}>
             <div style={{ flex: 1 }}>

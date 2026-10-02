@@ -408,6 +408,7 @@ export default async function PlanAnualPage({ searchParams }: { searchParams: Pr
                         currentDate={r.scheduledDate ? r.scheduledDate.toISOString().split('T')[0] : ''} 
                         status={r.status} 
                         isSgi={role === 'SGI'}
+                        currentObjective={r.objective || ""}
                       />
                     ) : (
                       <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
@@ -454,6 +455,7 @@ export default async function PlanAnualPage({ searchParams }: { searchParams: Pr
                             isCompleted={true}
                             currentCompletedDate={r.completedAt ? r.completedAt.toISOString().split('T')[0] : ''}
                             currentScore={r.score || ""}
+                            currentObjective={r.objective || ""}
                           />
                         </div>
                       </div>

@@ -160,6 +160,7 @@ export async function borrarCapacitacion(formData: FormData) {
 export async function sgiEditRecord(formData: FormData) {
   try {
     const recordId = parseInt(formData.get("recordId") as string);
+    const objectiveStr = formData.get("objective") as string | null;
     const scheduledDateStr = formData.get("scheduledDate") as string;
     const completedAtStr = formData.get("completedAt") as string;
     const scoreStr = formData.get("score") as string;
@@ -170,6 +171,7 @@ export async function sgiEditRecord(formData: FormData) {
 
     let updateData: any = {};
 
+    if (objectiveStr !== null) updateData.objective = objectiveStr.trim();
     if (scheduledDateStr) updateData.scheduledDate = new Date(scheduledDateStr);
     if (completedAtStr) updateData.completedAt = new Date(completedAtStr);
     if (scoreStr) updateData.score = scoreStr;
