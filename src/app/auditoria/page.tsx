@@ -1,8 +1,27 @@
 import { prisma } from "@/lib/prisma";
 import Link from "next/link";
 import { getCurrentRole } from "@/lib/auth";
+import { AuditoriaFilters } from "./AuditoriaFilters";
 
-export default async function AuditoriaGlobalPage() {
+function normalizeStr(s: string): string {
+  return (s || "")
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "");
+}
+
+export default async function AuditoriaGlobalPage({
+  searchParams
+}: {
+  searchParams: Promise<{
+    empName?: string;
+    sectorId?: string;
+    profileId?: string;
+    employeeId?: string;
+    statusFilter?: string;
+    q?: string;
+  }>;
+}) {
   const role = await getCurrentRole();
 
   if (!["ADMIN", "SGI", "RRHH"].includes(role)) {
@@ -13,6 +32,14 @@ export default async function AuditoriaGlobalPage() {
       </div>
     );
   }
+
+  const sp = await searchParams;
+  const empNameQuery = sp.empName?.trim() || "";
+  const sectorFilter = sp.sectorId ? parseInt(sp.sectorId) : undefined;
+  const profileFilter = sp.profileId ? parseInt(sp.profileId) : undefined;
+  const employeeFilter = sp.employeeId ? parseInt(sp.employeeId) : undefined;
+  const statusFilter = sp.statusFilter || "";
+  const trainingQuery = sp.q?.trim() || "";
 
   // Traemos TODOS los cambios de puesto históricos
   const transferenciasHistoricas = await prisma.pendingTransfer.findMany({
@@ -29,6 +56,120 @@ export default async function AuditoriaGlobalPage() {
     }
   });
 
+  // Construimos opciones únicas de Sectores, Perfiles y Empleados presentes en el historial
+  const sectorMap = new Map<number, { id: number; name: string }>();
+  const profileMap = new Map<number, { id: number; title: string; gerencia: string | null }>();
+  const employeeMap = new Map<
+    number,
+    { id: number; name: string; legajo: string; targetSectorId: number; targetProfileId: number }
+  >();
+
+  for (const pt of transferenciasHistoricas) {
+    if (pt.targetSector) {
+      sectorMap.set(pt.targetSector.id, { id: pt.targetSector.id, name: pt.targetSector.name });
+    }
+    if (pt.targetProfile) {
+      profileMap.set(pt.targetProfile.id, {
+        id: pt.targetProfile.id,
+        title: pt.targetProfile.title,
+        gerencia: pt.targetProfile.gerencia
+      });
+    }
+    if (pt.employee && !employeeMap.has(pt.employee.id)) {
+      employeeMap.set(pt.employee.id, {
+        id: pt.employee.id,
+        name: pt.employee.name,
+        legajo: pt.employee.legajo,
+        targetSectorId: pt.targetSectorId,
+        targetProfileId: pt.targetProfileId
+      });
+    }
+  }
+
+  const filterSectors = Array.from(sectorMap.values()).sort((a, b) => a.name.localeCompare(b.name));
+  const filterProfiles = Array.from(profileMap.values()).sort((a, b) => a.title.localeCompare(b.title));
+  const filterEmployees = Array.from(employeeMap.values()).sort((a, b) => a.name.localeCompare(b.name));
+
+  // Pre-procesamos cada transferencia con su estado de avance y vencimiento
+  const now = new Date();
+  const enrichedList = transferenciasHistoricas.map((pt) => {
+    let gapsList: string[] = [];
+    try {
+      gapsList = JSON.parse(pt.gaps);
+    } catch {}
+
+    const resolvedItems = gapsList.map((gap) => {
+      const record =
+        pt.employee.trainingRecords.find(
+          (r) => r.trainingName === gap && r.sourceProfileId === pt.targetProfileId
+        ) || pt.employee.trainingRecords.find((r) => r.trainingName === gap);
+      return { gap, record };
+    });
+
+    const completedCount = resolvedItems.filter((item) => item.record?.status === "COMPLETED").length;
+    const totalCount = resolvedItems.length;
+    const hasPendingGaps = completedCount < totalCount;
+    const progressPct = totalCount > 0 ? Math.round((completedCount / totalCount) * 100) : 100;
+
+    let dueDate: Date | null = null;
+    let isOverdue = false;
+    if (pt.completedAt) {
+      dueDate = new Date(pt.completedAt);
+      dueDate.setDate(dueDate.getDate() + 90);
+      if (hasPendingGaps && now > dueDate) {
+        isOverdue = true;
+      }
+    }
+
+    const evaluationStatus = !hasPendingGaps
+      ? "COMPLETED"
+      : isOverdue
+      ? "OVERDUE"
+      : "PENDING";
+
+    return {
+      pt,
+      resolvedItems,
+      completedCount,
+      totalCount,
+      hasPendingGaps,
+      progressPct,
+      dueDate,
+      isOverdue,
+      evaluationStatus
+    };
+  });
+
+  // Aplicamos los filtros seleccionados
+  const filteredList = enrichedList.filter((item) => {
+    const { pt, resolvedItems, evaluationStatus } = item;
+
+    if (sectorFilter && pt.targetSectorId !== sectorFilter) return false;
+    if (profileFilter && pt.targetProfileId !== profileFilter) return false;
+    if (employeeFilter && pt.employeeId !== employeeFilter) return false;
+    if (statusFilter && evaluationStatus !== statusFilter) return false;
+
+    if (empNameQuery) {
+      const normQ = normalizeStr(empNameQuery);
+      const normName = normalizeStr(pt.employee.name);
+      const normLeg = normalizeStr(pt.employee.legajo);
+      if (!normName.includes(normQ) && !normLeg.includes(normQ)) return false;
+    }
+
+    if (trainingQuery) {
+      const normT = normalizeStr(trainingQuery);
+      const matchesTopic = resolvedItems.some((r) => normalizeStr(r.gap).includes(normT));
+      if (!matchesTopic) return false;
+    }
+
+    return true;
+  });
+
+  const kpiTotal = filteredList.length;
+  const kpiCompleted = filteredList.filter((i) => i.evaluationStatus === "COMPLETED").length;
+  const kpiPending = filteredList.filter((i) => i.evaluationStatus === "PENDING").length;
+  const kpiOverdue = filteredList.filter((i) => i.evaluationStatus === "OVERDUE").length;
+
   return (
     <div>
       <div className="page-header">
@@ -40,8 +181,68 @@ export default async function AuditoriaGlobalPage() {
         </div>
       </div>
 
-      <div className="card" style={{ overflowX: "auto", padding: 0, borderRadius: "12px", boxShadow: "0 4px 16px rgba(15, 23, 42, 0.05)" }}>
-        <table className="data-table" style={{ fontSize: "0.875rem", borderCollapse: "separate", borderSpacing: 0 }}>
+      {/* KPIs Resumen */}
+      <div
+        style={{
+          display: "grid",
+          gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))",
+          gap: "1rem",
+          marginBottom: "1.5rem"
+        }}
+      >
+        <div className="card" style={{ padding: "1rem 1.25rem", borderLeft: "4px solid #4f46e5" }}>
+          <div style={{ fontSize: "0.78rem", color: "#64748b", fontWeight: 600 }}>TOTAL EVALUACIONES</div>
+          <div style={{ fontSize: "1.75rem", fontWeight: 800, color: "#1e293b", marginTop: "0.2rem" }}>
+            {kpiTotal}
+          </div>
+        </div>
+        <div className="card" style={{ padding: "1rem 1.25rem", borderLeft: "4px solid #10b981" }}>
+          <div style={{ fontSize: "0.78rem", color: "#15803d", fontWeight: 600 }}>COMPLETADAS (100% APTO)</div>
+          <div style={{ fontSize: "1.75rem", fontWeight: 800, color: "#15803d", marginTop: "0.2rem" }}>
+            {kpiCompleted}
+          </div>
+        </div>
+        <div className="card" style={{ padding: "1rem 1.25rem", borderLeft: "4px solid #0284c7" }}>
+          <div style={{ fontSize: "0.78rem", color: "#0369a1", fontWeight: 600 }}>EN CURSO (DENTRO DE PLAZO)</div>
+          <div style={{ fontSize: "1.75rem", fontWeight: 800, color: "#0369a1", marginTop: "0.2rem" }}>
+            {kpiPending}
+          </div>
+        </div>
+        <div className="card" style={{ padding: "1rem 1.25rem", borderLeft: "4px solid #e11d48" }}>
+          <div style={{ fontSize: "0.78rem", color: "#be123c", fontWeight: 600 }}>PLAZO VENCIDO (&gt; 90 DÍAS)</div>
+          <div style={{ fontSize: "1.75rem", fontWeight: 800, color: "#be123c", marginTop: "0.2rem" }}>
+            {kpiOverdue}
+          </div>
+        </div>
+      </div>
+
+      {/* Barra de Filtros Relacionados */}
+      <AuditoriaFilters
+        sectors={filterSectors}
+        profiles={filterProfiles}
+        employees={filterEmployees}
+        initialEmpQuery={empNameQuery}
+        initialSectorId={sectorFilter}
+        initialProfileId={profileFilter}
+        initialEmployeeId={employeeFilter}
+        initialStatusFilter={statusFilter}
+        initialTrainingQuery={trainingQuery}
+        totalResults={filteredList.length}
+      />
+
+      <div
+        className="card"
+        style={{
+          overflowX: "auto",
+          padding: 0,
+          borderRadius: "12px",
+          boxShadow: "0 4px 16px rgba(15, 23, 42, 0.05)"
+        }}
+      >
+        <table
+          className="data-table"
+          style={{ fontSize: "0.875rem", borderCollapse: "separate", borderSpacing: 0 }}
+        >
           <thead>
             <tr style={{ background: "#f8fafc" }}>
               <th style={{ width: "110px" }}>Fecha Aprobación</th>
@@ -52,41 +253,19 @@ export default async function AuditoriaGlobalPage() {
             </tr>
           </thead>
           <tbody>
-            {transferenciasHistoricas.length === 0 ? (
+            {filteredList.length === 0 ? (
               <tr>
                 <td colSpan={5} style={{ textAlign: "center", color: "var(--text-secondary)", padding: "2.5rem" }}>
-                  No hay historial registrado en el sistema.
+                  No se encontraron registros con los filtros seleccionados.
                 </td>
               </tr>
             ) : (
-              transferenciasHistoricas.map((pt) => {
-                let gapsList: string[] = [];
-                try {
-                  gapsList = JSON.parse(pt.gaps);
-                } catch {}
-
-                const resolvedItems = gapsList.map((gap) => {
-                  const record =
-                    pt.employee.trainingRecords.find(
-                      (r) => r.trainingName === gap && r.sourceProfileId === pt.targetProfileId
-                    ) ||
-                    pt.employee.trainingRecords.find((r) => r.trainingName === gap);
-                  return { gap, record };
-                });
-
-                const completedCount = resolvedItems.filter((item) => item.record?.status === "COMPLETED").length;
-                const totalCount = resolvedItems.length;
-                const hasPendingGaps = completedCount < totalCount;
-                const progressPct = totalCount > 0 ? Math.round((completedCount / totalCount) * 100) : 100;
-
+              filteredList.map(({ pt, resolvedItems, completedCount, totalCount, hasPendingGaps, progressPct, dueDate }) => {
                 let dueDateStr = "-";
                 let alertBadge = null;
-                if (pt.completedAt) {
-                  const dueDate = new Date(pt.completedAt);
-                  dueDate.setDate(dueDate.getDate() + 90);
+                if (dueDate) {
                   dueDateStr = dueDate.toLocaleDateString("es-AR");
 
-                  const now = new Date();
                   const diffTime = Math.abs(dueDate.getTime() - now.getTime());
                   const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
 
@@ -275,7 +454,16 @@ export default async function AuditoriaGlobalPage() {
                               border: "1px solid #e2e8f0"
                             }}
                           >
-                            <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", fontSize: "0.76rem", fontWeight: 700, color: "#334155" }}>
+                            <div
+                              style={{
+                                display: "flex",
+                                alignItems: "center",
+                                gap: "0.5rem",
+                                fontSize: "0.76rem",
+                                fontWeight: 700,
+                                color: "#334155"
+                              }}
+                            >
                               <span>Avance de Capacitaciones:</span>
                               <span
                                 style={{
@@ -403,7 +591,7 @@ export default async function AuditoriaGlobalPage() {
                                                 color: "#0f766e",
                                                 background: "#ccfbf1",
                                                 padding: "0.1rem 0.4rem",
-                                              borderRadius: "4px"
+                                                borderRadius: "4px"
                                               }}
                                             >
                                               Nota: {record.score}/10
@@ -438,7 +626,14 @@ export default async function AuditoriaGlobalPage() {
                                       )}
                                     </div>
                                   ) : (
-                                    <div style={{ paddingLeft: "1.4rem", fontSize: "0.7rem", color: "#b91c1c", fontWeight: 600 }}>
+                                    <div
+                                      style={{
+                                        paddingLeft: "1.4rem",
+                                        fontSize: "0.7rem",
+                                        color: "#b91c1c",
+                                        fontWeight: 600
+                                      }}
+                                    >
                                       Pendiente de programar
                                     </div>
                                   )}
