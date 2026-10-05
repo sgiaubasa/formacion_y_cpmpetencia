@@ -84,8 +84,49 @@ export default async function HistorialEmpleadoPage({ params }: { params: Promis
                     {(() => {
                       try {
                         const gaps = JSON.parse(pt.gaps);
-                        if (gaps.length === 0) return 'Sin Brechas (100% apto)';
-                        return <ul style={{ margin: 0, paddingLeft: '1rem' }}>{gaps.map((g: string, i: number) => <li key={i}>{g}</li>)}</ul>;
+                        if (gaps.length === 0) {
+                          return (
+                            <span
+                              style={{
+                                display: 'inline-flex',
+                                alignItems: 'center',
+                                gap: '0.35rem',
+                                padding: '0.25rem 0.65rem',
+                                borderRadius: '6px',
+                                background: '#f0fdf4',
+                                border: '1px solid #bbf7d0',
+                                color: '#15803d',
+                                fontWeight: 600
+                              }}
+                            >
+                              ✓ Sin Brechas (100% apto)
+                            </span>
+                          );
+                        }
+                        return (
+                          <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.4rem' }}>
+                            {gaps.map((g: string, i: number) => (
+                              <span
+                                key={i}
+                                style={{
+                                  display: 'inline-flex',
+                                  alignItems: 'center',
+                                  gap: '0.3rem',
+                                  padding: '0.25rem 0.6rem',
+                                  borderRadius: '6px',
+                                  background: '#f8fafc',
+                                  border: '1px solid #cbd5e1',
+                                  color: '#334155',
+                                  fontWeight: 500,
+                                  fontSize: '0.76rem'
+                                }}
+                              >
+                                <span style={{ color: '#0284c7', fontWeight: 700 }}>•</span>
+                                {g}
+                              </span>
+                            ))}
+                          </div>
+                        );
                       } catch {
                         return '-';
                       }
