@@ -3,6 +3,7 @@ import { getCurrentRole, isSectorRole, getSectorIdFromRole, getAllowedSectorName
 import DashboardClient from "@/components/DashboardClient";
 
 import { getUniqueActiveProfiles } from "@/lib/profileUtils";
+import { buildSectorRecordSourceFilter } from "@/lib/sectorTrainings";
 
 export default async function Home() {
   const role = await getCurrentRole();
@@ -21,9 +22,14 @@ export default async function Home() {
   const sectors = await prisma.sector.findMany({ orderBy: { name: 'asc' } });
   const profiles = await getUniqueActiveProfiles(allowedSectors);
 
-  // Filter records based on role (Admin sees all, Sector sees only their sector)
-  const whereClause = (isSector && sectorRoleId) 
-    ? { employee: { sectorId: sectorRoleId } } 
+  // Filter records based on role (RRHH/SGI/Admin sees all, Sector sees only their sector and trainings of their sector)
+  const whereClause: any = (isSector && sectorRoleId)
+    ? {
+        employee: allowedSectors && allowedSectors.length > 0
+          ? { sector: { name: { in: allowedSectors } } }
+          : { sectorId: sectorRoleId },
+        ...buildSectorRecordSourceFilter(allowedSectors)
+      }
     : {};
 
   // Fetch training records

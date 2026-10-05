@@ -2,7 +2,7 @@ import { prisma } from "@/lib/prisma";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { revalidatePath } from "next/cache";
-import { getCurrentRole, getUserEmail } from "@/lib/auth";
+import { getCurrentRole, getUserEmail, isSectorRole, getSectorIdFromRole, getAllowedSectorNames } from "@/lib/auth";
 import { getTrainingMaterialsMap } from "@/lib/trainingMaterials";
 import { MaterialViewerButton } from "@/components/MaterialViewerButton";
 import {
@@ -11,11 +11,22 @@ import {
   saveEfficacyTraceForRecord,
   formatNameFromEmail
 } from "@/lib/efficacyTraceability";
+import { buildSectorRecordSourceFilter } from "@/lib/sectorTrainings";
 
 export default async function EvaluacionEficaciaPage({ params }: { params: Promise<{ employeeId: string }> }) {
   const { employeeId } = await params;
   const currentRole = await getCurrentRole();
   const currentEmail = (await getUserEmail()).toLowerCase().trim();
+  const isSector = await isSectorRole(currentRole);
+  const sectorRoleId = await getSectorIdFromRole(currentRole);
+
+  let allowedSectors: string[] | null = null;
+  if (isSector && sectorRoleId) {
+    const mySector = await prisma.sector.findUnique({ where: { id: sectorRoleId } });
+    if (mySector) {
+      allowedSectors = await getAllowedSectorNames(currentRole, mySector.name);
+    }
+  }
 
   const [emp, materialsMap, evaluatorsMap, traceMap, currentUserDb] = await Promise.all([
     prisma.employee.findUnique({
@@ -23,7 +34,10 @@ export default async function EvaluacionEficaciaPage({ params }: { params: Promi
       include: {
         sector: true,
         trainingRecords: {
-          where: { status: "COMPLETED" },
+          where: {
+            status: "COMPLETED",
+            ...(isSector ? buildSectorRecordSourceFilter(allowedSectors) : {})
+          },
           orderBy: { completedAt: "desc" },
           include: { sourceProfile: true }
         }
@@ -38,6 +52,15 @@ export default async function EvaluacionEficaciaPage({ params }: { params: Promi
   ]);
 
   if (!emp) return notFound();
+
+  if (isSector && allowedSectors && allowedSectors.length > 0 && !allowedSectors.includes(emp.sector.name)) {
+    return (
+      <div className="card" style={{ padding: "2rem", textAlign: "center", marginTop: "2rem" }}>
+        <h1 style={{ color: "var(--text-secondary)" }}>Acceso Denegado</h1>
+        <p>Solo puedes ver y evaluar empleados pertenecientes a tu sector.</p>
+      </div>
+    );
+  }
 
   const evaluatorConfig = currentEmail ? evaluatorsMap[currentEmail] : undefined;
   const canEvaluate = evaluatorConfig

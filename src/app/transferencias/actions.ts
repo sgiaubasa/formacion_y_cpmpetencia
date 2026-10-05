@@ -15,8 +15,25 @@ export async function confirmarTransferenciaAction(formData: FormData) {
 
   const gaps = JSON.parse(pending.gaps) as string[];
 
-  // 1. Actualizar al empleado
+  // 1. Preservar perfil de origen en capacitaciones previas y actualizar al empleado
   await prisma.$transaction(async (tx) => {
+    const empBefore = await tx.employee.findUnique({
+      where: { id: pending.employeeId },
+      select: { jobProfileId: true }
+    });
+    const priorProfileId = pending.sourceProfileId ?? empBefore?.jobProfileId ?? null;
+    if (priorProfileId) {
+      await tx.employeeTrainingRecord.updateMany({
+        where: {
+          employeeId: pending.employeeId,
+          sourceProfileId: null
+        },
+        data: {
+          sourceProfileId: priorProfileId
+        }
+      });
+    }
+
     await tx.employee.update({
       where: { id: pending.employeeId },
       data: {

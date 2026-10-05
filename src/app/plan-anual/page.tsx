@@ -12,11 +12,20 @@ import { getTrainingMaterialsMap, saveTrainingMaterialForRecords } from "@/lib/t
 import { MaterialViewerButton } from "@/components/MaterialViewerButton";
 import { getEfficacyTraceMap } from "@/lib/efficacyTraceability";
 import { PlanAnualFilters } from "./PlanAnualFilters";
+import { buildSectorRecordSourceFilter, getTrainingsForSectors } from "@/lib/sectorTrainings";
 
 export default async function PlanAnualPage({ searchParams }: { searchParams: Promise<{ tab?: string, q?: string, employeeId?: string, empName?: string, sectorId?: string, jobProfileId?: string, statusFilter?: string }> }) {
   const role = await getCurrentRole();
   const isSector = await isSectorRole(role);
   const sectorRoleId = await getSectorIdFromRole(role);
+
+  let allowedSectors: string[] | null = null;
+  if (isSector && sectorRoleId) {
+    const mySector = await prisma.sector.findUnique({ where: { id: sectorRoleId } });
+    if (mySector) {
+      allowedSectors = await getAllowedSectorNames(role, mySector.name);
+    }
+  }
 
   const sp = await searchParams;
   const q = sp.q || '';
@@ -41,7 +50,8 @@ export default async function PlanAnualPage({ searchParams }: { searchParams: Pr
   const globalFilters = {
     ...(employeeId && { employeeId: employeeId }),
     ...(Object.keys(employeeFilters).length > 0 && { employee: employeeFilters }),
-    ...(statusFilter && { status: statusFilter })
+    ...(statusFilter && { status: statusFilter }),
+    ...(isSector ? buildSectorRecordSourceFilter(allowedSectors) : {})
   };
 
   const [records, materialsMap, traceMap] = await Promise.all([
@@ -75,8 +85,16 @@ export default async function PlanAnualPage({ searchParams }: { searchParams: Pr
     if (assignmentType === "empleado") {
       const empId = parseInt(formData.get("employeeId") as string);
       if (empId) {
+        const empObj = await prisma.employee.findUnique({ where: { id: empId }, select: { jobProfileId: true } });
         const created = await prisma.employeeTrainingRecord.create({
-          data: { employeeId: empId, trainingName, objective, status, scheduledDate: dateObj }
+          data: {
+            employeeId: empId,
+            trainingName,
+            objective,
+            status,
+            scheduledDate: dateObj,
+            sourceProfileId: empObj?.jobProfileId ?? null
+          }
         });
         createdIds.push(created.id);
       }
@@ -86,7 +104,14 @@ export default async function PlanAnualPage({ searchParams }: { searchParams: Pr
         const emps = await prisma.employee.findMany({ where: { jobProfileId: profileId, isActive: true } });
         for (const e of emps) {
           const created = await prisma.employeeTrainingRecord.create({
-            data: { employeeId: e.id, trainingName, objective, status, scheduledDate: dateObj }
+            data: {
+              employeeId: e.id,
+              trainingName,
+              objective,
+              status,
+              scheduledDate: dateObj,
+              sourceProfileId: profileId
+            }
           });
           createdIds.push(created.id);
         }
@@ -97,7 +122,14 @@ export default async function PlanAnualPage({ searchParams }: { searchParams: Pr
         const emps = await prisma.employee.findMany({ where: { sectorId: sectorIdVal, isActive: true } });
         for (const e of emps) {
           const created = await prisma.employeeTrainingRecord.create({
-            data: { employeeId: e.id, trainingName, objective, status, scheduledDate: dateObj }
+            data: {
+              employeeId: e.id,
+              trainingName,
+              objective,
+              status,
+              scheduledDate: dateObj,
+              sourceProfileId: e.jobProfileId ?? null
+            }
           });
           createdIds.push(created.id);
         }
@@ -285,17 +317,10 @@ export default async function PlanAnualPage({ searchParams }: { searchParams: Pr
     orderBy: { name: 'asc' } 
   });
   const allSectors = await prisma.sector.findMany({ orderBy: { name: 'asc' } });
-  let allowedSectors: string[] | null = null;
-  if (isSector && sectorRoleId) {
-    const mySector = await prisma.sector.findUnique({ where: { id: sectorRoleId } });
-    if (mySector) {
-      allowedSectors = await getAllowedSectorNames(role, mySector.name);
-    }
-  }
 
   // Used for filtering dropdowns (if they want to filter by profile across their permitted sectors)
   const allJobProfiles = await getUniqueActiveProfiles(allowedSectors);
-  const allTrainings = await prisma.training.findMany({ orderBy: { title: 'asc' } });
+  const allTrainings = await getTrainingsForSectors(allowedSectors);
 
   const totalProgramadas = records.filter(r => r.status === 'IN_PLAN').length;
   const totalCompletadas = records.filter(r => r.status === 'COMPLETED').length;
