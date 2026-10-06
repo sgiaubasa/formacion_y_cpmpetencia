@@ -21,6 +21,9 @@ export default async function CapacitacionesPage() {
 
   const capacitaciones = await getTrainingsForSectors(allowedSectors);
   const isSgi = role === "SGI";
+  const isOperaciones =
+    isSector && mySectorName.toLowerCase().includes("operaciones");
+  const canAddTopic = !isSector || isOperaciones;
 
   return (
     <div>
@@ -38,7 +41,7 @@ export default async function CapacitacionesPage() {
         </div>
       </div>
 
-      {!isSector && (
+      {canAddTopic && (
         <div className="card" style={{ marginBottom: "2rem" }}>
           <h3 style={{ marginBottom: "1rem", color: "var(--primary-color)" }}>Nuevo Tema</h3>
           <form action={addTopic} style={{ display: "flex", gap: "1rem", alignItems: "flex-end", flexWrap: "wrap" }}>

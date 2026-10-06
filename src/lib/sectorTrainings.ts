@@ -42,7 +42,7 @@ export async function getTrainingsForSectors(allowedSectors: string[] | null) {
     return allTrainings;
   }
 
-  const [sectorProfiles, sectorRecords] = await Promise.all([
+  const [sectorProfiles, sectorRecords, sectorCreatedSetting] = await Promise.all([
     prisma.jobProfile.findMany({
       where: {
         isActive: true,
@@ -66,8 +66,20 @@ export async function getTrainingsForSectors(allowedSectors: string[] | null) {
       },
       select: { trainingName: true },
       distinct: ["trainingName"]
+    }),
+    prisma.appSetting.findUnique({
+      where: { id: "sector_created_trainings" }
     })
   ]);
+
+  let sectorCreatedMap: Record<string, string> = {};
+  if (sectorCreatedSetting?.value) {
+    try {
+      sectorCreatedMap = JSON.parse(sectorCreatedSetting.value);
+    } catch {
+      sectorCreatedMap = {};
+    }
+  }
 
   const allowedNormNames = new Set<string>();
 
@@ -96,6 +108,8 @@ export async function getTrainingsForSectors(allowedSectors: string[] | null) {
 
   return allTrainings.filter((t) => {
     if (t.isMandatory) return true;
+    const creatorSector = sectorCreatedMap[String(t.id)];
+    if (creatorSector && allowedSectors.includes(creatorSector)) return true;
     const normTitle = normalizeStr(t.title);
     if (allowedNormNames.has(normTitle)) return true;
     return false;

@@ -1,15 +1,61 @@
 "use server";
 
 import { prisma } from "@/lib/prisma";
-import { getCurrentRole } from "@/lib/auth";
+import { getCurrentRole, isSectorRole, getSectorIdFromRole } from "@/lib/auth";
 import { revalidatePath } from "next/cache";
 
 export async function addTopic(formData: FormData) {
+  const role = await getCurrentRole();
+  const isSector = await isSectorRole(role);
+  const sectorRoleId = await getSectorIdFromRole(role);
+
+  let mySectorName = "";
+  if (isSector && sectorRoleId) {
+    const mySector = await prisma.sector.findUnique({ where: { id: sectorRoleId } });
+    if (mySector) {
+      mySectorName = mySector.name;
+    }
+  }
+
+  const isOperaciones =
+    isSector && mySectorName.toLowerCase().includes("operaciones");
+  const canAddTopic =
+    role === "SGI" || role === "RRHH" || role === "ADMIN" || isOperaciones;
+
+  if (!canAddTopic) {
+    return;
+  }
+
   const title = (formData.get("title") as string)?.trim();
   if (title) {
-    await prisma.training.create({
+    const created = await prisma.training.create({
       data: { title, isMandatory: false }
     });
+
+    if (isOperaciones && mySectorName) {
+      const existingSetting = await prisma.appSetting.findUnique({
+        where: { id: "sector_created_trainings" }
+      });
+      let map: Record<string, string> = {};
+      if (existingSetting?.value) {
+        try {
+          map = JSON.parse(existingSetting.value);
+        } catch {
+          map = {};
+        }
+      }
+      map[String(created.id)] = mySectorName;
+      await prisma.appSetting.upsert({
+        where: { id: "sector_created_trainings" },
+        update: { value: JSON.stringify(map) },
+        create: {
+          id: "sector_created_trainings",
+          value: JSON.stringify(map),
+          description: "Mapa de temas creados directamente por sectores habilitados"
+        }
+      });
+    }
+
     revalidatePath("/capacitaciones");
     revalidatePath("/plan-anual");
     revalidatePath("/perfiles");
