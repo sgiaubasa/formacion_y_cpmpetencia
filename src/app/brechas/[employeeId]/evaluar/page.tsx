@@ -101,35 +101,8 @@ export default async function EvaluacionEficaciaPage({ params }: { params: Promi
 
   async function sendReminderEmail() {
     "use server";
-    const { sendMail } = await import("@/lib/mailer");
-
-    const targetSectorRole = `SECTOR_${emp?.sectorId}`;
-
-    const targetUsers = await prisma.appUser.findMany({
-      where: {
-        OR: [{ role: "RRHH" }, { role: targetSectorRole }, { role: "ADMIN" }]
-      }
-    });
-
-    const sectorEmails = targetUsers
-      .filter((u) => u.role === targetSectorRole)
-      .map((u) => u.email)
-      .filter((e) => e);
-    const rrhhEmails = targetUsers
-      .filter((u) => u.role === "RRHH" || u.role === "ADMIN")
-      .map((u) => u.email)
-      .filter((e) => e);
-
-    await sendMail({
-      to: sectorEmails.length > 0 ? sectorEmails : rrhhEmails.length > 0 ? rrhhEmails : "rrhh@aubasa.com.ar",
-      cc: rrhhEmails.length > 0 ? rrhhEmails : undefined,
-      subject: `Recordatorio: Evaluación de Eficacia Pendiente (${emp?.name})`,
-      html: `
-        <h2>Recordatorio de Evaluación de Eficacia</h2>
-        <p>Se solicita a los integrantes habilitados del sector <strong>${emp?.sector.name}</strong> que ingresen al sistema para evaluar la eficacia de las capacitaciones recientes del empleado <strong>${emp?.name}</strong>.</p>
-        <p>Por favor, revise el listado de brechas del empleado en el sistema y complete la evaluación correspondiente.</p>
-      `
-    });
+    // Envío de correos de eficacia temporalmente pausado a pedido del usuario
+    return;
   }
 
   return (
@@ -149,18 +122,6 @@ export default async function EvaluacionEficaciaPage({ params }: { params: Promi
             Volver al GAP
           </Link>
         </div>
-      </div>
-
-      <div className="card" style={{ marginBottom: "1rem" }}>
-        <h3 style={{ marginBottom: "0.5rem", color: "var(--primary-color)" }}>Notificar al Sector</h3>
-        <p style={{ marginBottom: "1rem", color: "var(--text-secondary)", fontSize: "0.9rem" }}>
-          Envía un recordatorio automático por correo electrónico a los responsables del sector para que ingresen y evalúen la eficacia de las capacitaciones recientes de este empleado.
-        </p>
-        <form action={sendReminderEmail}>
-          <button type="submit" className="btn btn-primary">
-            📧 Enviar Correo de Recordatorio al Sector
-          </button>
-        </form>
       </div>
 
       <div className="card" style={{ padding: 0 }}>
