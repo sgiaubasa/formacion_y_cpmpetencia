@@ -12,6 +12,7 @@ export function SidebarNav({ isSector, role }: { isSector: boolean; role: string
     { href: "/perfiles", label: "Perfiles de Puesto", icon: "💼" },
     ...(!isSector ? [{ href: "/brechas", label: "Cambio de Puesto", icon: "📝" }] : []),
     { href: "/plan-anual", label: "Plan Anual", icon: "📅" },
+    { href: "/formularios", label: "Formularios Online", icon: "📝" },
     { href: "/capacitaciones", label: "Temas a Capacitar", icon: "🎓" },
     { href: "/transferencias", label: "Transferencias", icon: "⇄" },
     ...(['ADMIN', 'SGI', 'RRHH'].includes(role) ? [{ href: "/auditoria", label: "Historial Eval. Inicial", icon: "📋" }] : []),

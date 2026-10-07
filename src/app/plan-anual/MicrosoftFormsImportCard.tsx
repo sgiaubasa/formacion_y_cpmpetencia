@@ -2,6 +2,7 @@
 
 import React, { useState } from "react";
 import * as XLSX from "xlsx";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 
 export function MicrosoftFormsImportCard({
@@ -59,9 +60,23 @@ export function MicrosoftFormsImportCard({
 
         const legajo = findCol(["legajo"]);
         const dni = findCol(["dni", "documento"]);
-        const employeeName = findCol(["apellido", "nombre y apellido", "nombre completo", "empleado", "participante"]) || findCol(["nombre"]);
-        const rawScore = findCol(["total de puntos", "puntos", "nota", "calificacion", "calificación", "score"]);
-        const completedAt = findCol(["hora de finalización", "hora de finalizacion", "fecha", "completion time"]);
+        const employeeName =
+          findCol(["apellido", "nombre y apellido", "nombre completo", "empleado", "participante"]) ||
+          findCol(["nombre"]);
+        const rawScore = findCol([
+          "total de puntos",
+          "puntos",
+          "nota",
+          "calificacion",
+          "calificación",
+          "score"
+        ]);
+        const completedAt = findCol([
+          "hora de finalización",
+          "hora de finalizacion",
+          "fecha",
+          "completion time"
+        ]);
 
         return {
           legajo: String(legajo ?? "").trim(),
@@ -83,9 +98,11 @@ export function MicrosoftFormsImportCard({
 
       const data = await res.json();
       if (data.ok) {
+        const nuevos = data.newCompleted ?? data.processed ?? 0;
+        const actualizados = data.updatedExisting ?? 0;
         setResultMsg({
           ok: true,
-          text: `✓ Se cerraron y firmaron automáticamente ${data.processed} capacitaciones desde el Excel de Microsoft Forms.`,
+          text: `✓ ¡Procesamiento exitoso! Nuevas capacitaciones cerradas y firmadas: ${nuevos} | Ya registradas previamente (actualizadas sin duplicar): ${actualizados}.`,
           notFound: data.notFoundList && data.notFoundList.length > 0 ? data.notFoundList : undefined
         });
         form.reset();
@@ -125,7 +142,7 @@ export function MicrosoftFormsImportCard({
           gap: "1rem"
         }}
       >
-        <div>
+        <div style={{ flex: "1 1 420px" }}>
           <span
             style={{
               backgroundColor: "#e0f2fe",
@@ -138,31 +155,48 @@ export function MicrosoftFormsImportCard({
               letterSpacing: "0.04em"
             }}
           >
-            Microsoft Forms 365 — Cierre y Firmas Automáticas
+            Formularios Online &amp; Microsoft Forms 365
           </span>
           <h3 style={{ margin: "0.35rem 0 0 0", fontSize: "1.05rem", color: "#1b365d" }}>
-            📥 Importar Respuestas de Microsoft Forms (Sin necesidad de armar flujo)
+            📥 Cargar / Actualizar Excel de Microsoft Forms o Crear Formulario Online
           </h3>
           <p style={{ margin: "0.2rem 0 0 0", fontSize: "0.85rem", color: "#64748b" }}>
-            Subí directamente el Excel que descargás desde Microsoft Forms (&ldquo;Abrir en Excel&rdquo;) y el sistema cargará automáticamente la fecha, la nota y ambas firmas (Capacitado + Instructor), pasando el estado a Realizado.
+            Podés subir el Excel de Microsoft Forms (y volver a subirlo con nuevas respuestas sin que se dupliquen las anteriores), o usar los <strong>Formularios Online propios de la aplicación</strong> que impactan en el acto.
           </p>
         </div>
 
-        <button
-          type="button"
-          onClick={() => setIsOpen(!isOpen)}
-          className="btn"
-          style={{
-            backgroundColor: isOpen ? "#f1f5f9" : "#1b365d",
-            color: isOpen ? "#1e293b" : "#ffffff",
-            fontWeight: 600,
-            padding: "0.5rem 1rem",
-            borderRadius: "8px",
-            border: "1px solid #cbd5e1"
-          }}
-        >
-          {isOpen ? "▲ Ocultar Importador" : "📥 Subir Excel de Microsoft Forms"}
-        </button>
+        <div style={{ display: "flex", gap: "0.6rem", flexWrap: "wrap" }}>
+          <Link
+            href="/formularios"
+            className="btn"
+            style={{
+              backgroundColor: "#0d8383",
+              color: "#ffffff",
+              fontWeight: 600,
+              padding: "0.5rem 1rem",
+              borderRadius: "8px",
+              textDecoration: "none"
+            }}
+          >
+            📝 Ir a Formularios Online de la App
+          </Link>
+
+          <button
+            type="button"
+            onClick={() => setIsOpen(!isOpen)}
+            className="btn"
+            style={{
+              backgroundColor: isOpen ? "#f1f5f9" : "#1b365d",
+              color: isOpen ? "#1e293b" : "#ffffff",
+              fontWeight: 600,
+              padding: "0.5rem 1rem",
+              borderRadius: "8px",
+              border: "1px solid #cbd5e1"
+            }}
+          >
+            {isOpen ? "▲ Ocultar Carga de Excel" : "📥 Subir / Actualizar Excel de Forms"}
+          </button>
+        </div>
       </div>
 
       {isOpen && (
@@ -240,8 +274,8 @@ export function MicrosoftFormsImportCard({
               }}
             >
               {isProcessing
-                ? "Procesando respuestas y firmando..."
-                : "✅ Importar, Firmar y Dar por Cerradas"}
+                ? "Procesando respuestas y generando firmas digitales..."
+                : "✅ Importar / Actualizar Nuevas Cargas y Firmar"}
             </button>
           </div>
 
@@ -261,7 +295,7 @@ export function MicrosoftFormsImportCard({
               <div>{resultMsg.text}</div>
               {resultMsg.notFound && resultMsg.notFound.length > 0 && (
                 <div style={{ marginTop: "0.4rem", fontSize: "0.82rem", fontWeight: 500 }}>
-                  No se encontraron en el padrón activo: {resultMsg.notFound.join(", ")}
+                  Omitidos (no pertenecen a tu sector o no se encontraron): {resultMsg.notFound.join(", ")}
                 </div>
               )}
             </div>

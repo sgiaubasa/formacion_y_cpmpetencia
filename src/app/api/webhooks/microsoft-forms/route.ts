@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { syncRecordToPowerAutomate } from "@/lib/powerAutomate";
+import { getCurrentRole, isSectorRole, getSectorIdFromRole, getAllowedSectorNames } from "@/lib/auth";
 import { revalidatePath } from "next/cache";
 
 function normalizeStr(s: string): string {
@@ -13,13 +14,13 @@ function normalizeStr(s: string): string {
     .trim();
 }
 
-function buildSvgSignatureDataUri(
+export function buildSvgSignatureDataUri(
   signerName: string,
   subtitle: string,
   dateStr: string
 ): string {
   const safeName = (signerName || "Firmado").replace(/[<>&"']/g, "");
-  const safeSub = (subtitle || "Validado Microsoft Forms 365").replace(/[<>&"']/g, "");
+  const safeSub = (subtitle || "Validado Digitalmente — AUBASA").replace(/[<>&"']/g, "");
   const safeDate = (dateStr || "").replace(/[<>&"']/g, "");
 
   const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="380" height="120" viewBox="0 0 380 120">
@@ -36,7 +37,13 @@ function buildSvgSignatureDataUri(
 
 async function processSingleFormItem(
   item: any,
-  allActiveEmployees: { id: number; legajo: string; dni: string | null; name: string; jobProfileId: number | null }[]
+  allPermittedEmployees: {
+    id: number;
+    legajo: string;
+    dni: string | null;
+    name: string;
+    jobProfileId: number | null;
+  }[]
 ) {
   const legajoRaw = String(item.legajo || item.Legajo || "").replace(/\D/g, "").trim();
   const dniRaw = String(item.dni || item.DNI || "").replace(/\D/g, "").trim();
@@ -63,18 +70,18 @@ async function processSingleFormItem(
   let employee = null;
   if (legajoRaw) {
     employee =
-      allActiveEmployees.find((e) => e.legajo.replace(/\D/g, "") === legajoRaw) || null;
+      allPermittedEmployees.find((e) => e.legajo.replace(/\D/g, "") === legajoRaw) || null;
   }
   if (!employee && dniRaw) {
     employee =
-      allActiveEmployees.find((e) => (e.dni || "").replace(/\D/g, "") === dniRaw) || null;
+      allPermittedEmployees.find((e) => (e.dni || "").replace(/\D/g, "") === dniRaw) || null;
   }
   if (!employee && empNameRaw) {
     const targetNorm = normalizeStr(empNameRaw);
     const targetTokens = targetNorm.split(" ").filter(Boolean);
     employee =
-      allActiveEmployees.find((e) => normalizeStr(e.name) === targetNorm) ||
-      allActiveEmployees.find((e) => {
+      allPermittedEmployees.find((e) => normalizeStr(e.name) === targetNorm) ||
+      allPermittedEmployees.find((e) => {
         const empNorm = normalizeStr(e.name);
         return (
           targetTokens.length >= 2 &&
@@ -115,7 +122,7 @@ async function processSingleFormItem(
     prevRecordWithSig?.employeeSignature ||
     buildSvgSignatureDataUri(
       employee.name,
-      `Legajo ${employee.legajo} — Firma Digital Microsoft Forms 365`,
+      `Legajo ${employee.legajo} — Firma Digital Validada`,
       `Fecha: ${dateFormatted}`
     );
 
@@ -127,23 +134,32 @@ async function processSingleFormItem(
       `Fecha: ${dateFormatted}`
     );
 
+  // Buscar TODOS los registros del empleado para ese tema (incluyendo COMPLETED para no duplicar al re-subir el Excel actualizado)
   const existingRecords = await prisma.employeeTrainingRecord.findMany({
     where: {
-      employeeId: employee.id,
-      status: { in: ["IN_PLAN", "GAP"] }
+      employeeId: employee.id
     },
     orderBy: { id: "desc" }
   });
 
   const targetTrainingNorm = normalizeStr(trainingNameRaw);
-  const matchedRecord = existingRecords.find(
-    (r) => normalizeStr(r.trainingName) === targetTrainingNorm
+  const matchedPending = existingRecords.find(
+    (r) =>
+      (r.status === "IN_PLAN" || r.status === "GAP") &&
+      normalizeStr(r.trainingName) === targetTrainingNorm
+  );
+  const matchedCompleted = existingRecords.find(
+    (r) =>
+      r.status === "COMPLETED" &&
+      normalizeStr(r.trainingName) === targetTrainingNorm
   );
 
   let updatedOrCreated;
-  if (matchedRecord) {
+  let wasAlreadyCompleted = false;
+
+  if (matchedPending) {
     updatedOrCreated = await prisma.employeeTrainingRecord.update({
-      where: { id: matchedRecord.id },
+      where: { id: matchedPending.id },
       data: {
         status: "COMPLETED",
         completedAt: completedDate,
@@ -152,7 +168,20 @@ async function processSingleFormItem(
         employeeSignature,
         instructorSignature,
         ...(objectiveRaw ? { objective: objectiveRaw } : {}),
-        effectiveness: measureEfficacy ? "PENDING" : null
+        effectiveness: matchedPending.effectiveness || (measureEfficacy ? "PENDING" : null)
+      }
+    });
+  } else if (matchedCompleted) {
+    // Si ya estaba completada de una carga anterior del Excel, actualizamos datos faltantes sin duplicar el registro
+    wasAlreadyCompleted = true;
+    updatedOrCreated = await prisma.employeeTrainingRecord.update({
+      where: { id: matchedCompleted.id },
+      data: {
+        score: scoreRaw || matchedCompleted.score,
+        instructorName: matchedCompleted.instructorName || instructorNameRaw,
+        employeeSignature: matchedCompleted.employeeSignature || employeeSignature,
+        instructorSignature: matchedCompleted.instructorSignature || instructorSignature,
+        ...(objectiveRaw && !matchedCompleted.objective ? { objective: objectiveRaw } : {})
       }
     });
   } else {
@@ -173,10 +202,13 @@ async function processSingleFormItem(
     });
   }
 
-  await syncRecordToPowerAutomate(updatedOrCreated.id).catch(() => {});
+  if (!wasAlreadyCompleted) {
+    await syncRecordToPowerAutomate(updatedOrCreated.id).catch(() => {});
+  }
 
   return {
     ok: true,
+    wasAlreadyCompleted,
     recordId: updatedOrCreated.id,
     employee: {
       id: employee.id,
@@ -189,20 +221,44 @@ async function processSingleFormItem(
 export async function POST(req: Request) {
   try {
     const body = await req.json();
-    const allActiveEmployees = await prisma.employee.findMany({
-      where: { isActive: true },
+
+    // Verificar alcance por sector cuando se sube el Excel desde la sesión del usuario
+    const role = await getCurrentRole();
+    const isSector = await isSectorRole(role);
+    const sectorRoleId = await getSectorIdFromRole(role);
+
+    let allowedSectors: string[] | null = null;
+    if (isSector && sectorRoleId) {
+      const mySector = await prisma.sector.findUnique({ where: { id: sectorRoleId } });
+      if (mySector) {
+        allowedSectors = await getAllowedSectorNames(role, mySector.name);
+      }
+    }
+
+    const allPermittedEmployees = await prisma.employee.findMany({
+      where: {
+        isActive: true,
+        ...(allowedSectors && allowedSectors.length > 0
+          ? { sector: { name: { in: allowedSectors } } }
+          : {})
+      },
       select: { id: true, legajo: true, dni: true, name: true, jobProfileId: true }
     });
 
-    // Modo lote (importación directa de Excel de Microsoft Forms desde la app sin usar Power Automate)
+    // Modo lote (importación o actualización de Excel de Microsoft Forms)
     if (Array.isArray(body.items)) {
-      let processed = 0;
+      let newCompleted = 0;
+      let updatedExisting = 0;
       const notFoundList: string[] = [];
 
       for (const item of body.items) {
-        const res = await processSingleFormItem(item, allActiveEmployees);
+        const res = await processSingleFormItem(item, allPermittedEmployees);
         if (res.ok) {
-          processed++;
+          if (res.wasAlreadyCompleted) {
+            updatedExisting++;
+          } else {
+            newCompleted++;
+          }
         } else if (res.notFound && res.label) {
           notFoundList.push(res.label);
         }
@@ -213,18 +269,20 @@ export async function POST(req: Request) {
 
       return NextResponse.json({
         ok: true,
-        processed,
+        processed: newCompleted + updatedExisting,
+        newCompleted,
+        updatedExisting,
         notFoundList
       });
     }
 
-    // Modo individual (Power Automate en tiempo real)
-    const singleRes = await processSingleFormItem(body, allActiveEmployees);
+    // Modo individual (Formulario Online de la App o Webhook)
+    const singleRes = await processSingleFormItem(body, allPermittedEmployees);
     if (!singleRes.ok) {
       return NextResponse.json(
         {
           ok: false,
-          error: singleRes.error || `No se encontró el colaborador (${singleRes.label || ""}).`
+          error: singleRes.error || `No se encontró el colaborador en el padrón (${singleRes.label || ""}).`
         },
         { status: 404 }
       );
@@ -235,14 +293,14 @@ export async function POST(req: Request) {
 
     return NextResponse.json({
       ok: true,
-      message: "Capacitación cerrada y firmada automáticamente desde Microsoft Forms 365.",
+      message: "Capacitación cerrada y firmada automáticamente.",
       recordId: singleRes.recordId,
       employee: singleRes.employee
     });
   } catch (err: any) {
-    console.error("Error in Microsoft Forms webhook:", err);
+    console.error("Error in Microsoft Forms / Online Form processor:", err);
     return NextResponse.json(
-      { ok: false, error: err?.message || "Error interno procesando respuesta de Microsoft Forms." },
+      { ok: false, error: err?.message || "Error interno procesando las respuestas." },
       { status: 500 }
     );
   }
