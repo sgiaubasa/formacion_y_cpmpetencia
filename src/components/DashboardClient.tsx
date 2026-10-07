@@ -126,8 +126,8 @@ export default function DashboardClient({ data, sectors, profiles, isSector }: P
       if (selectedEmployee !== 'Todos' && d.employeeName !== selectedEmployee) pass = false;
 
       if (selectedStatus === 'Realizadas' && d.status !== 'COMPLETED') pass = false;
-      if (selectedStatus === 'Programadas' && (d.status !== 'IN_PLAN' || d.isRescheduled)) pass = false;
-      if (selectedStatus === 'Reprogramadas' && !d.isRescheduled) pass = false;
+      if (selectedStatus === 'Programadas' && !(d.status === 'IN_PLAN' && !d.isRescheduled)) pass = false;
+      if (selectedStatus === 'Reprogramadas' && !(d.status === 'IN_PLAN' && Boolean(d.isRescheduled))) pass = false;
       if (selectedStatus === 'Brechas' && d.status !== 'GAP') pass = false;
       
       if (d.date) {
@@ -153,19 +153,19 @@ export default function DashboardClient({ data, sectors, profiles, isSector }: P
           if (month !== crossFilter.monthIndex) return false;
           
           if (crossFilter.statusKey === 'Realizadas') return d.status === 'COMPLETED';
-          if (crossFilter.statusKey === 'Programadas') return d.status === 'IN_PLAN' || d.status === 'COMPLETED';
-          if (crossFilter.statusKey === 'Reprogramadas') return Boolean(d.isRescheduled);
+          if (crossFilter.statusKey === 'Programadas') return d.status === 'IN_PLAN' && !d.isRescheduled;
+          if (crossFilter.statusKey === 'Reprogramadas') return d.status === 'IN_PLAN' && Boolean(d.isRescheduled);
           return true;
         });
       } else if (crossFilter.source === 'PieChart') {
         result = result.filter(d => d.trainingName === crossFilter.tema && d.status === 'COMPLETED');
       } else if (crossFilter.source === 'KpiBox') {
         if (crossFilter.statusKey === 'Reprogramadas') {
-          result = result.filter(d => Boolean(d.isRescheduled));
+          result = result.filter(d => d.status === 'IN_PLAN' && Boolean(d.isRescheduled));
         } else if (crossFilter.statusKey === 'Realizadas') {
           result = result.filter(d => d.status === 'COMPLETED');
         } else if (crossFilter.statusKey === 'Programadas') {
-          result = result.filter(d => d.status === 'IN_PLAN');
+          result = result.filter(d => d.status === 'IN_PLAN' && !d.isRescheduled);
         }
       }
     }
@@ -181,26 +181,30 @@ export default function DashboardClient({ data, sectors, profiles, isSector }: P
     return Object.keys(counts).map(key => ({ name: key, value: counts[key] })).sort((a,b) => b.value - a.value).slice(0, 8); // top 8
   }, [filteredData]);
 
-  // Chart 2: Bar (Mensual) -> Always use global filteredData
+  // Chart 2: Bar (Mensual) -> Always use global filteredData (mutually exclusive states: Realizadas, Programadas, Reprogramadas)
   const monthlyData = useMemo(() => {
     const mData = MONTHS.map((m) => ({ name: m, Realizadas: 0, Programadas: 0, Reprogramadas: 0 }));
     filteredData.forEach(d => {
       if (d.date) {
         const monthIndex = new Date(d.date).getMonth();
-        if (d.status === 'COMPLETED') mData[monthIndex].Realizadas += 1;
-        if (d.status === 'IN_PLAN' || d.status === 'COMPLETED') mData[monthIndex].Programadas += 1;
-        if (d.isRescheduled) mData[monthIndex].Reprogramadas += 1;
+        if (d.status === 'COMPLETED') {
+          mData[monthIndex].Realizadas += 1;
+        } else if (d.status === 'IN_PLAN' && Boolean(d.isRescheduled)) {
+          mData[monthIndex].Reprogramadas += 1;
+        } else if (d.status === 'IN_PLAN' && !d.isRescheduled) {
+          mData[monthIndex].Programadas += 1;
+        }
       }
     });
     return mData;
   }, [filteredData]);
 
-  // KPIs -> React to cross filters!
+  // KPIs -> Mutually exclusive so Reprogramadas leaves Programadas and never duplicates numbers!
   const realizadas = detailedData.filter(d => d.status === 'COMPLETED').length;
-  const programadas = detailedData.filter(d => d.status === 'IN_PLAN' || d.status === 'COMPLETED').length;
-  const reprogramadas = detailedData.filter(d => Boolean(d.isRescheduled)).length;
+  const programadas = detailedData.filter(d => d.status === 'IN_PLAN' && !d.isRescheduled).length;
+  const reprogramadas = detailedData.filter(d => d.status === 'IN_PLAN' && Boolean(d.isRescheduled)).length;
   const pendientes = detailedData.filter(d => d.status === 'GAP').length;
-  const totalGeneral = programadas + pendientes;
+  const totalGeneral = realizadas + programadas + reprogramadas + pendientes;
   const tasaCumplimiento = totalGeneral > 0 ? Math.round((realizadas / totalGeneral) * 100) : 0;
   
   const strokeDasharray = 125.6;

@@ -54,7 +54,7 @@ export default async function PlanAnualPage({ searchParams }: { searchParams: Pr
   let statusWhere: any = {};
   if (statusFilter === 'REPROGRAMADA') {
     statusWhere = { status: 'IN_PLAN', rescheduledDate: { not: null } };
-  } else if (statusFilter === 'PROGRAMADA_ONLY') {
+  } else if (statusFilter === 'IN_PLAN' || statusFilter === 'PROGRAMADA_ONLY') {
     statusWhere = { status: 'IN_PLAN', rescheduledDate: null };
   } else if (statusFilter) {
     statusWhere = { status: statusFilter };

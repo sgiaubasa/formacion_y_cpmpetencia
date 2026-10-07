@@ -6,8 +6,9 @@ function formatEffectiveness(eff: string | null): string {
   return "Pendiente";
 }
 
-function formatStatus(status: string | null): string {
+function formatStatus(status: string | null, rescheduledDate?: Date | string | null): string {
   if (status === "COMPLETED") return "Completado";
+  if (status === "IN_PLAN" && rescheduledDate) return "Reprogramado";
   if (status === "IN_PLAN") return "Programado";
   return status || "Pendiente";
 }
@@ -141,7 +142,7 @@ export async function syncRecordToPowerAutomate(recordId: number) {
             ""
         ),
         brecha: String(record.trainingName ?? ""),
-        estadoBrecha: formatStatus(record.status),
+        estadoBrecha: formatStatus(record.status, record.rescheduledDate),
         nota: String(record.score ?? "-"),
         eficacia: formatEffectiveness(record.effectiveness),
       };

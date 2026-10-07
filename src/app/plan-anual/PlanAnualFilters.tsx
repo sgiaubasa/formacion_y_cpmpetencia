@@ -283,9 +283,8 @@ export function PlanAnualFilters({
           >
             <option value="">Todos los estados</option>
             <option value="GAP">Brecha (Pendiente)</option>
-            <option value="IN_PLAN">Programada / Reprogramada (Todas)</option>
-            <option value="PROGRAMADA_ONLY">Solo Programadas (Sin reprogramar)</option>
-            <option value="REPROGRAMADA">Solo Reprogramadas</option>
+            <option value="IN_PLAN">Programada</option>
+            <option value="REPROGRAMADA">Reprogramada</option>
             <option value="COMPLETED">Realizada</option>
           </select>
         </div>
