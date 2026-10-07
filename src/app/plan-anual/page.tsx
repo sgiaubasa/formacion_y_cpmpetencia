@@ -13,6 +13,7 @@ import { MaterialViewerButton } from "@/components/MaterialViewerButton";
 import { getEfficacyTraceMap } from "@/lib/efficacyTraceability";
 import { PlanAnualFilters } from "./PlanAnualFilters";
 import { buildSectorRecordSourceFilter, getTrainingsForSectors } from "@/lib/sectorTrainings";
+import { MicrosoftFormsImportCard } from "./MicrosoftFormsImportCard";
 
 export default async function PlanAnualPage({ searchParams }: { searchParams: Promise<{ tab?: string, q?: string, employeeId?: string, empName?: string, sectorId?: string, jobProfileId?: string, statusFilter?: string }> }) {
   const role = await getCurrentRole();
@@ -378,6 +379,9 @@ export default async function PlanAnualPage({ searchParams }: { searchParams: Pr
           addAdHocNeed={addAdHocNeed}
         />
       </div>
+
+      {/* PANEL 1.B: IMPORTAR RESPUESTAS DE MICROSOFT FORMS (SIN ARMAR FLUJO) */}
+      <MicrosoftFormsImportCard allTrainings={allTrainings} />
 
       {/* PANEL 2: FILTROS INTERACTIVOS + TABLA DEL PLAN ANUAL */}
       <PlanAnualFilters
