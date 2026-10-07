@@ -1,4 +1,5 @@
 import { getAllOnlineForms } from "@/lib/onlineForms";
+import { prisma } from "@/lib/prisma";
 import { ResponderFormClient } from "./ResponderFormClient";
 
 export default async function ResponderFormPage({
@@ -22,5 +23,20 @@ export default async function ResponderFormPage({
     );
   }
 
-  return <ResponderFormClient form={form} />;
+  const employees = await prisma.employee.findMany({
+    where: {
+      isActive: true,
+      ...(form.ownerSectorName
+        ? { sector: { name: form.ownerSectorName } }
+        : {})
+    },
+    select: {
+      id: true,
+      name: true,
+      legajo: true
+    },
+    orderBy: { name: "asc" }
+  });
+
+  return <ResponderFormClient form={form} employees={employees} />;
 }

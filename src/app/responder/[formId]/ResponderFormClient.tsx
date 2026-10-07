@@ -4,7 +4,13 @@ import React, { useState } from "react";
 import { OnlineTrainingForm } from "@/lib/onlineForms";
 import { submitOnlineFormResponseAction } from "@/app/formularios/actions";
 
-export function ResponderFormClient({ form }: { form: OnlineTrainingForm }) {
+export function ResponderFormClient({
+  form,
+  employees = []
+}: {
+  form: OnlineTrainingForm;
+  employees?: { id: number; name: string; legajo: string }[];
+}) {
   const [legajo, setLegajo] = useState("");
   const [dni, setDni] = useState("");
   const [employeeName, setEmployeeName] = useState("");
@@ -19,12 +25,36 @@ export function ResponderFormClient({ form }: { form: OnlineTrainingForm }) {
     score: string;
   } | null>(null);
 
+  const handleNameChange = (val: string) => {
+    setEmployeeName(val);
+    const matched = employees.find(
+      (e) =>
+        e.name.toLowerCase() === val.trim().toLowerCase() ||
+        `${e.name} (Legajo ${e.legajo})`.toLowerCase() === val.trim().toLowerCase()
+    );
+    if (matched) {
+      setEmployeeName(matched.name);
+      setLegajo(matched.legajo);
+    }
+  };
+
+  const handleLegajoChange = (val: string) => {
+    setLegajo(val);
+    const clean = val.replace(/\D/g, "").trim();
+    if (clean) {
+      const matched = employees.find((e) => e.legajo.replace(/\D/g, "") === clean);
+      if (matched) {
+        setEmployeeName(matched.name);
+      }
+    }
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setErrorMsg(null);
 
-    if (!legajo.trim() && !dni.trim()) {
-      setErrorMsg("Por favor ingresá tu Número de Legajo o tu DNI.");
+    if (!employeeName.trim() && !legajo.trim() && !dni.trim()) {
+      setErrorMsg("Por favor seleccioná tu Nombre y Apellido de la lista o ingresá tu Legajo / DNI.");
       return;
     }
 
@@ -208,48 +238,54 @@ export function ResponderFormClient({ form }: { form: OnlineTrainingForm }) {
         {/* 1. IDENTIFICACIÓN */}
         <div className="card" style={{ marginBottom: "1.25rem", borderLeft: "4px solid #1b365d" }}>
           <h3 style={{ marginTop: 0, color: "#1b365d", fontSize: "1.08rem", marginBottom: "0.85rem" }}>
-            1. Tus Datos de Identificación
+            1. Tus Datos de Identificación (Buscate en la lista por Apellido o Legajo)
           </h3>
           <div
             style={{
               display: "grid",
-              gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))",
+              gridTemplateColumns: "repeat(auto-fit, minmax(210px, 1fr))",
               gap: "1rem"
             }}
           >
+            <div style={{ gridColumn: "1 / -1" }}>
+              <label className="form-label">Apellido y Nombre (Seleccioná de la lista) *</label>
+              <input
+                list="aubasa-employees-list"
+                type="text"
+                className="form-input"
+                placeholder="Escribí tu apellido o nombre para buscarte en la lista..."
+                value={employeeName}
+                onChange={(e) => handleNameChange(e.target.value)}
+                required
+              />
+              <datalist id="aubasa-employees-list">
+                {employees.map((emp) => (
+                  <option key={emp.id} value={emp.name}>
+                    Legajo: {emp.legajo}
+                  </option>
+                ))}
+              </datalist>
+            </div>
+
             <div>
-              <label className="form-label">Número de Legajo *</label>
+              <label className="form-label">Número de Legajo (Se completa solo al elegir tu nombre)</label>
               <input
                 type="text"
                 className="form-input"
                 placeholder="Ej: 12807"
                 value={legajo}
-                onChange={(e) => setLegajo(e.target.value)}
-                required
+                onChange={(e) => handleLegajoChange(e.target.value)}
               />
             </div>
 
             <div>
-              <label className="form-label">DNI (sin puntos) *</label>
+              <label className="form-label">DNI (Opcional)</label>
               <input
                 type="text"
                 className="form-input"
-                placeholder="Ej: 35123456"
+                placeholder="Sin puntos"
                 value={dni}
                 onChange={(e) => setDni(e.target.value)}
-                required
-              />
-            </div>
-
-            <div>
-              <label className="form-label">Apellido y Nombre *</label>
-              <input
-                type="text"
-                className="form-input"
-                placeholder="Ej: González Damián"
-                value={employeeName}
-                onChange={(e) => setEmployeeName(e.target.value)}
-                required
               />
             </div>
           </div>
@@ -343,7 +379,7 @@ export function ResponderFormClient({ form }: { form: OnlineTrainingForm }) {
               style={{ width: "20px", height: "20px", marginTop: "0.15rem" }}
             />
             <span>
-              <strong>Declaro haber recibido y comprendido la capacitación &ldquo;{form.trainingName}&rdquo;</strong>, prestando mi conformidad para que mis datos identificatorios (Legajo, DNI y Nombre) queden registrados como <strong>Firma Digital de Realización</strong> junto a la firma del Instructor ({form.instructorName}).
+              <strong>Declaro haber recibido y comprendido la capacitación &ldquo;{form.trainingName}&rdquo;</strong>, prestando mi conformidad para que mis datos queden registrados como <strong>Firma Digital de Realización</strong> junto a la firma del Instructor ({form.instructorName}).
             </span>
           </label>
         </div>
