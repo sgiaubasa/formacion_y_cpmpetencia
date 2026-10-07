@@ -4,6 +4,7 @@ import Link from "next/link";
 import { getUniqueActiveProfiles } from "@/lib/profileUtils";
 import { getCurrentRole, isSectorRole, getSectorIdFromRole, getAllowedSectorNames } from "@/lib/auth";
 import { BASES_OPERATIVAS, formatEmployeeName } from "@/lib/constants";
+import { SectorAndProfileSelects } from "@/components/SectorAndProfileSelects";
 
 export default async function NuevoPersonalPage({ searchParams }: { searchParams: Promise<{ error?: string }> }) {
   const params = await searchParams;
@@ -133,43 +134,16 @@ export default async function NuevoPersonalPage({ searchParams }: { searchParams
             </select>
           </div>
 
-          <div className="form-group">
-            <label className="form-label">Sector a la que pertenece</label>
-            {isComercialSector ? (
-              <>
-                <input type="text" className="form-input" value={mySector?.name || 'Gerencia Comercial'} disabled />
-                <input type="hidden" name="sectorId" value={mySectorId!} />
-                <small style={{ color: 'var(--text-secondary)', display: 'block', marginTop: '0.25rem' }}>
-                  Fijado a tu gerencia (Comercial).
-                </small>
-              </>
-            ) : (
-              <>
-                <select name="sectorId" required className="form-input">
-                  <option value="">Seleccione un sector...</option>
-                  {sectores.map(s => (
-                    <option key={s.id} value={s.id}>{s.name}</option>
-                  ))}
-                </select>
-                <small style={{ color: 'var(--text-secondary)', display: 'block', marginTop: '0.25rem' }}>
-                  Los sectores disponibles provienen de tu histórico migrado.
-                </small>
-              </>
-            )}
-          </div>
-
-          <div className="form-group">
-            <label className="form-label">Perfil de Puesto (Norma ISO)</label>
-            <select name="jobProfileId" className="form-input">
-              <option value="">Sin asignar por ahora (En inducción)</option>
-              {perfiles.map(p => (
-                <option key={p.id} value={p.id}>{p.title}</option>
-              ))}
-            </select>
-            <small style={{ color: 'var(--text-secondary)', display: 'block', marginTop: '0.25rem' }}>
-              Vincular a un puesto activará automáticamente el Análisis de Brechas.
-            </small>
-          </div>
+          <SectorAndProfileSelects
+            sectores={sectores}
+            perfiles={perfiles}
+            lockedSector={
+              isComercialSector && mySectorId
+                ? { id: mySectorId, name: mySector?.name || "Gerencia Comercial" }
+                : null
+            }
+            mode="create"
+          />
 
           <button type="submit" className="btn btn-primary" style={{ marginTop: '1rem', width: '100%' }}>
             Guardar y Vincular Legajo

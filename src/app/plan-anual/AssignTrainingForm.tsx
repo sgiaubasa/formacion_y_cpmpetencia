@@ -2,6 +2,7 @@
 
 import { useState, useRef, useMemo } from "react";
 import { supabase } from "@/lib/supabase";
+import { matchesSectorAndGerencia } from "@/components/SectorAndProfileSelects";
 
 export function AssignTrainingForm({
   allEmployees,
@@ -47,6 +48,20 @@ export function AssignTrainingForm({
       return true;
     });
   }, [allEmployees, isSector, sectorRoleId, filterSectorForAssign, empSearchAssign]);
+
+  // Puestos filtrados por el sector elegido
+  const filteredJobProfiles = useMemo(() => {
+    const secId =
+      isSector && sectorRoleId
+        ? sectorRoleId
+        : filterSectorForAssign
+        ? parseInt(filterSectorForAssign, 10)
+        : null;
+    if (!secId) return allJobProfiles;
+    const secObj = allSectors.find((s) => s.id === secId);
+    if (!secObj) return allJobProfiles;
+    return allJobProfiles.filter((p) => matchesSectorAndGerencia(secObj.name, p.gerencia));
+  }, [allJobProfiles, allSectors, isSector, sectorRoleId, filterSectorForAssign]);
 
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
@@ -118,7 +133,7 @@ export function AssignTrainingForm({
         </select>
       </div>
 
-      {assignmentType === "empleado" && !isSector && (
+      {(assignmentType === "empleado" || assignmentType === "puesto") && !isSector && (
         <div style={{ flex: "1 1 170px" }}>
           <label className="form-label">Filtrar por Sector (Opcional)</label>
           <select
@@ -167,10 +182,10 @@ export function AssignTrainingForm({
         )}
         {assignmentType === "puesto" && (
           <>
-            <label className="form-label">Perfil de Puesto *</label>
+            <label className="form-label">Perfil de Puesto ({filteredJobProfiles.length}) *</label>
             <select name="jobProfileId" className="form-input" required style={{ borderRadius: "10px" }}>
               <option value="">Seleccione un puesto...</option>
-              {allJobProfiles.map((p) => (
+              {filteredJobProfiles.map((p) => (
                 <option key={p.id} value={p.id}>
                   {p.title}
                 </option>

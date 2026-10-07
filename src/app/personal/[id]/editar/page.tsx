@@ -5,6 +5,7 @@ import { getUniqueActiveProfiles } from "@/lib/profileUtils";
 import { getCurrentRole, isSectorRole, getSectorIdFromRole, getAllowedSectorNames } from "@/lib/auth";
 import { DeleteEmployeeButton } from "./DeleteEmployeeButton";
 import { BASES_OPERATIVAS, formatEmployeeName } from "@/lib/constants";
+import { SectorAndProfileSelects } from "@/components/SectorAndProfileSelects";
 
 export default async function EditarPersonalPage({ 
   params, 
@@ -198,42 +199,14 @@ export default async function EditarPersonalPage({
             </select>
           </div>
 
-          <div className="form-group">
-            <label className="form-label">Sector / Gerencia</label>
-            {isComercialSector ? (
-              <>
-                <input type="text" className="form-input" value={empleado.sector.name} disabled />
-                <input type="hidden" name="sectorId" value={empleado.sectorId} />
-                <small style={{ color: 'var(--text-secondary)', display: 'block', marginTop: '0.25rem' }}>
-                  Como referente de Comercial, solo podés gestionar personal de tu gerencia.
-                </small>
-              </>
-            ) : (
-              <select name="sectorId" className="form-input" defaultValue={empleado.sectorId} required>
-                {sectores.map(s => (
-                  <option key={s.id} value={s.id}>{s.name}</option>
-                ))}
-              </select>
-            )}
-          </div>
-
-          <div className="form-group" style={{ padding: '1rem', backgroundColor: '#f8fafc', borderRadius: '4px', border: '1px solid #e2e8f0' }}>
-            <label className="form-label" style={{ color: 'var(--primary-color)' }}>Asignar Perfil de Puesto</label>
-            <p style={{ fontSize: '0.875rem', color: 'var(--text-secondary)', marginBottom: '0.5rem' }}>
-              Si cambias el perfil de puesto, podrás ir a la pestaña "Evaluación y Brechas" para ver qué capacitaciones le faltan de su nuevo perfil.
-            </p>
-            <select name="jobProfileId" className="form-input" defaultValue={empleado.jobProfileId || ''}>
-              <option value="">-- Sin perfil asignado --</option>
-              {perfiles.map(p => <option key={p.id} value={p.id}>{p.title}</option>)}
-            </select>
-            {empleado.jobProfileId && (
-              <div style={{ marginTop: '0.5rem' }}>
-                <Link href={`/perfiles/${empleado.jobProfileId}`} target="_blank" style={{ color: 'var(--primary-color)', textDecoration: 'underline', fontSize: '0.875rem' }}>
-                  Ver Perfil Asignado
-                </Link>
-              </div>
-            )}
-          </div>
+          <SectorAndProfileSelects
+            sectores={sectores}
+            perfiles={perfiles}
+            defaultSectorId={empleado.sectorId}
+            defaultJobProfileId={empleado.jobProfileId}
+            lockedSector={isComercialSector ? { id: empleado.sectorId, name: empleado.sector.name } : null}
+            mode="edit"
+          />
 
           <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: '1rem' }}>
             <div>
