@@ -33,9 +33,7 @@ export default async function CapacitacionesPage() {
             {isSector && mySectorName ? `Temas a Capacitar — ${mySectorName}` : "Gestión de Temas a Capacitar"}
           </h1>
           <p style={{ color: "var(--text-secondary)" }}>
-            {isSector
-              ? "Listado de temas de capacitación correspondientes a tu sector."
-              : "Administra el catálogo completo de capacitaciones disponibles en el sistema."}
+            Catálogo completo de temas de capacitación disponibles en el sistema para programar en el Plan Anual.
             {isSgi && " Como usuario SGI, al editar el nombre de un tema se actualizarán automáticamente todas las capacitaciones y perfiles vinculados."}
           </p>
         </div>
