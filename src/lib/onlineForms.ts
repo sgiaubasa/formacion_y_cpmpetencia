@@ -1,4 +1,5 @@
 import { prisma } from "./prisma";
+import { buildSvgSignatureDataUri } from "@/app/api/webhooks/microsoft-forms/route";
 
 export interface OnlineFormQuestion {
   id: string;
@@ -30,7 +31,7 @@ const DEFAULT_MANUAL_FORM: OnlineTrainingForm = {
   trainingName: "Uso del Sistema de Gestión de Competencia y Formación",
   objective:
     "Que el personal conozca el funcionamiento integral de la aplicación, la planificación anual por sector/puesto/persona, la gestión de evaluaciones iniciales, el registro de firmas y la evaluación de la eficacia.",
-  instructorName: "SGI / Capacitación AUBASA",
+  instructorName: "Montes Sergio (Leg. 11739)",
   ownerSectorName: null,
   createdByRole: "SGI",
   createdAt: new Date().toISOString(),
@@ -74,7 +75,7 @@ const DEFAULT_MANUAL_FORM: OnlineTrainingForm = {
         "¿Cuáles son las opciones válidas en el sistema para dejar registrado el respaldo de firmas y pasar una capacitación de 'Programado' a 'Realizado'?",
       options: [
         "Solo escaneando una hoja en papel.",
-        "Cualquiera de las 3 modalidades: 1) Adjuntar el documento/planilla firmada en la solapa de evidencia, 2) Firmar en el momento con la aplicación abierta en celular o PC (instructor y capacitado), o 3) Enviar el enlace (link) por Mail o WhatsApp al instructor y a la persona capacitada.",
+        "Cualquiera de las modalidades habilitadas: 1) Adjuntar el documento/planilla firmada en la solapa de evidencia, 2) Firmar en el momento con la aplicación abierta en celular o PC, 3) Enviar el enlace (link) por Mail o WhatsApp, o 4) Formulario Online / Excel de Microsoft Forms.",
         "No hace falta registrar firmas ni evidencia."
       ],
       correctIndex: 1
@@ -93,7 +94,37 @@ const DEFAULT_MANUAL_FORM: OnlineTrainingForm = {
   ]
 };
 
+export async function migrateSgiInstructorRecordsToMontesSergio() {
+  try {
+    const sgiRecords = await prisma.employeeTrainingRecord.findMany({
+      where: {
+        instructorName: { contains: "SGI", mode: "insensitive" }
+      }
+    });
+
+    for (const r of sgiRecords) {
+      const dateFormatted = (r.completedAt ? new Date(r.completedAt) : new Date()).toLocaleDateString("es-AR");
+      const newSig = buildSvgSignatureDataUri(
+        "Montes Sergio",
+        "Legajo 11739 — Instructor SGI AUBASA",
+        `Fecha: ${dateFormatted}`
+      );
+      await prisma.employeeTrainingRecord.update({
+        where: { id: r.id },
+        data: {
+          instructorName: "Montes Sergio (Leg. 11739)",
+          instructorSignature: newSig
+        }
+      });
+    }
+  } catch {
+    // Ignorar errores silenciosamente
+  }
+}
+
 export async function getAllOnlineForms(): Promise<OnlineTrainingForm[]> {
+  await migrateSgiInstructorRecordsToMontesSergio();
+
   try {
     const setting = await prisma.appSetting.findUnique({
       where: { id: SETTING_KEY }
@@ -117,6 +148,22 @@ export async function getAllOnlineForms(): Promise<OnlineTrainingForm[]> {
     if (!Array.isArray(parsed) || parsed.length === 0) {
       return [DEFAULT_MANUAL_FORM];
     }
+
+    let updated = false;
+    for (const f of parsed) {
+      if (!f.instructorName || f.instructorName.toLowerCase().includes("sgi")) {
+        f.instructorName = "Montes Sergio (Leg. 11739)";
+        updated = true;
+      }
+    }
+
+    if (updated) {
+      await prisma.appSetting.update({
+        where: { id: SETTING_KEY },
+        data: { value: JSON.stringify(parsed) }
+      });
+    }
+
     return parsed;
   } catch {
     return [DEFAULT_MANUAL_FORM];
@@ -139,11 +186,9 @@ export async function getOnlineFormsForSector(
   allowedSectors: string[] | null
 ): Promise<OnlineTrainingForm[]> {
   const all = await getAllOnlineForms();
-  // Si es SGI, RRHH o ADMIN (!allowedSectors || allowedSectors.length === 0) ve absolutamente todos
   if (!allowedSectors || allowedSectors.length === 0) {
     return all;
   }
-  // Si es un sector, ve los formularios creados por su sector + el formulario institucional del Manual de Uso
   return all.filter(
     (f) =>
       f.id === "manual-uso-sgcysv" ||

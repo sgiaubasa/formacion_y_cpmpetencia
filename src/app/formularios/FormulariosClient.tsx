@@ -42,7 +42,7 @@ export function FormulariosClient({
   const [trainingName, setTrainingName] = useState("");
   const [objective, setObjective] = useState("");
   const [instructorName, setInstructorName] = useState(
-    mySectorName ? `Instructor — ${mySectorName}` : "SGI / Capacitación AUBASA"
+    mySectorName ? `Instructor — ${mySectorName}` : "Montes Sergio (Leg. 11739)"
   );
   const [questions, setQuestions] = useState<OnlineFormQuestion[]>([
     {

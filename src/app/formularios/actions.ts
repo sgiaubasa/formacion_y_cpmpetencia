@@ -48,7 +48,7 @@ export async function createOnlineFormAction(payload: {
     description: payload.description.trim(),
     trainingName: payload.trainingName.trim(),
     objective: payload.objective.trim(),
-    instructorName: payload.instructorName.trim() || "SGI / Capacitación AUBASA",
+    instructorName: payload.instructorName.trim() || "Montes Sergio (Leg. 11739)",
     ownerSectorName,
     createdByRole: role,
     createdAt: new Date().toISOString(),
@@ -189,9 +189,19 @@ export async function submitOnlineFormResponseAction(payload: {
       `Fecha: ${dateFormatted}`
     );
 
+  const isSgiOrMontes =
+    !form.instructorName ||
+    form.instructorName.toLowerCase().includes("sgi") ||
+    form.instructorName.toLowerCase().includes("montes");
+  const finalInstructorName = isSgiOrMontes
+    ? "Montes Sergio (Leg. 11739)"
+    : form.instructorName;
+
   const instructorSignature = buildSvgSignatureDataUri(
-    form.instructorName || "SGI / Capacitación AUBASA",
-    "Instructor — Firma Digital Validada",
+    isSgiOrMontes ? "Montes Sergio" : finalInstructorName,
+    isSgiOrMontes
+      ? "Legajo 11739 — Instructor SGI AUBASA"
+      : "Instructor — Firma Digital Validada",
     `Fecha: ${dateFormatted}`
   );
 
@@ -221,7 +231,7 @@ export async function submitOnlineFormResponseAction(payload: {
         status: "COMPLETED",
         completedAt: completedDate,
         score: scoreStr,
-        instructorName: form.instructorName,
+        instructorName: finalInstructorName,
         employeeSignature,
         instructorSignature,
         objective: matchedPending.objective || form.objective || null,
@@ -234,7 +244,7 @@ export async function submitOnlineFormResponseAction(payload: {
       data: {
         completedAt: completedDate,
         score: scoreStr,
-        instructorName: form.instructorName,
+        instructorName: finalInstructorName,
         employeeSignature,
         instructorSignature,
         objective: matchedCompleted.objective || form.objective || null
@@ -249,7 +259,7 @@ export async function submitOnlineFormResponseAction(payload: {
         status: "COMPLETED",
         completedAt: completedDate,
         score: scoreStr,
-        instructorName: form.instructorName,
+        instructorName: finalInstructorName,
         employeeSignature,
         instructorSignature,
         sourceProfileId: employee.jobProfileId ?? null,

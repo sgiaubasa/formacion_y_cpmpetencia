@@ -56,9 +56,16 @@ async function processSingleFormItem(
   const scoreRaw = String(
     item.score ?? item.nota ?? item.calificacion ?? "10"
   ).trim();
-  const instructorNameRaw = String(
-    item.instructorName || item.instructor || "SGI / Capacitación AUBASA"
+  const rawInstructorInput = String(
+    item.instructorName || item.instructor || "Montes Sergio (Leg. 11739)"
   ).trim();
+  const isSgiOrMontes =
+    !rawInstructorInput ||
+    rawInstructorInput.toLowerCase().includes("sgi") ||
+    rawInstructorInput.toLowerCase().includes("montes");
+  const instructorNameRaw = isSgiOrMontes
+    ? "Montes Sergio (Leg. 11739)"
+    : rawInstructorInput;
   const completedAtRaw = item.completedAt || item.fecha || null;
   const objectiveRaw = String(item.objective || item.objetivo || "").trim();
   const measureEfficacy = Boolean(item.measureEfficacy ?? item.medirEficacia ?? true);
@@ -129,8 +136,10 @@ async function processSingleFormItem(
   const instructorSignature =
     item.instructorSignature ||
     buildSvgSignatureDataUri(
-      instructorNameRaw,
-      "Instructor — Firma Digital Validada",
+      isSgiOrMontes ? "Montes Sergio" : instructorNameRaw,
+      isSgiOrMontes
+        ? "Legajo 11739 — Instructor SGI AUBASA"
+        : "Instructor — Firma Digital Validada",
       `Fecha: ${dateFormatted}`
     );
 

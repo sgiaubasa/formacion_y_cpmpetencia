@@ -24,7 +24,7 @@ export function MicrosoftFormsImportCard({
   const [isOpen, setIsOpen] = useState(false);
   const [trainingName, setTrainingName] = useState("");
   const [autoDetectedTopic, setAutoDetectedTopic] = useState(false);
-  const [instructorName, setInstructorName] = useState("SGI / Capacitación AUBASA");
+  const [instructorName, setInstructorName] = useState("Montes Sergio (Leg. 11739)");
   const [objective, setObjective] = useState("");
   const [isProcessing, setIsProcessing] = useState(false);
   const [resultMsg, setResultMsg] = useState<{
@@ -131,7 +131,7 @@ export function MicrosoftFormsImportCard({
           score: rawScore !== "" && rawScore !== undefined ? String(rawScore).trim() : "10",
           completedAt: completedAt || new Date().toISOString(),
           trainingName: String(rowTopic || trainingName).trim(),
-          instructorName: instructorName.trim() || "SGI / Capacitación AUBASA",
+          instructorName: instructorName.trim() || "Montes Sergio (Leg. 11739)",
           objective: objective.trim()
         };
       });

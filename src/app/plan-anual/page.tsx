@@ -14,8 +14,11 @@ import { getEfficacyTraceMap } from "@/lib/efficacyTraceability";
 import { PlanAnualFilters } from "./PlanAnualFilters";
 import { buildSectorRecordSourceFilter, getTrainingsForSectors } from "@/lib/sectorTrainings";
 import { MicrosoftFormsImportCard } from "./MicrosoftFormsImportCard";
+import { migrateSgiInstructorRecordsToMontesSergio } from "@/lib/onlineForms";
 
 export default async function PlanAnualPage({ searchParams }: { searchParams: Promise<{ tab?: string, q?: string, employeeId?: string, empName?: string, sectorId?: string, jobProfileId?: string, statusFilter?: string }> }) {
+  await migrateSgiInstructorRecordsToMontesSergio();
+
   const role = await getCurrentRole();
   const isSector = await isSectorRole(role);
   const sectorRoleId = await getSectorIdFromRole(role);
