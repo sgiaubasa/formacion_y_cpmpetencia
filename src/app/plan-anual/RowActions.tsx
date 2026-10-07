@@ -9,6 +9,9 @@ import { supabase } from "@/lib/supabase";
 export function RowActions({
   recordId,
   currentDate,
+  currentScheduledDate = "",
+  currentRescheduledDate = "",
+  hasScheduledDate = false,
   status,
   isSgi = false,
   isCompleted = false,
@@ -18,6 +21,9 @@ export function RowActions({
 }: {
   recordId: number;
   currentDate: string;
+  currentScheduledDate?: string;
+  currentRescheduledDate?: string;
+  hasScheduledDate?: boolean;
   status: string;
   isSgi?: boolean;
   isCompleted?: boolean;
@@ -104,7 +110,7 @@ export function RowActions({
         <input type="hidden" name="recordId" value={recordId} />
         <div>
           <label style={{ display: "block", fontSize: "0.72rem", fontWeight: 600, color: "#475569", marginBottom: "0.2rem" }}>
-            Fecha Programada *
+            {hasScheduledDate ? "🔄 Nueva Fecha (Reprogramación) *" : "Fecha Programada *"}
           </label>
           <input
             type="date"
@@ -210,7 +216,8 @@ export function RowActions({
     return (
       <SgiEditModal
         recordId={recordId}
-        currentScheduledDate={currentDate}
+        currentScheduledDate={currentScheduledDate || currentDate}
+        currentRescheduledDate={currentRescheduledDate}
         currentCompletedDate={currentCompletedDate}
         currentScore={currentScore}
         currentObjective={currentObjective}
@@ -246,7 +253,7 @@ export function RowActions({
                   setIsOpen(false);
                 }}
               >
-                📅 Programar Fecha / Material
+                {hasScheduledDate ? "🔄 Reprogramar Fecha / Material" : "📅 Programar Fecha / Material"}
               </button>
               <button
                 className="dropdown-item"

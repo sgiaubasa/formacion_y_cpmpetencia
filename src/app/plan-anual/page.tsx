@@ -51,10 +51,19 @@ export default async function PlanAnualPage({ searchParams }: { searchParams: Pr
     ];
   }
 
+  let statusWhere: any = {};
+  if (statusFilter === 'REPROGRAMADA') {
+    statusWhere = { status: 'IN_PLAN', rescheduledDate: { not: null } };
+  } else if (statusFilter === 'PROGRAMADA_ONLY') {
+    statusWhere = { status: 'IN_PLAN', rescheduledDate: null };
+  } else if (statusFilter) {
+    statusWhere = { status: statusFilter };
+  }
+
   const globalFilters = {
     ...(employeeId && { employeeId: employeeId }),
     ...(Object.keys(employeeFilters).length > 0 && { employee: employeeFilters }),
-    ...(statusFilter && { status: statusFilter }),
+    ...statusWhere,
     ...(isSector ? buildSectorRecordSourceFilter(allowedSectors) : {})
   };
 
@@ -270,7 +279,7 @@ export default async function PlanAnualPage({ searchParams }: { searchParams: Pr
   // Helper de fórmula de estados con iconos SVG
   function getStateBadge(record: any) {
     const isCompleted = record.completedAt || record.status === 'COMPLETED';
-    const isRescheduled = record.rescheduledDate;
+    const isRescheduled = Boolean(record.rescheduledDate);
     const isProgrammed = record.scheduledDate || record.status === 'IN_PLAN';
     
     let color = '#ef4444';
@@ -309,9 +318,16 @@ export default async function PlanAnualPage({ searchParams }: { searchParams: Pr
     }
 
     return (
-      <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', color: color, fontWeight: '700', fontSize: '0.75rem' }}>
-        <SvgIcon />
-        <span>{text}</span>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: '0.2rem' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', color: color, fontWeight: '700', fontSize: '0.75rem' }}>
+          <SvgIcon />
+          <span>{text}</span>
+        </div>
+        {isCompleted && isRescheduled && (
+          <span style={{ fontSize: '0.68rem', color: '#ea580c', fontWeight: 600, marginLeft: '1.9rem' }}>
+            🔄 Tuvo reprogramación ({new Date(record.rescheduledDate).toLocaleDateString('es-AR')})
+          </span>
+        )}
       </div>
     );
   }
@@ -417,6 +433,7 @@ export default async function PlanAnualPage({ searchParams }: { searchParams: Pr
             {records.map(r => {
               const isCompleted = r.status === 'COMPLETED';
               const material = materialsMap[`record_${r.id}`] || null;
+              const activeDateObj = r.rescheduledDate || r.scheduledDate;
               return (
                 <tr key={r.id}>
                   <td style={{ fontWeight: 500 }}>{r.employee.name}</td>
@@ -431,13 +448,29 @@ export default async function PlanAnualPage({ searchParams }: { searchParams: Pr
                   </td>
                   <td>{getStateBadge(r)}</td>
                   <td>
-                    {r.scheduledDate ? new Date(r.scheduledDate).toLocaleDateString('es-AR') : '-'}
+                    {r.rescheduledDate ? (
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: '0.15rem' }}>
+                        <span style={{ fontWeight: 700, color: '#ea580c', fontSize: '0.88rem' }} title="Nueva Fecha Reprogramada">
+                          🔄 Nueva: {new Date(r.rescheduledDate).toLocaleDateString('es-AR')}
+                        </span>
+                        {r.scheduledDate && (
+                          <span style={{ fontSize: '0.74rem', color: '#64748b' }} title="Fecha Programada Original">
+                            Orig.: <span style={{ textDecoration: 'line-through' }}>{new Date(r.scheduledDate).toLocaleDateString('es-AR')}</span>
+                          </span>
+                        )}
+                      </div>
+                    ) : (
+                      r.scheduledDate ? new Date(r.scheduledDate).toLocaleDateString('es-AR') : '-'
+                    )}
                   </td>
                   <td>
                     {!isCompleted ? (
                       <RowActions 
                         recordId={r.id} 
-                        currentDate={r.scheduledDate ? r.scheduledDate.toISOString().split('T')[0] : ''} 
+                        currentDate={activeDateObj ? activeDateObj.toISOString().split('T')[0] : ''} 
+                        currentScheduledDate={r.scheduledDate ? r.scheduledDate.toISOString().split('T')[0] : ''}
+                        currentRescheduledDate={r.rescheduledDate ? r.rescheduledDate.toISOString().split('T')[0] : ''}
+                        hasScheduledDate={Boolean(r.scheduledDate)}
                         status={r.status} 
                         isSgi={role === 'SGI'}
                         currentObjective={r.objective || ""}
@@ -481,7 +514,10 @@ export default async function PlanAnualPage({ searchParams }: { searchParams: Pr
                         <div style={{ marginTop: '0.25rem' }}>
                           <RowActions 
                             recordId={r.id} 
-                            currentDate={r.scheduledDate ? r.scheduledDate.toISOString().split('T')[0] : ''} 
+                            currentDate={activeDateObj ? activeDateObj.toISOString().split('T')[0] : ''} 
+                            currentScheduledDate={r.scheduledDate ? r.scheduledDate.toISOString().split('T')[0] : ''}
+                            currentRescheduledDate={r.rescheduledDate ? r.rescheduledDate.toISOString().split('T')[0] : ''}
+                            hasScheduledDate={Boolean(r.scheduledDate)}
                             status={r.status}
                             isSgi={role === 'SGI'}
                             isCompleted={true}

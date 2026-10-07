@@ -55,6 +55,10 @@ export default async function Home() {
       effectiveness: record.effectiveness, // "PENDING", "EFFECTIVE", "INEFFECTIVE"
       trainingName: record.trainingName,
       date: dateToUse ? dateToUse.toISOString() : null,
+      scheduledDate: record.scheduledDate ? record.scheduledDate.toISOString() : null,
+      rescheduledDate: record.rescheduledDate ? record.rescheduledDate.toISOString() : null,
+      completedAt: record.completedAt ? record.completedAt.toISOString() : null,
+      isRescheduled: Boolean(record.rescheduledDate),
       employeeName: record.employee.name,
       employeeId: record.employee.id,
       sectorId: record.employee.sector.id,

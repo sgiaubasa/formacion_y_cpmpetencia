@@ -12,6 +12,10 @@ type DashboardData = {
   effectiveness: string | null;
   trainingName: string;
   date: string | null;
+  scheduledDate?: string | null;
+  rescheduledDate?: string | null;
+  completedAt?: string | null;
+  isRescheduled?: boolean;
   employeeName: string;
   employeeId: number;
   sectorId: number;
@@ -28,9 +32,9 @@ type Props = {
 };
 
 type CrossFilter = {
-  source: 'BarChart' | 'PieChart';
+  source: 'BarChart' | 'PieChart' | 'KpiBox';
   monthIndex?: number;
-  statusKey?: string; // 'Realizadas' | 'Programadas'
+  statusKey?: string; // 'Realizadas' | 'Programadas' | 'Reprogramadas'
   tema?: string;
 };
 
@@ -40,6 +44,7 @@ const MONTHS = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 
 export default function DashboardClient({ data, sectors, profiles, isSector }: Props) {
   const [selectedYear, setSelectedYear] = useState<string>('Todos');
   const [selectedMonth, setSelectedMonth] = useState<string>('Todos');
+  const [selectedStatus, setSelectedStatus] = useState<string>('Todos');
   const [selectedSector, setSelectedSector] = useState<string>('Todos');
   const [selectedProfile, setSelectedProfile] = useState<string>('Todos');
   const [selectedEmployee, setSelectedEmployee] = useState<string>('Todos');
@@ -119,6 +124,11 @@ export default function DashboardClient({ data, sectors, profiles, isSector }: P
       if (selectedSector !== 'Todos' && d.sectorId.toString() !== selectedSector) pass = false;
       if (selectedProfile !== 'Todos' && d.profileId?.toString() !== selectedProfile) pass = false;
       if (selectedEmployee !== 'Todos' && d.employeeName !== selectedEmployee) pass = false;
+
+      if (selectedStatus === 'Realizadas' && d.status !== 'COMPLETED') pass = false;
+      if (selectedStatus === 'Programadas' && (d.status !== 'IN_PLAN' || d.isRescheduled)) pass = false;
+      if (selectedStatus === 'Reprogramadas' && !d.isRescheduled) pass = false;
+      if (selectedStatus === 'Brechas' && d.status !== 'GAP') pass = false;
       
       if (d.date) {
         const dObj = new Date(d.date);
@@ -130,7 +140,7 @@ export default function DashboardClient({ data, sectors, profiles, isSector }: P
       
       return pass;
     });
-  }, [data, selectedYear, selectedMonth, selectedSector, selectedProfile, selectedEmployee]);
+  }, [data, selectedYear, selectedMonth, selectedStatus, selectedSector, selectedProfile, selectedEmployee]);
 
   // Apply CROSS filters (Chart Clicks)
   const detailedData = useMemo(() => {
@@ -144,10 +154,19 @@ export default function DashboardClient({ data, sectors, profiles, isSector }: P
           
           if (crossFilter.statusKey === 'Realizadas') return d.status === 'COMPLETED';
           if (crossFilter.statusKey === 'Programadas') return d.status === 'IN_PLAN' || d.status === 'COMPLETED';
+          if (crossFilter.statusKey === 'Reprogramadas') return Boolean(d.isRescheduled);
           return true;
         });
       } else if (crossFilter.source === 'PieChart') {
         result = result.filter(d => d.trainingName === crossFilter.tema && d.status === 'COMPLETED');
+      } else if (crossFilter.source === 'KpiBox') {
+        if (crossFilter.statusKey === 'Reprogramadas') {
+          result = result.filter(d => Boolean(d.isRescheduled));
+        } else if (crossFilter.statusKey === 'Realizadas') {
+          result = result.filter(d => d.status === 'COMPLETED');
+        } else if (crossFilter.statusKey === 'Programadas') {
+          result = result.filter(d => d.status === 'IN_PLAN');
+        }
       }
     }
     return result;
@@ -164,12 +183,13 @@ export default function DashboardClient({ data, sectors, profiles, isSector }: P
 
   // Chart 2: Bar (Mensual) -> Always use global filteredData
   const monthlyData = useMemo(() => {
-    const mData = MONTHS.map((m, i) => ({ name: m, Realizadas: 0, Programadas: 0 }));
+    const mData = MONTHS.map((m) => ({ name: m, Realizadas: 0, Programadas: 0, Reprogramadas: 0 }));
     filteredData.forEach(d => {
       if (d.date) {
         const monthIndex = new Date(d.date).getMonth();
         if (d.status === 'COMPLETED') mData[monthIndex].Realizadas += 1;
         if (d.status === 'IN_PLAN' || d.status === 'COMPLETED') mData[monthIndex].Programadas += 1;
+        if (d.isRescheduled) mData[monthIndex].Reprogramadas += 1;
       }
     });
     return mData;
@@ -178,6 +198,7 @@ export default function DashboardClient({ data, sectors, profiles, isSector }: P
   // KPIs -> React to cross filters!
   const realizadas = detailedData.filter(d => d.status === 'COMPLETED').length;
   const programadas = detailedData.filter(d => d.status === 'IN_PLAN' || d.status === 'COMPLETED').length;
+  const reprogramadas = detailedData.filter(d => Boolean(d.isRescheduled)).length;
   const pendientes = detailedData.filter(d => d.status === 'GAP').length;
   const totalGeneral = programadas + pendientes;
   const tasaCumplimiento = totalGeneral > 0 ? Math.round((realizadas / totalGeneral) * 100) : 0;
@@ -228,6 +249,14 @@ export default function DashboardClient({ data, sectors, profiles, isSector }: P
     }
   };
 
+  const handleKpiClick = (statusKey: string) => {
+    if (crossFilter?.source === 'KpiBox' && crossFilter.statusKey === statusKey) {
+      setCrossFilter(null);
+    } else {
+      setCrossFilter({ source: 'KpiBox', statusKey });
+    }
+  };
+
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
       
@@ -245,6 +274,16 @@ export default function DashboardClient({ data, sectors, profiles, isSector }: P
           <select value={selectedMonth} onChange={e => setSelectedMonth(e.target.value)} style={{ width: '100%', padding: '0.25rem', color: 'black' }}>
             <option value="Todos">Todos</option>
             {MONTHS.map((m, i) => <option key={i} value={i}>{m}</option>)}
+          </select>
+        </div>
+        <div style={{ flex: 1, minWidth: '150px' }}>
+          <label style={{ fontSize: '0.75rem', fontWeight: 'bold' }}>Estado</label>
+          <select value={selectedStatus} onChange={e => setSelectedStatus(e.target.value)} style={{ width: '100%', padding: '0.25rem', color: 'black' }}>
+            <option value="Todos">Todos los estados</option>
+            <option value="Realizadas">Realizadas</option>
+            <option value="Programadas">Programadas (Sin reprogramar)</option>
+            <option value="Reprogramadas">Reprogramadas</option>
+            <option value="Brechas">Brechas (Pendientes)</option>
           </select>
         </div>
       </div>
@@ -278,14 +317,32 @@ export default function DashboardClient({ data, sectors, profiles, isSector }: P
             </select>
           </div>
 
-          <div style={{ marginTop: '1rem', display: 'flex', gap: '0.5rem' }}>
-            <div style={{ flex: 1, textAlign: 'center', background: '#0078D4', color: 'white', padding: '0.5rem', borderRadius: '4px', opacity: crossFilter?.statusKey === 'Programadas' ? 0.5 : 1 }}>
-              <div style={{ fontSize: '0.75rem' }}>Cap. Realizadas</div>
-              <div style={{ fontSize: '1.5rem', fontWeight: 'bold' }}>{realizadas}</div>
+          <div style={{ marginTop: '0.75rem', display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+            <div style={{ display: 'flex', gap: '0.5rem' }}>
+              <div
+                onClick={() => handleKpiClick('Realizadas')}
+                style={{ flex: 1, textAlign: 'center', background: '#0078D4', color: 'white', padding: '0.5rem', borderRadius: '4px', cursor: 'pointer', opacity: (crossFilter?.statusKey && crossFilter.statusKey !== 'Realizadas') ? 0.5 : 1 }}
+                title="Click para filtrar Realizadas"
+              >
+                <div style={{ fontSize: '0.72rem' }}>Cap. Realizadas</div>
+                <div style={{ fontSize: '1.4rem', fontWeight: 'bold' }}>{realizadas}</div>
+              </div>
+              <div
+                onClick={() => handleKpiClick('Programadas')}
+                style={{ flex: 1, textAlign: 'center', background: '#004B8B', color: 'white', padding: '0.5rem', borderRadius: '4px', cursor: 'pointer', opacity: (crossFilter?.statusKey && crossFilter.statusKey !== 'Programadas') ? 0.5 : 1 }}
+                title="Click para filtrar Programadas"
+              >
+                <div style={{ fontSize: '0.72rem' }}>Cap. Programadas</div>
+                <div style={{ fontSize: '1.4rem', fontWeight: 'bold' }}>{programadas}</div>
+              </div>
             </div>
-            <div style={{ flex: 1, textAlign: 'center', background: '#004B8B', color: 'white', padding: '0.5rem', borderRadius: '4px', opacity: crossFilter?.statusKey === 'Realizadas' ? 0.5 : 1 }}>
-              <div style={{ fontSize: '0.75rem' }}>Cap. Programadas</div>
-              <div style={{ fontSize: '1.5rem', fontWeight: 'bold' }}>{programadas}</div>
+            <div
+              onClick={() => handleKpiClick('Reprogramadas')}
+              style={{ textAlign: 'center', background: '#f97316', color: 'white', padding: '0.45rem 0.5rem', borderRadius: '4px', cursor: 'pointer', opacity: (crossFilter?.statusKey && crossFilter.statusKey !== 'Reprogramadas') ? 0.5 : 1 }}
+              title="Click para ver solo las Capacitaciones Reprogramadas"
+            >
+              <div style={{ fontSize: '0.72rem', fontWeight: 600 }}>🔄 Cap. Reprogramadas</div>
+              <div style={{ fontSize: '1.35rem', fontWeight: 'bold' }}>{reprogramadas}</div>
             </div>
           </div>
 
@@ -332,7 +389,7 @@ export default function DashboardClient({ data, sectors, profiles, isSector }: P
           {/* Top Bar Chart */}
           <div className="card" style={{ height: '300px' }}>
             <h3 style={{ fontSize: '1rem', textAlign: 'center', color: 'white', background: '#0078D4', padding: '0.25rem', marginTop: '-1rem', marginLeft: '-1rem', marginRight: '-1rem', marginBottom: '1rem', borderRadius: '4px 4px 0 0' }}>
-              Capacitaciones Realizadas / Programadas Mensualmente (Click para filtrar)
+              Capacitaciones Realizadas / Programadas / Reprogramadas Mensualmente (Click para filtrar)
             </h3>
             <ResponsiveContainer width="100%" height="90%">
               <BarChart data={monthlyData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
@@ -349,7 +406,7 @@ export default function DashboardClient({ data, sectors, profiles, isSector }: P
                   cursor="pointer"
                 >
                   {monthlyData.map((entry, index) => (
-                    <Cell key={`cell-${index}`} fill="#0078D4" opacity={(crossFilter?.source === 'BarChart' && (crossFilter.monthIndex !== index || crossFilter.statusKey !== 'Realizadas')) ? 0.3 : 1} />
+                    <Cell key={`cell-real-${index}`} fill="#0078D4" opacity={(crossFilter?.source === 'BarChart' && (crossFilter.monthIndex !== index || crossFilter.statusKey !== 'Realizadas')) ? 0.3 : 1} />
                   ))}
                 </Bar>
                 <Bar 
@@ -360,7 +417,18 @@ export default function DashboardClient({ data, sectors, profiles, isSector }: P
                   cursor="pointer"
                 >
                   {monthlyData.map((entry, index) => (
-                    <Cell key={`cell-${index}`} fill="#004B8B" opacity={(crossFilter?.source === 'BarChart' && (crossFilter.monthIndex !== index || crossFilter.statusKey !== 'Programadas')) ? 0.3 : 1} />
+                    <Cell key={`cell-prog-${index}`} fill="#004B8B" opacity={(crossFilter?.source === 'BarChart' && (crossFilter.monthIndex !== index || crossFilter.statusKey !== 'Programadas')) ? 0.3 : 1} />
+                  ))}
+                </Bar>
+                <Bar 
+                  dataKey="Reprogramadas" 
+                  fill="#f97316" 
+                  radius={[4, 4, 0, 0]} 
+                  onClick={(d, i) => handleBarClick(d, i, 'Reprogramadas')}
+                  cursor="pointer"
+                >
+                  {monthlyData.map((entry, index) => (
+                    <Cell key={`cell-reprog-${index}`} fill="#f97316" opacity={(crossFilter?.source === 'BarChart' && (crossFilter.monthIndex !== index || crossFilter.statusKey !== 'Reprogramadas')) ? 0.3 : 1} />
                   ))}
                 </Bar>
               </BarChart>
@@ -425,14 +493,57 @@ export default function DashboardClient({ data, sectors, profiles, isSector }: P
                 <tbody>
                   {detailedData.slice(0, 100).map(d => (
                     <tr key={d.id}>
-                      <td>{d.date ? new Date(d.date).toLocaleDateString('es-AR') : '-'}</td>
+                      <td>
+                        {d.isRescheduled && d.rescheduledDate ? (
+                          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.1rem' }}>
+                            {d.status === 'COMPLETED' && d.completedAt ? (
+                              <>
+                                <span style={{ fontWeight: 600, color: '#0f172a' }}>
+                                  Realiz.: {new Date(d.completedAt).toLocaleDateString('es-AR')}
+                                </span>
+                                <span style={{ fontSize: '0.73rem', color: '#ea580c', fontWeight: 600 }}>
+                                  🔄 Reprog.: {new Date(d.rescheduledDate).toLocaleDateString('es-AR')}
+                                </span>
+                              </>
+                            ) : (
+                              <>
+                                <span style={{ fontWeight: 700, color: '#ea580c' }}>
+                                  🔄 Nueva: {new Date(d.rescheduledDate).toLocaleDateString('es-AR')}
+                                </span>
+                                {d.scheduledDate && (
+                                  <span style={{ fontSize: '0.72rem', color: '#64748b' }}>
+                                    Orig.: <span style={{ textDecoration: 'line-through' }}>{new Date(d.scheduledDate).toLocaleDateString('es-AR')}</span>
+                                  </span>
+                                )}
+                              </>
+                            )}
+                          </div>
+                        ) : (
+                          d.date ? new Date(d.date).toLocaleDateString('es-AR') : '-'
+                        )}
+                      </td>
                       <td style={{ fontWeight: 500, color: 'var(--primary-color)' }}>{d.employeeName}</td>
                       <td>{d.sectorName}</td>
                       <td>{d.trainingName}</td>
                       <td>
-                        {d.status === 'COMPLETED' ? <span className="badge badge-success">Realizada</span> : 
-                         d.status === 'IN_PLAN' ? <span className="badge badge-warning">Programada</span> : 
-                         <span className="badge">Brecha</span>}
+                        {d.status === 'COMPLETED' ? (
+                          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.2rem' }}>
+                            <span className="badge badge-success" style={{ width: 'fit-content' }}>Realizada</span>
+                            {d.isRescheduled && (
+                              <span style={{ fontSize: '0.68rem', color: '#ea580c', fontWeight: 600 }}>
+                                🔄 Fue reprogramada
+                              </span>
+                            )}
+                          </div>
+                        ) : d.isRescheduled ? (
+                          <span className="badge" style={{ backgroundColor: '#f97316', color: 'white' }}>
+                            Reprogramada
+                          </span>
+                        ) : d.status === 'IN_PLAN' ? (
+                          <span className="badge badge-warning">Programada</span>
+                        ) : (
+                          <span className="badge">Brecha</span>
+                        )}
                       </td>
                     </tr>
                   ))}

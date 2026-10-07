@@ -95,6 +95,7 @@ export async function programarFecha(formData: FormData) {
 
   await syncRecordToPowerAutomate(recordId).catch(() => {});
   revalidatePath('/plan-anual');
+  revalidatePath('/');
 }
 
 export async function marcarEjecutada(formData: FormData) {
@@ -131,6 +132,7 @@ export async function marcarEjecutada(formData: FormData) {
 
     await syncRecordToPowerAutomate(recordId).catch(() => {});
     revalidatePath('/plan-anual');
+    revalidatePath('/');
     return { success: true };
   } catch (err: any) {
     console.error("Error in marcarEjecutada:", err);
@@ -155,6 +157,7 @@ export async function borrarCapacitacion(formData: FormData) {
     }).catch(() => {});
   }
   revalidatePath('/plan-anual');
+  revalidatePath('/');
 }
 
 export async function sgiEditRecord(formData: FormData) {
@@ -162,6 +165,7 @@ export async function sgiEditRecord(formData: FormData) {
     const recordId = parseInt(formData.get("recordId") as string);
     const objectiveStr = formData.get("objective") as string | null;
     const scheduledDateStr = formData.get("scheduledDate") as string;
+    const rescheduledDateStr = formData.get("rescheduledDate") as string | null;
     const completedAtStr = formData.get("completedAt") as string;
     const scoreStr = formData.get("score") as string;
     const file = formData.get("evidence") as File | null;
@@ -173,6 +177,9 @@ export async function sgiEditRecord(formData: FormData) {
 
     if (objectiveStr !== null) updateData.objective = objectiveStr.trim();
     if (scheduledDateStr) updateData.scheduledDate = new Date(scheduledDateStr);
+    if (rescheduledDateStr !== null) {
+      updateData.rescheduledDate = rescheduledDateStr ? new Date(rescheduledDateStr) : null;
+    }
     if (completedAtStr) updateData.completedAt = new Date(completedAtStr);
     if (scoreStr) updateData.score = scoreStr;
 
@@ -198,6 +205,7 @@ export async function sgiEditRecord(formData: FormData) {
     }
     
     revalidatePath('/plan-anual');
+    revalidatePath('/');
     return { success: true };
   } catch (err: any) {
     console.error("Error in sgiEditRecord:", err);

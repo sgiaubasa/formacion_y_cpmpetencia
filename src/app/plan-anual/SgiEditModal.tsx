@@ -7,6 +7,7 @@ import { supabase } from "@/lib/supabase";
 export function SgiEditModal({
   recordId,
   currentScheduledDate,
+  currentRescheduledDate,
   currentCompletedDate,
   currentScore,
   currentObjective = "",
@@ -14,6 +15,7 @@ export function SgiEditModal({
 }: {
   recordId: number;
   currentScheduledDate?: string;
+  currentRescheduledDate?: string;
   currentCompletedDate?: string;
   currentScore?: string;
   currentObjective?: string;
@@ -123,12 +125,16 @@ export function SgiEditModal({
             />
           </div>
 
-          <div style={{ display: "flex", gap: "1rem" }}>
-            <div style={{ flex: 1 }}>
-              <label className="form-label">Fecha Programada</label>
+          <div style={{ display: "flex", gap: "0.75rem", flexWrap: "wrap" }}>
+            <div style={{ flex: "1 1 140px" }}>
+              <label className="form-label">Fecha Programada (Orig.)</label>
               <input type="date" name="scheduledDate" className="form-input" defaultValue={currentScheduledDate} />
             </div>
-            <div style={{ flex: 1 }}>
+            <div style={{ flex: "1 1 140px" }}>
+              <label className="form-label">Fecha Reprogramada</label>
+              <input type="date" name="rescheduledDate" className="form-input" defaultValue={currentRescheduledDate} />
+            </div>
+            <div style={{ flex: "1 1 140px" }}>
               <label className="form-label">Fecha de Realización</label>
               <input type="date" name="completedAt" className="form-input" defaultValue={currentCompletedDate} />
             </div>
