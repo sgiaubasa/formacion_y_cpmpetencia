@@ -212,6 +212,9 @@ export function ResponderFormClient({
               Formulario Oficial de Capacitación — AUBASA
             </span>
             <h1 style={{ margin: 0, fontSize: "1.4rem", color: "#1b365d" }}>{form.title}</h1>
+            <div style={{ marginTop: "0.35rem", fontSize: "0.88rem", color: "#0d8383", fontWeight: 700 }}>
+              🎓 Tema de Capacitación: {form.trainingName}
+            </div>
           </div>
         </div>
 

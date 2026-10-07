@@ -6,8 +6,7 @@ import Link from "next/link";
 import { prisma } from "@/lib/prisma";
 import { getCurrentRole, isSectorRole } from "@/lib/auth";
 import { AuthProvider } from "@/components/AuthProvider";
-import { LogoutButton } from "@/components/LogoutButton";
-import { SidebarNav } from "@/components/SidebarNav";
+import { AppShell } from "@/components/AppShell";
 
 const inter = Inter({ subsets: ["latin"] });
 
@@ -23,24 +22,14 @@ export default async function RootLayout({
 }>) {
   const role = await getCurrentRole();
   const isSector = await isSectorRole(role);
-  const sectores = await prisma.sector.findMany({ orderBy: { name: 'asc' } });
 
   return (
     <html lang="es">
       <body className={inter.className}>
         <AuthProvider>
-          <div className="app-container">
-            <aside className="sidebar">
-              <div className="sidebar-header" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '2rem 1rem', borderBottom: '1px solid var(--border-color)', background: '#ffffff' }}>
-                <img src="/logo.png" alt="AUBASA Logo" style={{ width: '180px', height: 'auto', objectFit: 'contain' }} />
-              </div>
-              <SidebarNav isSector={isSector} role={role} />
-              <LogoutButton />
-            </aside>
-            <main className="main-content">
-              {children}
-            </main>
-          </div>
+          <AppShell isSector={isSector} role={role}>
+            {children}
+          </AppShell>
         </AuthProvider>
       </body>
     </html>

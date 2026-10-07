@@ -5,6 +5,16 @@ import * as XLSX from "xlsx";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 
+function normalizeStr(s: string): string {
+  return (s || "")
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^a-z0-9\s]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
 export function MicrosoftFormsImportCard({
   allTrainings
 }: {
@@ -13,6 +23,7 @@ export function MicrosoftFormsImportCard({
   const router = useRouter();
   const [isOpen, setIsOpen] = useState(false);
   const [trainingName, setTrainingName] = useState("");
+  const [autoDetectedTopic, setAutoDetectedTopic] = useState(false);
   const [instructorName, setInstructorName] = useState("SGI / Capacitación AUBASA");
   const [objective, setObjective] = useState("");
   const [isProcessing, setIsProcessing] = useState(false);
@@ -21,6 +32,40 @@ export function MicrosoftFormsImportCard({
     text: string;
     notFound?: string[];
   } | null>(null);
+
+  // Cuando el usuario selecciona el archivo Excel descargado de Microsoft Forms,
+  // detectamos automáticamente el Tema de Capacitación a partir del título del formulario (nombre del archivo Excel)
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    // Microsoft Forms nombra el Excel como: "Nombre del Formulario(1-25).xlsx"
+    const baseName = file.name
+      .replace(/\.(xlsx|xls|csv)$/i, "")
+      .replace(/\(\d+\s*-\s*\d+\)$/g, "")
+      .replace(/^capacitacion\s*[:\-]?\s*/i, "")
+      .trim();
+
+    const normFile = normalizeStr(baseName);
+    if (!normFile) return;
+
+    const matched =
+      allTrainings.find((t) => normalizeStr(t.title) === normFile) ||
+      allTrainings.find(
+        (t) =>
+          normalizeStr(t.title).length >= 5 &&
+          (normFile.includes(normalizeStr(t.title)) ||
+            normalizeStr(t.title).includes(normFile))
+      );
+
+    if (matched) {
+      setTrainingName(matched.title);
+      setAutoDetectedTopic(true);
+    } else if (!trainingName.trim()) {
+      setTrainingName(baseName);
+      setAutoDetectedTopic(false);
+    }
+  };
 
   const handleFileSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
@@ -63,6 +108,7 @@ export function MicrosoftFormsImportCard({
         const employeeName =
           findCol(["apellido", "nombre y apellido", "nombre completo", "empleado", "participante"]) ||
           findCol(["nombre"]);
+        const rowTopic = findCol(["tema de capacitacion", "tema de capacitación", "capacitacion", "capacitación", "tema"]);
         const rawScore = findCol([
           "total de puntos",
           "puntos",
@@ -84,7 +130,7 @@ export function MicrosoftFormsImportCard({
           employeeName: String(employeeName ?? "").trim(),
           score: rawScore !== "" && rawScore !== undefined ? String(rawScore).trim() : "10",
           completedAt: completedAt || new Date().toISOString(),
-          trainingName: trainingName.trim(),
+          trainingName: String(rowTopic || trainingName).trim(),
           instructorName: instructorName.trim() || "SGI / Capacitación AUBASA",
           objective: objective.trim()
         };
@@ -106,6 +152,7 @@ export function MicrosoftFormsImportCard({
           notFound: data.notFoundList && data.notFoundList.length > 0 ? data.notFoundList : undefined
         });
         form.reset();
+        setAutoDetectedTopic(false);
         router.refresh();
       } else {
         setResultMsg({
@@ -158,10 +205,10 @@ export function MicrosoftFormsImportCard({
             Formularios Online &amp; Microsoft Forms 365
           </span>
           <h3 style={{ margin: "0.35rem 0 0 0", fontSize: "1.05rem", color: "#1b365d" }}>
-            📥 Cargar / Actualizar Excel de Microsoft Forms o Crear Formulario Online
+            📥 Cargar / Actualizar Excel de Microsoft Forms o Usar Formulario Online
           </h3>
           <p style={{ margin: "0.2rem 0 0 0", fontSize: "0.85rem", color: "#64748b" }}>
-            Podés subir el Excel de Microsoft Forms (y volver a subirlo con nuevas respuestas sin que se dupliquen las anteriores), o usar los <strong>Formularios Online propios de la aplicación</strong> que impactan en el acto.
+            Si en Microsoft Forms le ponés al formulario el <strong>mismo título que el Tema de Capacitación de la aplicación</strong>, al subir el Excel lo detecta automáticamente. También podés volver a subir el mismo Excel con nuevas cargas sin duplicar las anteriores.
           </p>
         </div>
 
@@ -213,12 +260,34 @@ export function MicrosoftFormsImportCard({
           }}
         >
           <div>
-            <label className="form-label">1. Tema de Capacitación *</label>
+            <label className="form-label">1. Archivo Excel de Microsoft Forms (.xlsx) *</label>
+            <input
+              type="file"
+              name="formsExcel"
+              accept=".xlsx,.xls,.csv"
+              onChange={handleFileChange}
+              className="form-input"
+              required
+            />
+          </div>
+
+          <div>
+            <label className="form-label">
+              2. Tema de Capacitación en la App *{" "}
+              {autoDetectedTopic && (
+                <span style={{ color: "#15803d", fontSize: "0.75rem", fontWeight: 700 }}>
+                  (✓ Detectado del título)
+                </span>
+              )}
+            </label>
             <input
               list="ms-forms-trainings-list"
               value={trainingName}
-              onChange={(e) => setTrainingName(e.target.value)}
-              placeholder="Elegí o escribí el tema..."
+              onChange={(e) => {
+                setTrainingName(e.target.value);
+                setAutoDetectedTopic(false);
+              }}
+              placeholder="Debe coincidir con el Tema en la aplicación..."
               className="form-input"
               required
             />
@@ -230,7 +299,7 @@ export function MicrosoftFormsImportCard({
           </div>
 
           <div>
-            <label className="form-label">2. Nombre del Instructor (Firma Instructor) *</label>
+            <label className="form-label">3. Nombre del Instructor (Firma Instructor) *</label>
             <input
               type="text"
               value={instructorName}
@@ -241,24 +310,13 @@ export function MicrosoftFormsImportCard({
           </div>
 
           <div>
-            <label className="form-label">3. Objetivo (Opcional si ya estaba en Plan)</label>
+            <label className="form-label">4. Objetivo (Opcional si ya estaba en Plan)</label>
             <input
               type="text"
               value={objective}
               onChange={(e) => setObjective(e.target.value)}
               placeholder="Ej: Conocer el uso del sistema..."
               className="form-input"
-            />
-          </div>
-
-          <div>
-            <label className="form-label">4. Archivo Excel de Microsoft Forms (.xlsx) *</label>
-            <input
-              type="file"
-              name="formsExcel"
-              accept=".xlsx,.xls,.csv"
-              className="form-input"
-              required
             />
           </div>
 

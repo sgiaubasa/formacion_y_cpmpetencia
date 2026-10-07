@@ -356,13 +356,13 @@ export default function ManualDeUsoPage() {
         }}
       >
         <h2 style={{ color: "#1b365d", marginTop: 0, marginBottom: "0.75rem", fontSize: "1.3rem" }}>
-          4. Carga de la Capacitación Realizada, Fecha, Nota y Registro de Firmas
+          4. Carga de la Capacitación Realizada, Fecha, Nota y Modalidades de Registro de Firmas
         </h2>
         <p style={{ color: "#334155", marginBottom: "1rem" }}>
-          Una vez que la capacitación se llevó adelante, desde la gestión del <strong>📅 Plan Anual</strong> se debe registrar su cierre colocando la <strong>Fecha de realización</strong>, la <strong>Nota / Calificación (de 0 a 10)</strong> y el <strong>Nombre del Instructor</strong>. Para dejar asentado el registro de firmas y cambiar el estado de <strong>Programado</strong> a <strong>Realizado</strong>, existen <strong>tres modalidades disponibles</strong>:
+          Una vez que la capacitación se llevó adelante, desde la gestión del <strong>📅 Plan Anual</strong> se debe registrar su cierre colocando la <strong>Fecha de realización</strong>, la <strong>Nota / Calificación (de 0 a 10)</strong> y el <strong>Nombre del Instructor</strong>. Para dejar asentado el registro de firmas y cambiar el estado de <strong>Programado</strong> a <strong>Realizado</strong>, el sistema ofrece las siguientes modalidades:
         </p>
 
-        <div style={{ display: "flex", flexDirection: "column", gap: "1rem" }}>
+        <div style={{ display: "flex", flexDirection: "column", gap: "1rem", marginBottom: "1.15rem" }}>
           <div
             style={{
               border: "1px solid #cbd5e1",
@@ -412,6 +412,48 @@ export default function ManualDeUsoPage() {
             <p style={{ margin: 0, fontSize: "0.92rem", color: "#334155" }}>
               Cuando la carga se gestiona a distancia, desde la fila de la capacitación se genera el <strong>enlace único (link)</strong> y se envía por <strong>Correo Electrónico o WhatsApp</strong> tanto al <strong>Instructor</strong> como a la <strong>Persona que realizó la capacitación</strong>. Cada uno abre el enlace desde su dispositivo, registra su firma digital y el estado cambia automáticamente de <strong>Programado</strong> a <strong>Realizado</strong>.
             </p>
+          </div>
+
+          <div
+            style={{
+              border: "1px solid #cbd5e1",
+              borderLeft: "4px solid #1b365d",
+              borderRadius: "10px",
+              padding: "1.1rem 1.25rem",
+              backgroundColor: "#f0f9ff"
+            }}
+          >
+            <h3 style={{ margin: "0 0 0.4rem 0", fontSize: "1.05rem", color: "#1b365d" }}>
+              📝 Modalidad 4: Formulario Online de la Aplicación o Carga de Excel de Microsoft Forms
+            </h3>
+            <p style={{ margin: "0 0 0.5rem 0", fontSize: "0.92rem", color: "#334155" }}>
+              Para evaluaciones múltiples o masivas, también se puede registrar la capacitación y las firmas digitales de dos maneras automatizadas:
+            </p>
+            <ul style={{ margin: 0, paddingLeft: "1.25rem", fontSize: "0.9rem", color: "#334155" }}>
+              <li style={{ marginBottom: "0.35rem" }}>
+                <strong>Formulario Online propio de la Aplicación (solapa 📝 Formularios Online):</strong> Cada sector puede generar un cuestionario online vinculado al tema de capacitación y compartir su link por Mail o WhatsApp. Al abrirlo, el participante ve únicamente el formulario limpio (sin menú lateral ni acceso al resto del sistema), selecciona su <strong>Apellido y Nombre / Legajo</strong> de la lista, responde las preguntas y presta conformidad, quedando registrada en el acto su <strong>Nota</strong>, la <strong>Firma del Participante</strong> y la <strong>Firma del Instructor</strong>.
+              </li>
+              <li>
+                <strong>Carga / Actualización de Excel de Microsoft Forms (en 📅 Plan Anual):</strong> Todos los sectores pueden descargar el Excel de respuestas de Microsoft Forms y subirlo en el botón <em>&ldquo;Subir / Actualizar Excel de Forms&rdquo;</em>. El sistema genera la firma digital del capacitado y del instructor con esos datos y pasa las capacitaciones a <strong>Realizado</strong> (pudiendo volver a subir el mismo Excel con nuevas cargas sin que se dupliquen las anteriores).
+              </li>
+            </ul>
+          </div>
+        </div>
+
+        <div
+          style={{
+            backgroundColor: "#fffbeb",
+            border: "1px solid #fde68a",
+            borderLeft: "5px solid #f59e0b",
+            padding: "0.95rem 1.15rem",
+            borderRadius: "8px",
+            fontSize: "0.91rem",
+            color: "#92400e"
+          }}
+        >
+          <strong>⚠️ Importante para la detección automática (Nombre del Tema y de la Persona):</strong>
+          <div style={{ marginTop: "0.3rem", color: "#78350f" }}>
+            Tanto al crear un formulario como al subir un Excel de Microsoft Forms, es fundamental que el <strong>nombre del Tema a Capacitar</strong> (en el título del formulario o selector) y el <strong>Apellido y Nombre / Legajo de la persona</strong> estén escritos <strong>igual a como figuran en la aplicación</strong> (en <em>Temas a Capacitar</em> y en <em>Personal / Legajos</em>). De esa manera, el sistema identifica automáticamente la capacitación programada y a la persona, estampando las firmas y cerrándola sin errores.
           </div>
         </div>
       </div>
