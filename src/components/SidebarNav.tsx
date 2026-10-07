@@ -16,7 +16,8 @@ export function SidebarNav({ isSector, role }: { isSector: boolean; role: string
     { href: "/transferencias", label: "Transferencias", icon: "⇄" },
     ...(['ADMIN', 'SGI', 'RRHH'].includes(role) ? [{ href: "/auditoria", label: "Historial Eval. Inicial", icon: "📋" }] : []),
     ...(role === 'SGI' ? [{ href: "/accesos", label: "Accesos", icon: "🔐" }] : []),
-    ...(['ADMIN', 'SGI', 'RRHH'].includes(role) ? [{ href: "/configuracion", label: "Configuración Correo", icon: "⚙️" }] : [])
+    ...(['ADMIN', 'SGI', 'RRHH'].includes(role) ? [{ href: "/configuracion", label: "Configuración Correo", icon: "⚙️" }] : []),
+    { href: "/manual", label: "Manual de Uso", icon: "📖" }
   ];
 
   return (
