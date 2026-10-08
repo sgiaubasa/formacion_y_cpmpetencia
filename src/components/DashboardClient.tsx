@@ -126,7 +126,7 @@ export default function DashboardClient({ data, sectors, profiles, isSector }: P
       if (selectedEmployee !== 'Todos' && d.employeeName !== selectedEmployee) pass = false;
 
       if (selectedStatus === 'Realizadas' && d.status !== 'COMPLETED') pass = false;
-      if (selectedStatus === 'Programadas' && !(d.status === 'IN_PLAN' && !d.isRescheduled)) pass = false;
+      if (selectedStatus === 'Programadas' && !(d.status === 'COMPLETED' || (d.status === 'IN_PLAN' && !d.isRescheduled))) pass = false;
       if (selectedStatus === 'Reprogramadas' && !(d.status === 'IN_PLAN' && Boolean(d.isRescheduled))) pass = false;
       if (selectedStatus === 'Brechas' && d.status !== 'GAP') pass = false;
       
@@ -153,7 +153,7 @@ export default function DashboardClient({ data, sectors, profiles, isSector }: P
           if (month !== crossFilter.monthIndex) return false;
           
           if (crossFilter.statusKey === 'Realizadas') return d.status === 'COMPLETED';
-          if (crossFilter.statusKey === 'Programadas') return d.status === 'IN_PLAN' && !d.isRescheduled;
+          if (crossFilter.statusKey === 'Programadas') return d.status === 'COMPLETED' || (d.status === 'IN_PLAN' && !d.isRescheduled);
           if (crossFilter.statusKey === 'Reprogramadas') return d.status === 'IN_PLAN' && Boolean(d.isRescheduled);
           return true;
         });
@@ -165,7 +165,7 @@ export default function DashboardClient({ data, sectors, profiles, isSector }: P
         } else if (crossFilter.statusKey === 'Realizadas') {
           result = result.filter(d => d.status === 'COMPLETED');
         } else if (crossFilter.statusKey === 'Programadas') {
-          result = result.filter(d => d.status === 'IN_PLAN' && !d.isRescheduled);
+          result = result.filter(d => d.status === 'COMPLETED' || (d.status === 'IN_PLAN' && !d.isRescheduled));
         }
       }
     }
@@ -181,13 +181,14 @@ export default function DashboardClient({ data, sectors, profiles, isSector }: P
     return Object.keys(counts).map(key => ({ name: key, value: counts[key] })).sort((a,b) => b.value - a.value).slice(0, 8); // top 8
   }, [filteredData]);
 
-  // Chart 2: Bar (Mensual) -> Always use global filteredData (mutually exclusive states: Realizadas, Programadas, Reprogramadas)
+  // Chart 2: Bar (Mensual) -> Compara Programadas contra Realizadas, y las que están en estado Reprogramada suman solo en Reprogramadas sin duplicar Programadas
   const monthlyData = useMemo(() => {
-    const mData = MONTHS.map((m) => ({ name: m, Realizadas: 0, Programadas: 0, Reprogramadas: 0 }));
+    const mData = MONTHS.map((m) => ({ name: m, Programadas: 0, Realizadas: 0, Reprogramadas: 0 }));
     filteredData.forEach(d => {
       if (d.date) {
         const monthIndex = new Date(d.date).getMonth();
         if (d.status === 'COMPLETED') {
+          mData[monthIndex].Programadas += 1;
           mData[monthIndex].Realizadas += 1;
         } else if (d.status === 'IN_PLAN' && Boolean(d.isRescheduled)) {
           mData[monthIndex].Reprogramadas += 1;
@@ -199,12 +200,12 @@ export default function DashboardClient({ data, sectors, profiles, isSector }: P
     return mData;
   }, [filteredData]);
 
-  // KPIs -> Mutually exclusive so Reprogramadas leaves Programadas and never duplicates numbers!
+  // KPIs -> Programadas incluye las Realizadas + Programadas pendientes para comparar Realizadas contra Programadas; Reprogramadas suma solo las que están en estado reprogramado sin duplicar en Programadas
   const realizadas = detailedData.filter(d => d.status === 'COMPLETED').length;
-  const programadas = detailedData.filter(d => d.status === 'IN_PLAN' && !d.isRescheduled).length;
+  const programadas = detailedData.filter(d => d.status === 'COMPLETED' || (d.status === 'IN_PLAN' && !d.isRescheduled)).length;
   const reprogramadas = detailedData.filter(d => d.status === 'IN_PLAN' && Boolean(d.isRescheduled)).length;
   const pendientes = detailedData.filter(d => d.status === 'GAP').length;
-  const totalGeneral = realizadas + programadas + reprogramadas + pendientes;
+  const totalGeneral = programadas + reprogramadas + pendientes;
   const tasaCumplimiento = totalGeneral > 0 ? Math.round((realizadas / totalGeneral) * 100) : 0;
   
   const strokeDasharray = 125.6;
