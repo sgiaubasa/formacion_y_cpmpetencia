@@ -212,29 +212,46 @@ export default function DashboardClient({ data, sectors, profiles, isSector }: P
   const strokeDashoffset = strokeDasharray - (strokeDasharray * tasaCumplimiento) / 100;
 
   // Table: Cumplimiento PAC por Tema -> React to cross filters
-  const pacData = useMemo(() => {
-    const stats: Record<string, { realizadas: number, programadas: number, eficaces: number, evaluadas: number }> = {};
+  const { pacData, pacTotals } = useMemo(() => {
+    const stats: Record<string, { realizadas: number, programadas: number, eficaces: number }> = {};
+    let totalRealizadas = 0;
+    let totalProgramadas = 0;
+    let totalEficaces = 0;
+
     detailedData.forEach(d => {
       if (d.status === 'GAP') return; 
       if (!stats[d.trainingName]) {
-        stats[d.trainingName] = { realizadas: 0, programadas: 0, eficaces: 0, evaluadas: 0 };
+        stats[d.trainingName] = { realizadas: 0, programadas: 0, eficaces: 0 };
       }
-      if (d.status === 'IN_PLAN' || d.status === 'COMPLETED') stats[d.trainingName].programadas += 1;
-      if (d.status === 'COMPLETED') stats[d.trainingName].realizadas += 1;
-      
-      if (d.status === 'COMPLETED' && d.effectiveness && d.effectiveness !== 'PENDING') {
-        stats[d.trainingName].evaluadas += 1;
+      if (d.status === 'IN_PLAN' || d.status === 'COMPLETED') {
+        stats[d.trainingName].programadas += 1;
+        totalProgramadas += 1;
+      }
+      if (d.status === 'COMPLETED') {
+        stats[d.trainingName].realizadas += 1;
+        totalRealizadas += 1;
         if (d.effectiveness === 'EFFECTIVE') {
           stats[d.trainingName].eficaces += 1;
+          totalEficaces += 1;
         }
       }
     });
-    return Object.keys(stats).map(key => {
+
+    const rows = Object.keys(stats).map(key => {
       const s = stats[key];
       const cump = s.programadas > 0 ? (s.realizadas / s.programadas) * 100 : 0;
-      const efic = s.evaluadas > 0 ? (s.eficaces / s.evaluadas) * 100 : 0;
-      return { tema: key, cump, efic };
+      // De lo realizado, cuántas tienen la eficacia cumplida
+      const efic = s.realizadas > 0 ? (s.eficaces / s.realizadas) * 100 : 0;
+      return { tema: key, cump, efic, realizadas: s.realizadas, programadas: s.programadas, eficaces: s.eficaces };
     }).sort((a,b) => b.cump - a.cump);
+
+    return {
+      pacData: rows,
+      pacTotals: {
+        cump: totalProgramadas > 0 ? (totalRealizadas / totalProgramadas) * 100 : 0,
+        efic: totalRealizadas > 0 ? (totalEficaces / totalRealizadas) * 100 : 0
+      }
+    };
   }, [detailedData]);
 
   // Handlers
@@ -443,27 +460,45 @@ export default function DashboardClient({ data, sectors, profiles, isSector }: P
           <div style={{ display: 'flex', gap: '1rem', alignItems: 'flex-start' }}>
             {/* Table Cumplimiento */}
             <div className="card" style={{ flex: 1, padding: 0, overflow: 'hidden' }}>
-              <h3 style={{ fontSize: '1rem', textAlign: 'center', color: 'white', background: '#0078D4', padding: '0.25rem', margin: 0 }}>
+              <h3 style={{ fontSize: '1rem', textAlign: 'center', color: 'white', background: '#0078D4', padding: '0.35rem', margin: 0 }}>
                 Cumplimiento del PAC por Tema
               </h3>
-              <div style={{ maxHeight: '250px', overflowY: 'auto' }}>
-                <table className="data-table" style={{ fontSize: '0.875rem' }}>
+              <div style={{ maxHeight: '280px', overflowY: 'auto' }}>
+                <table className="data-table" style={{ fontSize: '0.875rem', borderCollapse: 'collapse', width: '100%' }}>
                   <thead>
                     <tr>
-                      <th style={{ position: 'sticky', top: 0, background: '#f8fafc' }}>Tema a capacitar</th>
-                      <th style={{ position: 'sticky', top: 0, background: '#f8fafc', textAlign: 'center' }}>% Cump.</th>
-                      <th style={{ position: 'sticky', top: 0, background: '#f8fafc', textAlign: 'center' }}>% Efic.</th>
+                      <th style={{ position: 'sticky', top: 0, background: '#f8fafc', color: '#0f172a', fontWeight: 700, borderBottom: '2px solid #0078D4', textTransform: 'none', zIndex: 2 }}>
+                        Tema a capacitar
+                      </th>
+                      <th style={{ position: 'sticky', top: 0, background: '#f8fafc', color: '#0f172a', fontWeight: 700, textAlign: 'right', borderBottom: '2px solid #0078D4', textTransform: 'none', width: '160px', zIndex: 2 }}>
+                        % Cumplimiento
+                      </th>
+                      <th style={{ position: 'sticky', top: 0, background: '#f8fafc', color: '#0f172a', fontWeight: 700, textAlign: 'right', borderBottom: '2px solid #0078D4', textTransform: 'none', width: '180px', zIndex: 2 }}>
+                        % Eficacias Cumplidas
+                      </th>
                     </tr>
                   </thead>
                   <tbody>
                     {pacData.map((r, i) => (
                       <tr key={i}>
-                        <td>{r.tema}</td>
-                        <td style={{ textAlign: 'center', background: r.cump >= 80 ? '#dcfce7' : (r.cump > 0 ? '#fef9c3' : '#fee2e2') }}>
-                          {r.cump.toFixed(1)}%
+                        <td style={{ color: '#1e293b' }}>{r.tema}</td>
+                        <td style={{
+                          textAlign: 'right',
+                          fontWeight: 600,
+                          color: '#0f172a',
+                          background: r.cump >= 80 ? '#10b981' : (r.cump > 0 ? '#fde047' : '#e05252'),
+                          borderLeft: '1px solid #e2e8f0'
+                        }}>
+                          {r.cump.toFixed(1).replace('.', ',')} %
                         </td>
-                        <td style={{ textAlign: 'center', background: r.efic >= 80 ? '#dcfce7' : (r.efic > 0 ? '#fef9c3' : '#fee2e2') }}>
-                          {r.efic.toFixed(1)}%
+                        <td style={{
+                          textAlign: 'right',
+                          fontWeight: 600,
+                          color: '#0f172a',
+                          background: r.efic >= 80 ? '#10b981' : (r.efic > 0 ? '#fde047' : '#e05252'),
+                          borderLeft: '1px solid #e2e8f0'
+                        }}>
+                          {r.efic.toFixed(1).replace('.', ',')} %
                         </td>
                       </tr>
                     ))}
@@ -471,6 +506,21 @@ export default function DashboardClient({ data, sectors, profiles, isSector }: P
                       <tr><td colSpan={3} style={{ textAlign: 'center' }}>Sin datos</td></tr>
                     )}
                   </tbody>
+                  {pacData.length > 0 && (
+                    <tfoot>
+                      <tr>
+                        <td style={{ position: 'sticky', bottom: 0, background: '#f8fafc', fontWeight: 700, color: '#0f172a', borderTop: '2px solid #cbd5e1' }}>
+                          Total
+                        </td>
+                        <td style={{ position: 'sticky', bottom: 0, background: '#f8fafc', fontWeight: 700, color: '#0f172a', textAlign: 'right', borderTop: '2px solid #cbd5e1' }}>
+                          {pacTotals.cump.toFixed(1).replace('.', ',')} %
+                        </td>
+                        <td style={{ position: 'sticky', bottom: 0, background: '#f8fafc', fontWeight: 700, color: '#0f172a', textAlign: 'right', borderTop: '2px solid #cbd5e1' }}>
+                          {pacTotals.efic.toFixed(1).replace('.', ',')} %
+                        </td>
+                      </tr>
+                    </tfoot>
+                  )}
                 </table>
               </div>
             </div>
@@ -488,11 +538,11 @@ export default function DashboardClient({ data, sectors, profiles, isSector }: P
               <table className="data-table" style={{ fontSize: '0.875rem' }}>
                 <thead>
                   <tr>
-                    <th style={{ position: 'sticky', top: 0, background: '#f8fafc' }}>Fecha</th>
-                    <th style={{ position: 'sticky', top: 0, background: '#f8fafc' }}>Empleado</th>
-                    <th style={{ position: 'sticky', top: 0, background: '#f8fafc' }}>Sector</th>
-                    <th style={{ position: 'sticky', top: 0, background: '#f8fafc' }}>Tema</th>
-                    <th style={{ position: 'sticky', top: 0, background: '#f8fafc' }}>Estado</th>
+                    <th style={{ position: 'sticky', top: 0, background: '#f8fafc', color: '#0f172a', fontWeight: 700, borderBottom: '2px solid #cbd5e1', zIndex: 2 }}>Fecha</th>
+                    <th style={{ position: 'sticky', top: 0, background: '#f8fafc', color: '#0f172a', fontWeight: 700, borderBottom: '2px solid #cbd5e1', zIndex: 2 }}>Empleado</th>
+                    <th style={{ position: 'sticky', top: 0, background: '#f8fafc', color: '#0f172a', fontWeight: 700, borderBottom: '2px solid #cbd5e1', zIndex: 2 }}>Sector</th>
+                    <th style={{ position: 'sticky', top: 0, background: '#f8fafc', color: '#0f172a', fontWeight: 700, borderBottom: '2px solid #cbd5e1', zIndex: 2 }}>Tema</th>
+                    <th style={{ position: 'sticky', top: 0, background: '#f8fafc', color: '#0f172a', fontWeight: 700, borderBottom: '2px solid #cbd5e1', zIndex: 2 }}>Estado</th>
                   </tr>
                 </thead>
                 <tbody>
