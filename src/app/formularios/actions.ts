@@ -43,6 +43,7 @@ export async function createOnlineFormAction(payload: {
   objective: string;
   instructorName: string;
   questions: OnlineFormQuestion[];
+  targetSectorName?: string | null;
 }) {
   const role = await getCurrentRole();
   const isSector = await isSectorRole(role);
@@ -52,6 +53,8 @@ export async function createOnlineFormAction(payload: {
   if (isSector && sectorRoleId) {
     const sec = await prisma.sector.findUnique({ where: { id: sectorRoleId } });
     ownerSectorName = sec?.name || null;
+  } else if (!isSector && payload.targetSectorName && payload.targetSectorName !== "GLOBAL") {
+    ownerSectorName = payload.targetSectorName;
   }
 
   const allForms = await getAllOnlineForms();

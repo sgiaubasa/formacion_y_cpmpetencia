@@ -22,7 +22,8 @@ export function FormulariosClient({
   completedResponses,
   isSector,
   mySectorName,
-  isAdmin
+  isAdmin,
+  sectors = []
 }: {
   forms: OnlineTrainingForm[];
   allTrainings: { id: number; title: string }[];
@@ -30,6 +31,7 @@ export function FormulariosClient({
   isSector: boolean;
   mySectorName: string;
   isAdmin: boolean;
+  sectors?: { id: number; name: string }[];
 }) {
   const router = useRouter();
   const [showBuilder, setShowBuilder] = useState(false);
@@ -41,6 +43,7 @@ export function FormulariosClient({
   const [description, setDescription] = useState("");
   const [trainingName, setTrainingName] = useState("");
   const [objective, setObjective] = useState("");
+  const [targetSectorName, setTargetSectorName] = useState<string>("GLOBAL");
   const [instructorName, setInstructorName] = useState(
     mySectorName ? `Instructor — ${mySectorName}` : "Montes Sergio (Leg. 11739)"
   );
@@ -97,7 +100,8 @@ export function FormulariosClient({
         trainingName,
         objective,
         instructorName,
-        questions: cleanQuestions
+        questions: cleanQuestions,
+        targetSectorName: isAdmin ? targetSectorName : undefined
       });
 
       if (res.ok) {
@@ -106,6 +110,7 @@ export function FormulariosClient({
         setDescription("");
         setTrainingName("");
         setObjective("");
+        setTargetSectorName("GLOBAL");
         router.refresh();
       }
     } finally {
@@ -273,6 +278,27 @@ export function FormulariosClient({
                 placeholder="Breve introducción del cuestionario..."
               />
             </div>
+
+            {isAdmin && sectors.length > 0 && (
+              <div>
+                <label className="form-label">Sector Propietario / Visible para:</label>
+                <select
+                  className="form-input"
+                  value={targetSectorName}
+                  onChange={(e) => setTargetSectorName(e.target.value)}
+                >
+                  <option value="GLOBAL">Solo Administradores (SGI / RRHH / No visible a sectores)</option>
+                  {sectors.map((s) => (
+                    <option key={s.id} value={s.name}>
+                      Sector: {s.name}
+                    </option>
+                  ))}
+                </select>
+                <span style={{ fontSize: "0.75rem", color: "#64748b" }}>
+                  Si seleccionás un sector específico (ej: Asistencia Vial), solo ese sector y los administradores verán este formulario.
+                </span>
+              </div>
+            )}
           </div>
 
           <h4 style={{ color: "#0d8383", marginBottom: "0.75rem" }}>

@@ -191,7 +191,6 @@ export async function getOnlineFormsForSector(
   }
   return all.filter(
     (f) =>
-      f.id === "manual-uso-sgcysv" ||
-      (f.ownerSectorName && allowedSectors.includes(f.ownerSectorName))
+      Boolean(f.ownerSectorName && allowedSectors.includes(f.ownerSectorName))
   );
 }

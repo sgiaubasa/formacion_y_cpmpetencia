@@ -21,9 +21,10 @@ export default async function FormulariosPage() {
     }
   }
 
-  const [forms, allTrainings] = await Promise.all([
+  const [forms, allTrainings, sectors] = await Promise.all([
     getOnlineFormsForSector(allowedSectors),
-    getTrainingsForSectors(allowedSectors)
+    getTrainingsForSectors(allowedSectors),
+    prisma.sector.findMany({ select: { id: true, name: true }, orderBy: { name: "asc" } })
   ]);
 
   const formTrainingTitles = forms.map((f) => f.trainingName);
@@ -65,6 +66,7 @@ export default async function FormulariosPage() {
         isSector={isSector}
         mySectorName={mySectorName}
         isAdmin={isAdmin}
+        sectors={sectors}
       />
     </div>
   );
