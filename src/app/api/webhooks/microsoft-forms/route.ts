@@ -14,6 +14,20 @@ function normalizeStr(s: string): string {
     .trim();
 }
 
+function cleanTopic(s: string): string {
+  return normalizeStr(s)
+    .replace(/\baubasa\b/g, "")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function isTrainingMatch(a: string, b: string): boolean {
+  const normA = cleanTopic(a);
+  const normB = cleanTopic(b);
+  if (!normA || !normB) return false;
+  return normA === normB || normA.includes(normB) || normB.includes(normA);
+}
+
 export function buildSvgSignatureDataUri(
   signerName: string,
   subtitle: string,
@@ -151,16 +165,20 @@ async function processSingleFormItem(
     orderBy: { id: "desc" }
   });
 
-  const targetTrainingNorm = normalizeStr(trainingNameRaw);
+  // Buscar el título oficial/canónico en el catálogo de capacitaciones
+  const allTrainings = await prisma.training.findMany({ select: { title: true } });
+  const canonicalTraining = allTrainings.find((t) => isTrainingMatch(t.title, trainingNameRaw));
+  const finalTrainingTitle = canonicalTraining?.title || trainingNameRaw;
+
   const matchedPending = existingRecords.find(
     (r) =>
       (r.status === "IN_PLAN" || r.status === "GAP") &&
-      normalizeStr(r.trainingName) === targetTrainingNorm
+      isTrainingMatch(r.trainingName, trainingNameRaw)
   );
   const matchedCompleted = existingRecords.find(
     (r) =>
       r.status === "COMPLETED" &&
-      normalizeStr(r.trainingName) === targetTrainingNorm
+      isTrainingMatch(r.trainingName, trainingNameRaw)
   );
 
   let updatedOrCreated;
@@ -197,9 +215,10 @@ async function processSingleFormItem(
     updatedOrCreated = await prisma.employeeTrainingRecord.create({
       data: {
         employeeId: employee.id,
-        trainingName: trainingNameRaw,
+        trainingName: finalTrainingTitle,
         objective: objectiveRaw || null,
         status: "COMPLETED",
+        scheduledDate: completedDate,
         completedAt: completedDate,
         score: scoreRaw,
         instructorName: instructorNameRaw,

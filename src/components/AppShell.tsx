@@ -15,8 +15,13 @@ export function AppShell({
   children: React.ReactNode;
 }) {
   const pathname = usePathname();
+  const isPlanillaPrint = pathname?.startsWith("/plan-anual/planilla");
   const isStandaloneForm =
     pathname?.startsWith("/responder") || pathname?.startsWith("/firma");
+
+  if (isPlanillaPrint) {
+    return <>{children}</>;
+  }
 
   if (isStandaloneForm) {
     return (

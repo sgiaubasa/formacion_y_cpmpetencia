@@ -18,7 +18,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const router = useRouter();
   const pathname = usePathname();
   const isPublicFirmaRoute =
-    pathname?.startsWith("/firma") || pathname?.startsWith("/responder");
+    pathname?.startsWith("/firma") ||
+    pathname?.startsWith("/responder") ||
+    pathname?.startsWith("/plan-anual/planilla");
 
   const [isRecovery, setIsRecovery] = useState(false);
   const [newPassword, setNewPassword] = useState("");
@@ -27,7 +29,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     if (
       typeof window !== "undefined" &&
       (window.location.pathname.startsWith("/firma") ||
-        window.location.pathname.startsWith("/responder"))
+        window.location.pathname.startsWith("/responder") ||
+        window.location.pathname.startsWith("/plan-anual/planilla"))
     ) {
       setLoading(false);
       return;
@@ -58,7 +61,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       if (
         typeof window !== "undefined" &&
         (window.location.pathname.startsWith("/firma") ||
-          window.location.pathname.startsWith("/responder"))
+          window.location.pathname.startsWith("/responder") ||
+          window.location.pathname.startsWith("/plan-anual/planilla"))
       ) {
         return;
       }

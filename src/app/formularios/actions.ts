@@ -22,6 +22,20 @@ function normalizeStr(s: string): string {
     .trim();
 }
 
+function cleanTopic(s: string): string {
+  return normalizeStr(s)
+    .replace(/\baubasa\b/g, "")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function isTrainingMatch(a: string, b: string): boolean {
+  const normA = cleanTopic(a);
+  const normB = cleanTopic(b);
+  if (!normA || !normB) return false;
+  return normA === normB || normA.includes(normB) || normB.includes(normA);
+}
+
 export async function createOnlineFormAction(payload: {
   title: string;
   description: string;
@@ -211,16 +225,20 @@ export async function submitOnlineFormResponseAction(payload: {
     orderBy: { id: "desc" }
   });
 
-  const targetTrainingNorm = normalizeStr(form.trainingName);
+  // Buscar el título oficial/canónico en el catálogo de capacitaciones
+  const allTrainings = await prisma.training.findMany({ select: { title: true } });
+  const canonicalTraining = allTrainings.find((t) => isTrainingMatch(t.title, form.trainingName));
+  const finalTrainingTitle = canonicalTraining?.title || form.trainingName;
+
   const matchedPending = existingRecords.find(
     (r) =>
       (r.status === "IN_PLAN" || r.status === "GAP") &&
-      normalizeStr(r.trainingName) === targetTrainingNorm
+      isTrainingMatch(r.trainingName, form.trainingName)
   );
   const matchedCompleted = existingRecords.find(
     (r) =>
       r.status === "COMPLETED" &&
-      normalizeStr(r.trainingName) === targetTrainingNorm
+      isTrainingMatch(r.trainingName, form.trainingName)
   );
 
   let record;
@@ -254,9 +272,10 @@ export async function submitOnlineFormResponseAction(payload: {
     record = await prisma.employeeTrainingRecord.create({
       data: {
         employeeId: employee.id,
-        trainingName: form.trainingName,
+        trainingName: finalTrainingTitle,
         objective: form.objective || null,
         status: "COMPLETED",
+        scheduledDate: completedDate,
         completedAt: completedDate,
         score: scoreStr,
         instructorName: finalInstructorName,
