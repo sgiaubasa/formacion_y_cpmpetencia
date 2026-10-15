@@ -48,6 +48,7 @@ export default function DashboardClient({ data, sectors, profiles, isSector }: P
   const [selectedSector, setSelectedSector] = useState<string>('Todos');
   const [selectedProfile, setSelectedProfile] = useState<string>('Todos');
   const [selectedEmployee, setSelectedEmployee] = useState<string>('Todos');
+  const [selectedTopic, setSelectedTopic] = useState<string>('Todos');
 
   const [crossFilter, setCrossFilter] = useState<CrossFilter | null>(null);
 
@@ -104,6 +105,19 @@ export default function DashboardClient({ data, sectors, profiles, isSector }: P
     return Array.from(emps).sort();
   }, [data, selectedSector, selectedProfile]);
 
+  // Cascading logic for Topics
+  const availableTopics = useMemo(() => {
+    const topics = new Set<string>();
+    data.forEach(d => {
+      let pass = true;
+      if (selectedSector !== 'Todos' && d.sectorId.toString() !== selectedSector) pass = false;
+      if (selectedProfile !== 'Todos' && d.profileId?.toString() !== selectedProfile) pass = false;
+      if (selectedEmployee !== 'Todos' && d.employeeName !== selectedEmployee) pass = false;
+      if (pass && d.trainingName) topics.add(d.trainingName);
+    });
+    return Array.from(topics).sort((a, b) => a.localeCompare(b, 'es'));
+  }, [data, selectedSector, selectedProfile, selectedEmployee]);
+
   // Reset dependent filters if they become invalid
   React.useEffect(() => {
     if (selectedProfile !== 'Todos' && !availableProfiles.some(p => p.id.toString() === selectedProfile)) {
@@ -117,8 +131,14 @@ export default function DashboardClient({ data, sectors, profiles, isSector }: P
     }
   }, [availableEmployees, selectedEmployee]);
 
-  // Apply GLOBAL filters (Dropdowns)
-  const filteredData = useMemo(() => {
+  React.useEffect(() => {
+    if (selectedTopic !== 'Todos' && !availableTopics.includes(selectedTopic)) {
+      setSelectedTopic('Todos');
+    }
+  }, [availableTopics, selectedTopic]);
+
+  // Apply GLOBAL filters EXCEPT topic (used for PAC table so all topics stay visible)
+  const baseFilteredData = useMemo(() => {
     return data.filter(d => {
       let pass = true;
       if (selectedSector !== 'Todos' && d.sectorId.toString() !== selectedSector) pass = false;
@@ -141,6 +161,12 @@ export default function DashboardClient({ data, sectors, profiles, isSector }: P
       return pass;
     });
   }, [data, selectedYear, selectedMonth, selectedStatus, selectedSector, selectedProfile, selectedEmployee]);
+
+  // Apply GLOBAL filters INCLUDING topic (used for BarChart, detailedData, and KPIs)
+  const filteredData = useMemo(() => {
+    if (selectedTopic === 'Todos') return baseFilteredData;
+    return baseFilteredData.filter(d => d.trainingName === selectedTopic);
+  }, [baseFilteredData, selectedTopic]);
 
   // Apply CROSS filters (Chart Clicks)
   const detailedData = useMemo(() => {
@@ -211,14 +237,14 @@ export default function DashboardClient({ data, sectors, profiles, isSector }: P
   const strokeDasharray = 125.6;
   const strokeDashoffset = strokeDasharray - (strokeDasharray * tasaCumplimiento) / 100;
 
-  // Table: Cumplimiento PAC por Tema -> React to cross filters
+  // Table: Cumplimiento PAC por Tema -> Computed from baseFilteredData so all topics remain visible
   const { pacData, pacTotals } = useMemo(() => {
     const stats: Record<string, { realizadas: number, programadas: number, eficaces: number }> = {};
     let totalRealizadas = 0;
     let totalProgramadas = 0;
     let totalEficaces = 0;
 
-    detailedData.forEach(d => {
+    baseFilteredData.forEach(d => {
       if (d.status === 'GAP') return; 
       if (!stats[d.trainingName]) {
         stats[d.trainingName] = { realizadas: 0, programadas: 0, eficaces: 0 };
@@ -252,9 +278,17 @@ export default function DashboardClient({ data, sectors, profiles, isSector }: P
         efic: totalRealizadas > 0 ? (totalEficaces / totalRealizadas) * 100 : 0
       }
     };
-  }, [detailedData]);
+  }, [baseFilteredData]);
 
   // Handlers
+  const handleTopicRowClick = (tema: string) => {
+    if (selectedTopic === tema) {
+      setSelectedTopic('Todos');
+    } else {
+      setSelectedTopic(tema);
+    }
+  };
+
   const handleBarClick = (data: any, index: number, key: string) => {
     if (crossFilter?.source === 'BarChart' && crossFilter.monthIndex === index && crossFilter.statusKey === key) {
       setCrossFilter(null);
@@ -264,10 +298,10 @@ export default function DashboardClient({ data, sectors, profiles, isSector }: P
   };
 
   const handlePieClick = (data: any) => {
-    if (crossFilter?.source === 'PieChart' && crossFilter.tema === data.name) {
-      setCrossFilter(null);
+    if (selectedTopic === data.name) {
+      setSelectedTopic('Todos');
     } else {
-      setCrossFilter({ source: 'PieChart', tema: data.name });
+      setSelectedTopic(data.name);
     }
   };
 
@@ -339,6 +373,25 @@ export default function DashboardClient({ data, sectors, profiles, isSector }: P
             </select>
           </div>
 
+          <div>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <label style={{ fontSize: '0.875rem', fontWeight: 'bold', color: 'var(--primary-color)' }}>Tema a capacitar</label>
+              {selectedTopic !== 'Todos' && (
+                <button
+                  type="button"
+                  onClick={() => setSelectedTopic('Todos')}
+                  style={{ background: 'none', border: 'none', color: '#0078D4', fontSize: '0.72rem', cursor: 'pointer', textDecoration: 'underline' }}
+                >
+                  Limpiar
+                </button>
+              )}
+            </div>
+            <select value={selectedTopic} onChange={e => setSelectedTopic(e.target.value)} className="form-input">
+              <option value="Todos">Todos los temas ({availableTopics.length})</option>
+              {availableTopics.map(t => <option key={t} value={t}>{t}</option>)}
+            </select>
+          </div>
+
           <div style={{ marginTop: '0.75rem', display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
             <div style={{ display: 'flex', gap: '0.5rem' }}>
               <div
@@ -394,7 +447,7 @@ export default function DashboardClient({ data, sectors, profiles, isSector }: P
                 <PieChart>
                   <Pie data={donutData} cx="50%" cy="50%" innerRadius={40} outerRadius={70} dataKey="value" stroke="none" onClick={handlePieClick}>
                     {donutData.map((entry, index) => (
-                      <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} opacity={(crossFilter?.source === 'PieChart' && crossFilter.tema !== entry.name) ? 0.3 : 1} />
+                      <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} opacity={(selectedTopic === entry.name) ? 1 : (selectedTopic !== 'Todos' ? 0.35 : 1)} />
                     ))}
                   </Pie>
                   <Tooltip />
@@ -408,10 +461,44 @@ export default function DashboardClient({ data, sectors, profiles, isSector }: P
         {/* Right Dashboard Area */}
         <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: '1rem', minWidth: 0 }}>
           
+          {/* Banner de Tema Activo */}
+          {selectedTopic !== 'Todos' && (
+            <div
+              style={{
+                backgroundColor: '#eff6ff',
+                border: '1px solid #93c5fd',
+                borderRadius: '8px',
+                padding: '0.55rem 1rem',
+                display: 'flex',
+                justifyContent: 'space-between',
+                alignItems: 'center',
+                boxShadow: '0 1px 3px rgba(0,0,0,0.06)'
+              }}
+            >
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem', color: '#1e40af', fontSize: '0.88rem' }}>
+                <span style={{ fontSize: '1.15rem' }}>🎯</span>
+                <span>
+                  Filtrando gráfico de barras y personas por: <strong>{selectedTopic}</strong>
+                </span>
+              </div>
+              <button
+                type="button"
+                onClick={() => setSelectedTopic('Todos')}
+                className="btn btn-secondary"
+                style={{ padding: '0.25rem 0.75rem', fontSize: '0.78rem', backgroundColor: '#ffffff', color: '#1e40af', borderColor: '#93c5fd', fontWeight: 600 }}
+              >
+                ✕ Quitar filtro de tema
+              </button>
+            </div>
+          )}
+
           {/* Top Bar Chart */}
           <div className="card" style={{ height: '300px' }}>
             <h3 style={{ fontSize: '1rem', textAlign: 'center', color: 'white', background: '#0078D4', padding: '0.25rem', marginTop: '-1rem', marginLeft: '-1rem', marginRight: '-1rem', marginBottom: '1rem', borderRadius: '4px 4px 0 0' }}>
-              Capacitaciones Realizadas / Programadas / Reprogramadas Mensualmente (Click para filtrar)
+              {selectedTopic === 'Todos'
+                ? 'Capacitaciones Realizadas / Programadas / Reprogramadas Mensualmente (Click para filtrar)'
+                : `Capacitaciones Mensuales: "${selectedTopic}" (Click para filtrar)`
+              }
             </h3>
             <ResponsiveContainer width="100%" height="90%">
               <BarChart data={monthlyData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
@@ -479,29 +566,51 @@ export default function DashboardClient({ data, sectors, profiles, isSector }: P
                     </tr>
                   </thead>
                   <tbody>
-                    {pacData.map((r, i) => (
-                      <tr key={i}>
-                        <td style={{ color: '#1e293b' }}>{r.tema}</td>
-                        <td style={{
-                          textAlign: 'right',
-                          fontWeight: 600,
-                          color: '#0f172a',
-                          background: r.cump >= 80 ? '#10b981' : (r.cump > 0 ? '#fde047' : '#e05252'),
-                          borderLeft: '1px solid #e2e8f0'
-                        }}>
-                          {r.cump.toFixed(1).replace('.', ',')} %
-                        </td>
-                        <td style={{
-                          textAlign: 'right',
-                          fontWeight: 600,
-                          color: '#0f172a',
-                          background: r.efic >= 80 ? '#10b981' : (r.efic > 0 ? '#fde047' : '#e05252'),
-                          borderLeft: '1px solid #e2e8f0'
-                        }}>
-                          {r.efic.toFixed(1).replace('.', ',')} %
-                        </td>
-                      </tr>
-                    ))}
+                    {pacData.map((r, i) => {
+                      const isSelected = selectedTopic === r.tema;
+                      return (
+                        <tr
+                          key={i}
+                          onClick={() => handleTopicRowClick(r.tema)}
+                          style={{
+                            cursor: 'pointer',
+                            backgroundColor: isSelected ? '#dbeafe' : undefined,
+                            borderLeft: isSelected ? '4px solid #0078D4' : 'none',
+                            transition: 'background-color 0.15s ease'
+                          }}
+                          title={isSelected ? "Click para quitar el filtro de este tema" : "Click para filtrar el gráfico de barras y las personas por este tema"}
+                        >
+                          <td style={{ color: isSelected ? '#004B8B' : '#1e293b', fontWeight: isSelected ? 700 : 500 }}>
+                            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '0.5rem' }}>
+                              <span>{r.tema}</span>
+                              {isSelected && (
+                                <span style={{ fontSize: '0.68rem', backgroundColor: '#0078D4', color: 'white', padding: '1px 6px', borderRadius: '4px', whiteSpace: 'nowrap' }}>
+                                  ✓ Activo
+                                </span>
+                              )}
+                            </div>
+                          </td>
+                          <td style={{
+                            textAlign: 'right',
+                            fontWeight: 600,
+                            color: '#0f172a',
+                            background: r.cump >= 80 ? '#10b981' : (r.cump > 0 ? '#fde047' : '#e05252'),
+                            borderLeft: '1px solid #e2e8f0'
+                          }}>
+                            {r.cump.toFixed(1).replace('.', ',')} %
+                          </td>
+                          <td style={{
+                            textAlign: 'right',
+                            fontWeight: 600,
+                            color: '#0f172a',
+                            background: r.efic >= 80 ? '#10b981' : (r.efic > 0 ? '#fde047' : '#e05252'),
+                            borderLeft: '1px solid #e2e8f0'
+                          }}>
+                            {r.efic.toFixed(1).replace('.', ',')} %
+                          </td>
+                        </tr>
+                      );
+                    })}
                     {pacData.length === 0 && (
                       <tr><td colSpan={3} style={{ textAlign: 'center' }}>Sin datos</td></tr>
                     )}
@@ -523,13 +632,18 @@ export default function DashboardClient({ data, sectors, profiles, isSector }: P
                   )}
                 </table>
               </div>
+              <div style={{ padding: '0.4rem 0.75rem', backgroundColor: '#f8fafc', borderTop: '1px solid #e2e8f0', fontSize: '0.72rem', color: '#64748b', textAlign: 'center' }}>
+                💡 Haz clic en cualquier tema para filtrar el gráfico de barras y el listado de personas
+              </div>
             </div>
           </div>
           
           {/* Detailed Records Table */}
-          <div className="card" style={{ padding: 0, overflow: 'hidden', borderLeft: crossFilter ? '4px solid var(--secondary-color)' : 'none' }}>
+          <div className="card" style={{ padding: 0, overflow: 'hidden', borderLeft: (crossFilter || selectedTopic !== 'Todos') ? '4px solid var(--secondary-color)' : 'none' }}>
             <h3 style={{ fontSize: '1rem', textAlign: 'center', color: 'white', background: '#004B8B', padding: '0.25rem', margin: 0, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <span style={{ paddingLeft: '1rem' }}>Listado de Empleados (Impactado por Filtros Gráficos)</span>
+              <span style={{ paddingLeft: '1rem' }}>
+                Listado de Empleados {selectedTopic !== 'Todos' ? `— Tema: "${selectedTopic}"` : '(Impactado por Filtros)'}
+              </span>
               <span style={{ paddingRight: '1rem', fontSize: '0.75rem', background: '#ffffff33', padding: '2px 8px', borderRadius: '10px' }}>
                 {detailedData.length} registros
               </span>
