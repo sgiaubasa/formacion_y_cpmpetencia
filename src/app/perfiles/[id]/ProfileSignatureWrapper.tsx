@@ -12,9 +12,9 @@ export function ProfileSignatureWrapper(props: {
   existingEmail?: string | null,
   canSign: boolean,
 }) {
-  const handleSave = async (role: string, signatureData: string) => {
+  const handleSave = async (role: string, signatureData: string, signerName: string) => {
     try {
-      await saveProfileSignature(props.profileId, role, signatureData);
+      await saveProfileSignature(props.profileId, role, signatureData, signerName);
       alert("Firma guardada correctamente.");
     } catch (e: any) {
       alert("Error al guardar la firma: " + e.message);
