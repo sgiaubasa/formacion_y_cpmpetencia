@@ -30,19 +30,25 @@ export default async function PlanillaAsistenciaPage({ params, searchParams }: {
     displayDate = new Date(record.scheduledDate).toLocaleDateString('es-AR');
   }
 
+  // Firma del Participante
   const employeeSignature = record.employeeSignature || (record.status === 'COMPLETED' ? buildSvgSignatureDataUri(
     record.employee.name,
     `Legajo ${record.employee.legajo} — Realización Validada`,
     `Fecha: ${displayDate || 'Validado'}`
   ) : null);
 
-  const instructorName = record.instructorName || (record.status === 'COMPLETED' ? "Montes Sergio (Leg. 11739)" : null);
+  // Firma del Instructor: ÚNICAMENTE si está especificado en el registro (NO inventar instructor si es null)
+  const instructorName = record.instructorName?.trim() || null;
 
-  const instructorSignature = record.instructorSignature || (record.status === 'COMPLETED' ? buildSvgSignatureDataUri(
-    record.instructorName || "Montes Sergio",
-    "Legajo 11739 — Instructor SGI AUBASA",
-    `Fecha: ${displayDate || 'Validado'}`
-  ) : null);
+  let instructorSignature = record.instructorSignature;
+  if (!instructorSignature && instructorName) {
+    const isMontes = instructorName.toLowerCase().includes("montes");
+    instructorSignature = buildSvgSignatureDataUri(
+      instructorName,
+      isMontes ? "Legajo 11739 — Instructor SGI AUBASA" : "Instructor — Firma Digital Validada",
+      `Fecha: ${displayDate || 'Validado'}`
+    );
+  }
 
   return (
     <div style={{ backgroundColor: 'white', minHeight: '100vh', padding: '20px', fontFamily: 'Arial, sans-serif' }}>
@@ -147,6 +153,11 @@ export default async function PlanillaAsistenciaPage({ params, searchParams }: {
             <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', marginLeft: '10px' }}>
               <img src={instructorSignature} alt="Firma Instructor" style={{ maxHeight: '60px', borderBottom: '1px solid black', padding: '0 50px' }} />
               {instructorName && <span style={{ fontSize: '12px', marginTop: '5px' }}>{instructorName}</span>}
+            </div>
+          ) : instructorName ? (
+            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', marginLeft: '10px' }}>
+              <span>____________________________________________________</span>
+              <span style={{ fontSize: '12px', marginTop: '5px' }}>{instructorName}</span>
             </div>
           ) : (
             <span>____________________________________________________</span>

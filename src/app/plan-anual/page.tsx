@@ -515,7 +515,7 @@ export default async function PlanAnualPage({ searchParams }: { searchParams: Pr
                             </a>
                           )}
                           <div style={{ fontSize: '0.72rem', color: '#475569' }}>
-                            Firma Participante: {r.employeeSignature ? '✅' : '✓ Validada'} | Instructor: {r.instructorSignature ? '✅' : '✓ Validada'}
+                            Firma Participante: {r.employeeSignature ? '✅' : '✓ Validada'} | Instructor: {r.instructorSignature || r.instructorName ? '✅' : '⏳ Pendiente'}
                           </div>
                         </div>
                         {r.effectiveness === 'PENDING' && (
