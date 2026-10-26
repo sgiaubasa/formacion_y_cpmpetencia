@@ -95,31 +95,7 @@ const DEFAULT_MANUAL_FORM: OnlineTrainingForm = {
 };
 
 export async function migrateSgiInstructorRecordsToMontesSergio() {
-  try {
-    const sgiRecords = await prisma.employeeTrainingRecord.findMany({
-      where: {
-        instructorName: { contains: "SGI", mode: "insensitive" }
-      }
-    });
-
-    for (const r of sgiRecords) {
-      const dateFormatted = (r.completedAt ? new Date(r.completedAt) : new Date()).toLocaleDateString("es-AR");
-      const newSig = buildSvgSignatureDataUri(
-        "Montes Sergio",
-        "Legajo 11739 — Instructor SGI AUBASA",
-        `Fecha: ${dateFormatted}`
-      );
-      await prisma.employeeTrainingRecord.update({
-        where: { id: r.id },
-        data: {
-          instructorName: "Montes Sergio (Leg. 11739)",
-          instructorSignature: newSig
-        }
-      });
-    }
-  } catch {
-    // Ignorar errores silenciosamente
-  }
+  // Deprecated: No-op para respetar la jerarquía de instructores por sector.
 }
 
 export async function getAllOnlineForms(): Promise<OnlineTrainingForm[]> {
