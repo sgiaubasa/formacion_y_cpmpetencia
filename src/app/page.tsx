@@ -12,14 +12,20 @@ export default async function Home() {
 
   let allowedSectors: string[] | null = null;
   if (isSector && sectorRoleId) {
-    const mySector = await prisma.sector.findUnique({ where: { id: sectorRoleId } });
+    const mySector = await prisma.sector.findUnique({
+      where: { id: sectorRoleId },
+      select: { name: true }
+    });
     if (mySector) {
       allowedSectors = await getAllowedSectorNames(role, mySector.name);
     }
   }
 
   // Fetch all sectors and profiles for filter dropdowns
-  const sectors = await prisma.sector.findMany({ orderBy: { name: 'asc' } });
+  const sectors = await prisma.sector.findMany({
+    select: { id: true, name: true },
+    orderBy: { name: 'asc' }
+  });
   const profiles = await getUniqueActiveProfiles(allowedSectors);
 
   // Filter records based on role (RRHH/SGI/Admin sees all, Sector sees only their sector and trainings of their sector)
@@ -32,14 +38,33 @@ export default async function Home() {
       }
     : {};
 
-  // Fetch training records
+  // Fetch training records with only required fields to minimize memory & payload
   const rawRecords = await prisma.employeeTrainingRecord.findMany({
     where: whereClause,
-    include: {
+    select: {
+      id: true,
+      status: true,
+      effectiveness: true,
+      trainingName: true,
+      scheduledDate: true,
+      rescheduledDate: true,
+      completedAt: true,
       employee: {
-        include: {
-          sector: true,
-          jobProfile: true
+        select: {
+          id: true,
+          name: true,
+          sector: {
+            select: {
+              id: true,
+              name: true
+            }
+          },
+          jobProfile: {
+            select: {
+              id: true,
+              title: true
+            }
+          }
         }
       }
     }
@@ -54,10 +79,10 @@ export default async function Home() {
       status: record.status, // "COMPLETED", "IN_PLAN", "GAP"
       effectiveness: record.effectiveness, // "PENDING", "EFFECTIVE", "INEFFECTIVE"
       trainingName: record.trainingName,
-      date: dateToUse ? dateToUse.toISOString() : null,
-      scheduledDate: record.scheduledDate ? record.scheduledDate.toISOString() : null,
-      rescheduledDate: record.rescheduledDate ? record.rescheduledDate.toISOString() : null,
-      completedAt: record.completedAt ? record.completedAt.toISOString() : null,
+      date: dateToUse ? dateToUse.toISOString().split('T')[0] : null,
+      scheduledDate: record.scheduledDate ? record.scheduledDate.toISOString().split('T')[0] : null,
+      rescheduledDate: record.rescheduledDate ? record.rescheduledDate.toISOString().split('T')[0] : null,
+      completedAt: record.completedAt ? record.completedAt.toISOString().split('T')[0] : null,
       isRescheduled: Boolean(record.rescheduledDate),
       employeeName: record.employee.name,
       employeeId: record.employee.id,

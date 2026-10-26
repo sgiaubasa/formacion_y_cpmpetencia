@@ -8,6 +8,11 @@ export async function getUniqueActiveProfiles(allowedSectors?: string[] | null) 
 
   const perfiles = await prisma.jobProfile.findMany({
     where: whereClause,
+    select: {
+      id: true,
+      title: true,
+      gerencia: true
+    },
     orderBy: { title: 'asc' }
   });
 
