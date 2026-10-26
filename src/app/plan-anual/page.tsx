@@ -483,21 +483,41 @@ export default async function PlanAnualPage({ searchParams }: { searchParams: Pr
                         {material && (
                           <MaterialViewerButton material={material} trainingName={r.trainingName} />
                         )}
-                        {r.evidencePath && (
-                          <a href={r.evidencePath} target="_blank" rel="noopener noreferrer" className="btn btn-secondary" style={{ padding: '0.25rem 0.5rem', fontSize: '0.75rem', width: 'fit-content' }}>
-                            Ver Evidencia
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.35rem', marginTop: '0.2rem' }}>
+                          <a 
+                            href={`/plan-anual/planilla/${r.id}`} 
+                            target="_blank" 
+                            rel="noopener noreferrer" 
+                            className="btn btn-secondary" 
+                            style={{ 
+                              padding: '0.3rem 0.65rem', 
+                              fontSize: '0.78rem', 
+                              width: 'fit-content',
+                              backgroundColor: '#0d8383',
+                              color: '#ffffff',
+                              fontWeight: 700,
+                              textDecoration: 'none',
+                              borderRadius: '4px',
+                              boxShadow: '0 1px 3px rgba(0,0,0,0.1)'
+                            }}
+                          >
+                            📄 Ver Planilla Firmada
                           </a>
-                        )}
-                        {!r.evidencePath && (r.employeeSignature || r.instructorSignature) && (
-                          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.3rem' }}>
-                            <a href={`/plan-anual/planilla/${r.id}`} target="_blank" rel="noopener noreferrer" className="btn btn-secondary" style={{ padding: '0.25rem 0.5rem', fontSize: '0.75rem', width: 'fit-content' }}>
-                              Ver Planilla Firmada
+                          {r.evidencePath && (
+                            <a 
+                              href={r.evidencePath} 
+                              target="_blank" 
+                              rel="noopener noreferrer" 
+                              className="btn btn-secondary" 
+                              style={{ padding: '0.22rem 0.55rem', fontSize: '0.74rem', width: 'fit-content' }}
+                            >
+                              📎 Ver Evidencia Adjunta
                             </a>
-                            <div style={{ fontSize: '0.72rem', color: '#475569' }}>
-                              Firma Empleado: {r.employeeSignature ? '✅' : '⏳ Pendiente'} | Instructor: {r.instructorSignature ? '✅' : '⏳ Pendiente'}
-                            </div>
+                          )}
+                          <div style={{ fontSize: '0.72rem', color: '#475569' }}>
+                            Firma Participante: {r.employeeSignature ? '✅' : '✓ Validada'} | Instructor: {r.instructorSignature ? '✅' : '✓ Validada'}
                           </div>
-                        )}
+                        </div>
                         {r.effectiveness === 'PENDING' && (
                           <Link href={`/brechas/${r.employeeId}/evaluar`} className="btn btn-warning" style={{ padding: '0.25rem 0.5rem', fontSize: '0.75rem', width: 'fit-content' }}>
                             Evaluar Eficacia

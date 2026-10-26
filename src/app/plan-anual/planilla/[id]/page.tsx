@@ -1,5 +1,6 @@
 import { prisma } from "@/lib/prisma";
 import { notFound } from "next/navigation";
+import { buildSvgSignatureDataUri } from "@/app/api/webhooks/microsoft-forms/route";
 
 export default async function PlanillaAsistenciaPage({ params, searchParams }: { params: Promise<{ id: string }>, searchParams: Promise<{ date?: string }> }) {
   const resolvedParams = await params;
@@ -29,6 +30,20 @@ export default async function PlanillaAsistenciaPage({ params, searchParams }: {
     displayDate = new Date(record.scheduledDate).toLocaleDateString('es-AR');
   }
 
+  const employeeSignature = record.employeeSignature || (record.status === 'COMPLETED' ? buildSvgSignatureDataUri(
+    record.employee.name,
+    `Legajo ${record.employee.legajo} — Realización Validada`,
+    `Fecha: ${displayDate || 'Validado'}`
+  ) : null);
+
+  const instructorName = record.instructorName || (record.status === 'COMPLETED' ? "Montes Sergio (Leg. 11739)" : null);
+
+  const instructorSignature = record.instructorSignature || (record.status === 'COMPLETED' ? buildSvgSignatureDataUri(
+    record.instructorName || "Montes Sergio",
+    "Legajo 11739 — Instructor SGI AUBASA",
+    `Fecha: ${displayDate || 'Validado'}`
+  ) : null);
+
   return (
     <div style={{ backgroundColor: 'white', minHeight: '100vh', padding: '20px', fontFamily: 'Arial, sans-serif' }}>
       {/* Botón de impresión oculto al imprimir */}
@@ -36,8 +51,6 @@ export default async function PlanillaAsistenciaPage({ params, searchParams }: {
         <button 
           id="print-button"
           style={{ padding: '10px 20px', fontSize: '16px', cursor: 'pointer', backgroundColor: 'var(--teal-color)', color: 'white', border: 'none', borderRadius: '5px' }}
-          // Uso de dangerouslySetInnerHTML para el onclick de javascript porque es un server component, 
-          // la mejor forma es un Client Component pequeñito o simplemente inyectar un script.
         >
           🖨️ Imprimir Planilla
         </button>
@@ -113,7 +126,7 @@ export default async function PlanillaAsistenciaPage({ params, searchParams }: {
               <td style={{ border: '1px solid black', padding: '8px' }}>{record.employee.name}</td>
               <td style={{ border: '1px solid black', padding: '8px' }}>{record.employee.sector.name}</td>
               <td style={{ border: '1px solid black', padding: '8px', textAlign: 'center' }}>
-                {record.employeeSignature && <img src={record.employeeSignature} alt="Firma" style={{ maxHeight: '40px' }} />}
+                {employeeSignature && <img src={employeeSignature} alt="Firma" style={{ maxHeight: '40px' }} />}
               </td>
             </tr>
             {/* Filas vacías adicionales */}
@@ -130,10 +143,10 @@ export default async function PlanillaAsistenciaPage({ params, searchParams }: {
 
         <div style={{ marginBottom: '50px', display: 'flex', alignItems: 'center', gap: '10px' }}>
           Instructor (Firma y Aclaración): 
-          {record.instructorSignature ? (
+          {instructorSignature ? (
             <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', marginLeft: '10px' }}>
-              <img src={record.instructorSignature} alt="Firma Instructor" style={{ maxHeight: '60px', borderBottom: '1px solid black', padding: '0 50px' }} />
-              {record.instructorName && <span style={{ fontSize: '12px', marginTop: '5px' }}>{record.instructorName}</span>}
+              <img src={instructorSignature} alt="Firma Instructor" style={{ maxHeight: '60px', borderBottom: '1px solid black', padding: '0 50px' }} />
+              {instructorName && <span style={{ fontSize: '12px', marginTop: '5px' }}>{instructorName}</span>}
             </div>
           ) : (
             <span>____________________________________________________</span>
