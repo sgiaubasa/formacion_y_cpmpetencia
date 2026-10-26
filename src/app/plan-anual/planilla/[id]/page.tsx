@@ -1,6 +1,7 @@
 import { prisma } from "@/lib/prisma";
 import { notFound } from "next/navigation";
 import { buildSvgSignatureDataUri } from "@/app/api/webhooks/microsoft-forms/route";
+import { getDefaultInstructorForSector } from "@/lib/instructorDefaults";
 
 export default async function PlanillaAsistenciaPage({ params, searchParams }: { params: Promise<{ id: string }>, searchParams: Promise<{ date?: string }> }) {
   const resolvedParams = await params;
@@ -37,15 +38,27 @@ export default async function PlanillaAsistenciaPage({ params, searchParams }: {
     `Fecha: ${displayDate || 'Validado'}`
   ) : null);
 
-  // Firma del Instructor: ÚNICAMENTE si está especificado en el registro (NO inventar instructor si es null)
-  const instructorName = record.instructorName?.trim() || null;
+  // Responsable / Instructor por defecto según sector (ej: David Ceballos en Comercial, Horacio San Martin en Operaciones, o rango superior)
+  const sectorName = record.employee?.sector?.name || "";
+  const defaultInstructor = getDefaultInstructorForSector(sectorName);
+
+  const instructorName = record.instructorName?.trim() || defaultInstructor.name;
+  const instructorTitle = record.instructorName?.trim()
+    ? (record.instructorName.toLowerCase().includes("montes") ? "Legajo 11739 — Instructor SGI AUBASA" : "Instructor — Firma Digital Validada")
+    : defaultInstructor.title;
 
   let instructorSignature = record.instructorSignature;
   if (!instructorSignature && instructorName) {
     const isMontes = instructorName.toLowerCase().includes("montes");
+    const sub = isMontes
+      ? "Legajo 11739 — Instructor SGI AUBASA"
+      : (defaultInstructor.legajo && !instructorName.includes("Leg.")
+          ? `Legajo ${defaultInstructor.legajo} — ${instructorTitle}`
+          : instructorTitle);
+
     instructorSignature = buildSvgSignatureDataUri(
       instructorName,
-      isMontes ? "Legajo 11739 — Instructor SGI AUBASA" : "Instructor — Firma Digital Validada",
+      sub,
       `Fecha: ${displayDate || 'Validado'}`
     );
   }
@@ -152,12 +165,16 @@ export default async function PlanillaAsistenciaPage({ params, searchParams }: {
           {instructorSignature ? (
             <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', marginLeft: '10px' }}>
               <img src={instructorSignature} alt="Firma Instructor" style={{ maxHeight: '60px', borderBottom: '1px solid black', padding: '0 50px' }} />
-              {instructorName && <span style={{ fontSize: '12px', marginTop: '5px' }}>{instructorName}</span>}
+              <span style={{ fontSize: '12px', marginTop: '5px', fontWeight: 600 }}>
+                {instructorName} {defaultInstructor.legajo && !instructorName.includes("Leg.") ? `(Leg. ${defaultInstructor.legajo})` : ''}
+              </span>
+              <span style={{ fontSize: '11px', color: '#475569' }}>{instructorTitle}</span>
             </div>
           ) : instructorName ? (
             <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', marginLeft: '10px' }}>
               <span>____________________________________________________</span>
-              <span style={{ fontSize: '12px', marginTop: '5px' }}>{instructorName}</span>
+              <span style={{ fontSize: '12px', marginTop: '5px', fontWeight: 600 }}>{instructorName}</span>
+              <span style={{ fontSize: '11px', color: '#475569' }}>{instructorTitle}</span>
             </div>
           ) : (
             <span>____________________________________________________</span>

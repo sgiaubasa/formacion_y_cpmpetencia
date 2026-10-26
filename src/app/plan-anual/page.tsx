@@ -15,6 +15,7 @@ import { PlanAnualFilters } from "./PlanAnualFilters";
 import { buildSectorRecordSourceFilter, getTrainingsForSectors } from "@/lib/sectorTrainings";
 import { MicrosoftFormsImportCard } from "./MicrosoftFormsImportCard";
 import { migrateSgiInstructorRecordsToMontesSergio } from "@/lib/onlineForms";
+import { getDefaultInstructorForSector } from "@/lib/instructorDefaults";
 
 export default async function PlanAnualPage({ searchParams }: { searchParams: Promise<{ tab?: string, q?: string, employeeId?: string, empName?: string, sectorId?: string, jobProfileId?: string, statusFilter?: string }> }) {
   await migrateSgiInstructorRecordsToMontesSergio();
@@ -479,7 +480,7 @@ export default async function PlanAnualPage({ searchParams }: { searchParams: Pr
                       <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
                         <div style={{ fontSize: '0.875rem' }}>Realizada el: <strong>{r.completedAt ? new Date(r.completedAt).toLocaleDateString('es-AR') : '-'}</strong></div>
                         {r.score && <div style={{ fontSize: '0.875rem' }}>Nota: <strong>{r.score}</strong>/10</div>}
-                        {r.instructorName && <div style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>Instructor: <strong>{r.instructorName}</strong></div>}
+                        <div style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>Instructor: <strong>{r.instructorName || getDefaultInstructorForSector(r.employee.sector?.name).name}</strong></div>
                         {material && (
                           <MaterialViewerButton material={material} trainingName={r.trainingName} />
                         )}
@@ -515,7 +516,7 @@ export default async function PlanAnualPage({ searchParams }: { searchParams: Pr
                             </a>
                           )}
                           <div style={{ fontSize: '0.72rem', color: '#475569' }}>
-                            Firma Participante: {r.employeeSignature ? '✅' : '✓ Validada'} | Instructor: {r.instructorSignature || r.instructorName ? '✅' : '⏳ Pendiente'}
+                            Firma Participante: {r.employeeSignature ? '✅' : '✓ Validada'} | Instructor: {r.instructorSignature || r.instructorName || r.status === 'COMPLETED' ? '✅' : '⏳ Pendiente'}
                           </div>
                         </div>
                         {r.effectiveness === 'PENDING' && (
