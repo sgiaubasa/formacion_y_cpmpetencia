@@ -1,6 +1,6 @@
 import { prisma } from "@/lib/prisma";
 import { getCurrentRole, isSectorRole, getSectorIdFromRole, getAllowedSectorNames } from "@/lib/auth";
-import { getOnlineFormsForSector } from "@/lib/onlineForms";
+import { getOnlineFormsForSector, isOnlineTrainingMatch } from "@/lib/onlineForms";
 import { getTrainingsForSectors, buildSectorRecordSourceFilter } from "@/lib/sectorTrainings";
 import { FormulariosClient } from "./FormulariosClient";
 
@@ -28,12 +28,10 @@ export default async function FormulariosPage() {
     prisma.appSetting.findUnique({ where: { id: "online_form_responses_v1" } }).catch(() => null)
   ]);
 
-  const formTrainingTitles = forms.map((f) => f.trainingName);
-
+  // Consultar registros completados seleccionando solo campos livianos (sin firmas base64 pesadas)
   const completedRecords = await prisma.employeeTrainingRecord.findMany({
     where: {
       status: "COMPLETED",
-      trainingName: { in: formTrainingTitles },
       ...(isSector && allowedSectors && allowedSectors.length > 0
         ? {
             employee: { sector: { name: { in: allowedSectors } } },
@@ -41,11 +39,22 @@ export default async function FormulariosPage() {
           }
         : {})
     },
-    include: {
-      employee: { include: { sector: true } }
+    select: {
+      id: true,
+      trainingName: true,
+      score: true,
+      completedAt: true,
+      instructorName: true,
+      employee: {
+        select: {
+          name: true,
+          legajo: true,
+          sector: { select: { name: true } }
+        }
+      }
     },
     orderBy: { completedAt: "desc" },
-    take: 400
+    take: 1500
   });
 
   const auditList: any[] = respSetting?.value ? JSON.parse(respSetting.value) : [];
@@ -61,15 +70,23 @@ export default async function FormulariosPage() {
     }
   }
 
-  const completedResponses = completedRecords.map((r) => {
+  // Filtrar los registros que coinciden con alguno de los formularios online (usando coincidencia flexible de título)
+  const matchedRecords = completedRecords.filter((r) =>
+    forms.some((f) => isOnlineTrainingMatch(r.trainingName, f.trainingName))
+  );
+
+  const completedResponses = matchedRecords.map((r) => {
+    const matchedForm = forms.find((f) => isOnlineTrainingMatch(r.trainingName, f.trainingName));
     const key = `${r.employee.legajo}_${r.trainingName}`.toLowerCase();
     const audit = auditMapByRecordId.get(r.id) || auditMapByLegajoTopic.get(key);
     return {
       id: r.id,
+      matchedFormId: matchedForm?.id || null,
       employeeName: r.employee.name,
       legajo: r.employee.legajo,
       sectorName: r.employee.sector.name,
       trainingName: r.trainingName,
+      instructorName: r.instructorName || matchedForm?.instructorName || "",
       score: r.score,
       completedAt: r.completedAt ? r.completedAt.toISOString() : null,
       email: audit?.email || null

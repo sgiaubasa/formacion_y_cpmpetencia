@@ -2,6 +2,7 @@ import { prisma } from "@/lib/prisma";
 import { notFound } from "next/navigation";
 import { buildSvgSignatureDataUri } from "@/app/api/webhooks/microsoft-forms/route";
 import { getDefaultInstructorForSector } from "@/lib/instructorDefaults";
+import { getSavedInstructorSignatureForTopic } from "@/lib/onlineForms";
 
 export default async function PlanillaAsistenciaPage({ params, searchParams }: { params: Promise<{ id: string }>, searchParams: Promise<{ date?: string }> }) {
   const resolvedParams = await params;
@@ -38,16 +39,23 @@ export default async function PlanillaAsistenciaPage({ params, searchParams }: {
     `Fecha: ${displayDate || 'Validado'}`
   ) : null);
 
+  // Consultar si el instructor firmó por link para todas las planillas de esta capacitación
+  const savedTopicInstructor = await getSavedInstructorSignatureForTopic(record.trainingName);
+
   // Responsable / Instructor por defecto según sector (ej: David Ceballos en Comercial, Horacio San Martin en Operaciones, o rango superior)
   const sectorName = record.employee?.sector?.name || "";
   const defaultInstructor = getDefaultInstructorForSector(sectorName);
 
-  const instructorName = record.instructorName?.trim() || defaultInstructor.name;
+  const instructorName =
+    record.instructorName?.trim() ||
+    savedTopicInstructor?.instructorName ||
+    defaultInstructor.name;
+
   const instructorTitle = record.instructorName?.trim()
-    ? (record.instructorName.toLowerCase().includes("montes") ? "Legajo 11739 — Instructor SGI AUBASA" : "Instructor — Firma Digital Validada")
+    ? (record.instructorName.toLowerCase().includes("montes") ? "Legajo 11739 — Instructor SGI AUBASA" : "Instructor — Firma Validada")
     : defaultInstructor.title;
 
-  let instructorSignature = record.instructorSignature;
+  let instructorSignature = record.instructorSignature || savedTopicInstructor?.instructorSignature || null;
   if (!instructorSignature && instructorName) {
     const isMontes = instructorName.toLowerCase().includes("montes");
     const sub = isMontes
@@ -57,7 +65,7 @@ export default async function PlanillaAsistenciaPage({ params, searchParams }: {
           : instructorTitle);
 
     instructorSignature = buildSvgSignatureDataUri(
-      instructorName,
+      instructorName.replace(/\(Leg\.\s*\d+\)/i, "").trim(),
       sub,
       `Fecha: ${displayDate || 'Validado'}`
     );
@@ -145,7 +153,7 @@ export default async function PlanillaAsistenciaPage({ params, searchParams }: {
               <td style={{ border: '1px solid black', padding: '8px' }}>{record.employee.name}</td>
               <td style={{ border: '1px solid black', padding: '8px' }}>{record.employee.sector.name}</td>
               <td style={{ border: '1px solid black', padding: '8px', textAlign: 'center' }}>
-                {employeeSignature && <img src={employeeSignature} alt="Firma" style={{ maxHeight: '40px' }} />}
+                {employeeSignature && <img src={employeeSignature} alt="Firma" style={{ maxHeight: '42px' }} />}
               </td>
             </tr>
             {/* Filas vacías adicionales */}

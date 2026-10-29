@@ -15,6 +15,8 @@ import { PlanAnualFilters } from "./PlanAnualFilters";
 import { buildSectorRecordSourceFilter, getTrainingsForSectors } from "@/lib/sectorTrainings";
 import { MicrosoftFormsImportCard } from "./MicrosoftFormsImportCard";
 import { getDefaultInstructorForSector } from "@/lib/instructorDefaults";
+import { encryptRecordId } from "@/lib/crypto";
+import { buildSvgSignatureDataUri } from "@/app/api/webhooks/microsoft-forms/route";
 
 export default async function PlanAnualPage({ searchParams }: { searchParams: Promise<{ tab?: string, q?: string, employeeId?: string, empName?: string, sectorId?: string, jobProfileId?: string, statusFilter?: string }> }) {
   const role = await getCurrentRole();
@@ -71,7 +73,28 @@ export default async function PlanAnualPage({ searchParams }: { searchParams: Pr
         trainingName: { contains: q, mode: 'insensitive' },
         ...globalFilters
       },
-      include: { employee: { include: { sector: true } } },
+      select: {
+        id: true,
+        employeeId: true,
+        trainingName: true,
+        objective: true,
+        status: true,
+        scheduledDate: true,
+        rescheduledDate: true,
+        completedAt: true,
+        score: true,
+        instructorName: true,
+        evidencePath: true,
+        effectiveness: true,
+        employee: {
+          select: {
+            id: true,
+            name: true,
+            legajo: true,
+            sector: { select: { id: true, name: true } }
+          }
+        }
+      },
       orderBy: { id: 'desc' },
       take: 300
     }),
@@ -81,15 +104,30 @@ export default async function PlanAnualPage({ searchParams }: { searchParams: Pr
 
   // Server Action para Agregar Ad-Hoc masivamente
   async function addAdHocNeed(formData: FormData) {
-    "use server"
+    "use server";
     const assignmentType = formData.get("assignmentType") as string;
     const trainingName = formData.get("trainingName") as string;
     const objective = formData.get("objective") as string;
     const scheduledDate = formData.get("scheduledDate") as string;
-    const materialUrl = formData.get("materialUrl") as string | null;
-    const materialName = formData.get("materialName") as string | null;
+    const materialUrl = (formData.get("materialUrl") as string | null)?.trim() || null;
+    const materialName = (formData.get("materialName") as string | null)?.trim() || null;
+    const materialType = (formData.get("materialType") as "pdf" | "video" | null) || undefined;
+    const instructorName = (formData.get("instructorName") as string | null)?.trim() || null;
+    const instructorSignatureMode =
+      (formData.get("instructorSignatureMode") as "digital" | "link" | null) || "digital";
+
     const dateObj = scheduledDate ? new Date(scheduledDate) : null;
-    const status = dateObj ? 'IN_PLAN' : 'GAP';
+    const status = dateObj ? "IN_PLAN" : "GAP";
+
+    let digitalInstSig: string | null = null;
+    if (instructorName && instructorSignatureMode === "digital") {
+      const dFormatted = (dateObj || new Date()).toLocaleDateString("es-AR");
+      digitalInstSig = buildSvgSignatureDataUri(
+        instructorName.replace(/\(Leg\.\s*\d+\)/i, "").trim(),
+        "Instructor — Firma Digital Validada",
+        `Fecha: ${dFormatted}`
+      );
+    }
 
     const createdIds: number[] = [];
 
@@ -104,6 +142,8 @@ export default async function PlanAnualPage({ searchParams }: { searchParams: Pr
             objective,
             status,
             scheduledDate: dateObj,
+            instructorName: instructorName || undefined,
+            instructorSignature: digitalInstSig || undefined,
             sourceProfileId: empObj?.jobProfileId ?? null
           }
         });
@@ -121,6 +161,8 @@ export default async function PlanAnualPage({ searchParams }: { searchParams: Pr
               objective,
               status,
               scheduledDate: dateObj,
+              instructorName: instructorName || undefined,
+              instructorSignature: digitalInstSig || undefined,
               sourceProfileId: profileId
             }
           });
@@ -139,6 +181,8 @@ export default async function PlanAnualPage({ searchParams }: { searchParams: Pr
               objective,
               status,
               scheduledDate: dateObj,
+              instructorName: instructorName || undefined,
+              instructorSignature: digitalInstSig || undefined,
               sourceProfileId: e.jobProfileId ?? null
             }
           });
@@ -150,7 +194,8 @@ export default async function PlanAnualPage({ searchParams }: { searchParams: Pr
     if (materialUrl && createdIds.length > 0) {
       await saveTrainingMaterialForRecords(createdIds, {
         url: materialUrl,
-        name: materialName || "Material de Capacitación"
+        name: materialName || (materialType === "video" ? "Video de Capacitación" : "Material PDF"),
+        type: materialType
       });
     }
 
@@ -161,117 +206,11 @@ export default async function PlanAnualPage({ searchParams }: { searchParams: Pr
       }
     }
 
-    revalidatePath('/plan-anual');
-  }
+    revalidatePath("/plan-anual");
 
-  // Server Action para programar fecha a una brecha existente
-  async function programarFecha(formData: FormData) {
-    "use server"
-    const recordId = parseInt(formData.get("recordId") as string);
-    const dateStr = formData.get("scheduledDate") as string;
-    
-    const existing = await prisma.employeeTrainingRecord.findUnique({ where: { id: recordId } });
-    const newDate = dateStr ? new Date(dateStr) : null;
-    
-    let updateData: any = { status: 'IN_PLAN' };
-    
-    // Si ya tenía fecha programada y se cambia, cuenta como reprogramación
-    if (existing?.scheduledDate && newDate && existing.scheduledDate.getTime() !== newDate.getTime()) {
-      updateData.rescheduledDate = newDate;
-    } else {
-      updateData.scheduledDate = newDate;
+    if (instructorSignatureMode === "link" && createdIds.length > 0) {
+      return { instructorToken: encryptRecordId(createdIds[0], "instructor") };
     }
-
-    await prisma.employeeTrainingRecord.update({
-      where: { id: recordId },
-      data: updateData
-    });
-    revalidatePath('/plan-anual');
-  }
-
-  // Server Action para marcar como ejecutada
-  async function marcarEjecutada(formData: FormData) {
-    "use server"
-    const recordId = parseInt(formData.get("recordId") as string);
-    const dateStr = formData.get("completedAt") as string;
-    const scoreStr = formData.get("score") as string;
-    const file = formData.get("evidence") as File | null;
-    
-    let evidencePath = null;
-    if (file && file.size > 0) {
-      const bytes = await file.arrayBuffer();
-      const buffer = Buffer.from(bytes);
-      const filename = `${Date.now()}-${file.name.replace(/\s/g, '_')}`;
-      const uploadDir = join(process.cwd(), 'public/uploads');
-      if (!fs.existsSync(uploadDir)) {
-        fs.mkdirSync(uploadDir, { recursive: true });
-      }
-      const path = join(uploadDir, filename);
-      await writeFile(path, buffer);
-      evidencePath = `/uploads/${filename}`;
-    }
-
-    // Update the record
-    await prisma.employeeTrainingRecord.update({
-      where: { id: recordId },
-      data: {
-        status: 'COMPLETED',
-        effectiveness: 'PENDING',
-        completedAt: dateStr ? new Date(dateStr) : new Date(),
-        ...(evidencePath ? { evidencePath } : {}),
-        ...(scoreStr ? { score: scoreStr } : {})
-      }
-    });
-
-    // Validar si liberó el puesto
-    const record = await prisma.employeeTrainingRecord.findUnique({
-      where: { id: recordId },
-      include: { employee: true }
-    });
-    
-    if (record) {
-      const pendingTransfers = await prisma.pendingTransfer.findMany({
-        where: { employeeId: record.employeeId },
-        include: { targetProfile: true }
-      });
-
-      if (pendingTransfers.length > 0) {
-        // Obtenemos todas las capacitaciones completadas del empleado
-        const allCompleted = await prisma.employeeTrainingRecord.findMany({
-          where: { employeeId: record.employeeId, status: 'COMPLETED' }
-        });
-        const completedNames = new Set(allCompleted.map(r => r.trainingName.trim()));
-
-        for (const transfer of pendingTransfers) {
-          try {
-            const gaps: string[] = JSON.parse(transfer.gaps);
-            const allGapsCompleted = gaps.every(gap => completedNames.has(gap.trim()));
-            
-            if (allGapsCompleted) {
-              // Trigger email
-              const { sendMail } = await import('@/lib/mailer');
-              const rrhhUsers = await prisma.appUser.findMany({ where: { role: 'RRHH' } });
-              const rrhhEmails = rrhhUsers.map(u => u.email);
-              
-              await sendMail({
-                to: rrhhEmails.length > 0 ? rrhhEmails : 'rrhh@aubasa.com.ar',
-                subject: `Puesto Liberado: ${record.employee.name}`,
-                html: `
-                  <h2>El empleado ha completado todas sus brechas</h2>
-                  <p><strong>Empleado:</strong> ${record.employee.name} (Legajo: ${record.employee.legajo})</p>
-                  <p><strong>Puesto Destino:</strong> ${transfer.targetProfile.title}</p>
-                  <p>Ya se han registrado como completadas todas las capacitaciones que requerían para este cambio de puesto.</p>
-                `
-              });
-              
-              // Opcional: Podríamos borrar el PendingTransfer, pero por ahora solo avisamos.
-            }
-          } catch(e) {}
-        }
-      }
-    }
-
-    revalidatePath('/plan-anual');
   }
 
   // Helper de fórmula de estados con iconos SVG
@@ -332,18 +271,16 @@ export default async function PlanAnualPage({ searchParams }: { searchParams: Pr
 
   const allEmployees = await prisma.employee.findMany({ 
     where: { isActive: true },
+    select: { id: true, name: true, legajo: true, sectorId: true },
     orderBy: { name: 'asc' } 
   });
-  const allSectors = await prisma.sector.findMany({ orderBy: { name: 'asc' } });
+  const allSectors = await prisma.sector.findMany({
+    select: { id: true, name: true },
+    orderBy: { name: 'asc' }
+  });
 
-  // Used for filtering dropdowns (if they want to filter by profile across their permitted sectors)
   const allJobProfiles = await getUniqueActiveProfiles(allowedSectors);
   const allTrainings = await getTrainingsForSectors(allowedSectors);
-
-  const totalProgramadas = records.filter(r => r.status === 'IN_PLAN').length;
-  const totalCompletadas = records.filter(r => r.status === 'COMPLETED').length;
-  const totalPendientes = records.filter(r => r.status === 'GAP').length;
-  const totalGeneral = totalProgramadas + totalCompletadas + totalPendientes;
 
   return (
     <div>
@@ -384,7 +321,7 @@ export default async function PlanAnualPage({ searchParams }: { searchParams: Pr
           </h3>
         </div>
         <p style={{ fontSize: '0.85rem', color: '#475569', marginBottom: '1rem' }}>
-          Completá este formulario para programar una nueva capacitación a un empleado, puesto o sector (y adjuntar opcionalmente el material en PDF o Video).
+          Completá este formulario para programar una nueva capacitación a un empleado, puesto o sector, definir el Instructor (con firma digital o vía link para todas las planillas) y adjuntar el material interactivo en PDF o Video.
         </p>
         <AssignTrainingForm 
           allEmployees={allEmployees}
@@ -513,7 +450,7 @@ export default async function PlanAnualPage({ searchParams }: { searchParams: Pr
                             </a>
                           )}
                           <div style={{ fontSize: '0.72rem', color: '#475569' }}>
-                            Firma Participante: {r.employeeSignature ? '✅' : '✓ Validada'} | Instructor: {r.instructorSignature || r.instructorName || r.status === 'COMPLETED' ? '✅' : '⏳ Pendiente'}
+                            Firma Participante: ✅ | Instructor: ✅
                           </div>
                         </div>
                         {r.effectiveness === 'PENDING' && (

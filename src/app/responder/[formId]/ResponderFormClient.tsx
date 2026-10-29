@@ -1,9 +1,13 @@
 "use client";
 
 import React, { useState, useRef } from "react";
+import Link from "next/link";
 import SignatureCanvas from "react-signature-canvas";
 import { OnlineTrainingForm } from "@/lib/onlineForms";
-import { submitOnlineFormResponseAction } from "@/app/formularios/actions";
+import {
+  submitOnlineFormResponseAction,
+  saveOnlineFormInstructorSignatureAction
+} from "@/app/formularios/actions";
 
 function renderVideoPlayer(url: string) {
   if (!url) return null;
@@ -138,10 +142,12 @@ function renderVideoPlayer(url: string) {
 
 export function ResponderFormClient({
   form,
-  employees = []
+  employees = [],
+  isInstructorMode = false
 }: {
   form: OnlineTrainingForm;
   employees?: { id: number; name: string; legajo: string }[];
+  isInstructorMode?: boolean;
 }) {
   const [legajo, setLegajo] = useState("");
   const [dni, setDni] = useState("");
@@ -153,11 +159,16 @@ export function ResponderFormClient({
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [submittedData, setSubmittedData] = useState<{
+    recordId?: number;
     employeeName: string;
     legajo: string;
     sectorName: string;
     score: string;
   } | null>(null);
+
+  // Estado exclusivo para modo instructor (?modo=instructor)
+  const [instNameInput, setInstNameInput] = useState(form.instructorName || "");
+  const [instSavedInfo, setInstSavedInfo] = useState<{ updatedCount: number } | null>(null);
 
   const sigCanvasRef = useRef<any>(null);
 
@@ -191,6 +202,206 @@ export function ResponderFormClient({
       setHasDrawn(false);
     }
   };
+
+  const handleInstructorSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setErrorMsg(null);
+    if (!instNameInput.trim()) {
+      setErrorMsg("Por favor ingresá el nombre y apellido del Instructor.");
+      return;
+    }
+    if (!sigCanvasRef.current || sigCanvasRef.current.isEmpty()) {
+      setErrorMsg("Por favor dibujá la firma del Instructor en el recuadro.");
+      return;
+    }
+
+    let drawnSignature: string | null = null;
+    try {
+      drawnSignature = sigCanvasRef.current.getTrimmedCanvas().toDataURL("image/png");
+    } catch {
+      drawnSignature = sigCanvasRef.current.toDataURL("image/png");
+    }
+
+    if (!drawnSignature) {
+      setErrorMsg("No se pudo procesar la firma. Por favor intentá nuevamente.");
+      return;
+    }
+
+    setIsSubmitting(true);
+    try {
+      const res = await saveOnlineFormInstructorSignatureAction({
+        formId: form.id,
+        instructorName: instNameInput,
+        drawnSignature
+      });
+      if (res.ok) {
+        setInstSavedInfo({ updatedCount: res.updatedCount || 0 });
+      } else {
+        setErrorMsg(res.error || "Error al guardar la firma del instructor.");
+      }
+    } catch (err: any) {
+      setErrorMsg(err?.message || "Error de conexión.");
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  // MODO INSTRUCTOR: Pantalla para que el instructor deje su firma para todas las planillas de esta capacitación
+  if (isInstructorMode) {
+    if (instSavedInfo) {
+      return (
+        <div
+          style={{
+            maxWidth: "640px",
+            margin: "2.5rem auto",
+            backgroundColor: "#ffffff",
+            borderRadius: "14px",
+            borderTop: "6px solid #0d8383",
+            boxShadow: "0 10px 30px rgba(27, 54, 93, 0.1)",
+            padding: "2.5rem 2rem",
+            textAlign: "center"
+          }}
+        >
+          <img src="/logo.png" alt="AUBASA" style={{ width: "155px", marginBottom: "1rem" }} />
+          <div style={{ fontSize: "3rem", marginBottom: "0.5rem" }}>✅</div>
+          <h2 style={{ color: "#1b365d", marginBottom: "0.5rem" }}>
+            ¡Firma de Instructor Guardada para toda la Capacitación!
+          </h2>
+          <p style={{ color: "#475569", lineHeight: 1.5 }}>
+            La firma manuscrita de <strong>{instNameInput}</strong> quedó registrada oficialmente para la capacitación <strong>&ldquo;{form.trainingName}&rdquo;</strong> y se aplicó automáticamente a todas las planillas de asistencia ({instSavedInfo.updatedCount} planillas actualizadas y todas las nuevas que se generen).
+          </p>
+        </div>
+      );
+    }
+
+    return (
+      <div style={{ maxWidth: "680px", margin: "2rem auto", padding: "0 1rem 3rem 1rem" }}>
+        <div
+          className="card"
+          style={{
+            borderTop: "6px solid #1b365d",
+            backgroundColor: "#ffffff"
+          }}
+        >
+          <div style={{ textAlign: "center", marginBottom: "1.25rem" }}>
+            <img src="/logo.png" alt="AUBASA" style={{ width: "150px", marginBottom: "0.75rem" }} />
+            <span
+              style={{
+                display: "inline-block",
+                backgroundColor: "#1b365d",
+                color: "#ffffff",
+                fontSize: "0.72rem",
+                fontWeight: 700,
+                padding: "0.22rem 0.65rem",
+                borderRadius: "999px",
+                textTransform: "uppercase",
+                marginBottom: "0.35rem"
+              }}
+            >
+              Enlace Oficial de Firma del Instructor
+            </span>
+            <h2 style={{ margin: "0.25rem 0", color: "#1b365d" }}>{form.trainingName}</h2>
+            <p style={{ margin: 0, color: "#64748b", fontSize: "0.9rem" }}>
+              Al registrar tu firma aquí una sola vez, aparecerá automáticamente en todas las planillas de asistencia (PAU/05 - A9.3) de esta capacitación.
+            </p>
+          </div>
+
+          <form onSubmit={handleInstructorSubmit} style={{ display: "flex", flexDirection: "column", gap: "1.25rem" }}>
+            <div>
+              <label className="form-label">Nombre y Apellido del Instructor *</label>
+              <input
+                type="text"
+                className="form-input"
+                value={instNameInput}
+                onChange={(e) => setInstNameInput(e.target.value)}
+                required
+                placeholder="Ej: David Ceballos / Horacio San Martin"
+              />
+            </div>
+
+            <div>
+              <label className="form-label">
+                ✍️ Firma Manuscrita del Instructor (Firmá con tu dedo o mouse) *
+              </label>
+              <div
+                style={{
+                  border: "2px dashed #94a3b8",
+                  borderRadius: "10px",
+                  backgroundColor: "#ffffff",
+                  padding: "0.5rem"
+                }}
+              >
+                <SignatureCanvas
+                  ref={sigCanvasRef}
+                  onBegin={() => setHasDrawn(true)}
+                  canvasProps={{
+                    style: { width: "100%", height: 180, display: "block", cursor: "crosshair" }
+                  }}
+                />
+              </div>
+              <div style={{ display: "flex", justifyContent: "space-between", marginTop: "0.4rem" }}>
+                <span style={{ fontSize: "0.8rem", color: hasDrawn ? "#0d8383" : "#64748b", fontWeight: 600 }}>
+                  {hasDrawn ? "✓ Trazo detectado" : "Dibujá la firma dentro del recuadro"}
+                </span>
+                <button
+                  type="button"
+                  onClick={handleClearSignature}
+                  style={{
+                    background: "none",
+                    border: "1px solid #cbd5e1",
+                    borderRadius: "6px",
+                    padding: "0.25rem 0.65rem",
+                    fontSize: "0.78rem",
+                    color: "#dc2626",
+                    cursor: "pointer",
+                    fontWeight: 600
+                  }}
+                >
+                  ↺ Limpiar firma
+                </button>
+              </div>
+            </div>
+
+            {errorMsg && (
+              <div
+                style={{
+                  backgroundColor: "#fee2e2",
+                  color: "#991b1b",
+                  padding: "0.75rem 1rem",
+                  borderRadius: "8px",
+                  fontWeight: 600,
+                  fontSize: "0.88rem"
+                }}
+              >
+                {errorMsg}
+              </div>
+            )}
+
+            <button
+              type="submit"
+              disabled={isSubmitting}
+              className="btn"
+              style={{
+                width: "100%",
+                backgroundColor: "#0d8383",
+                color: "#ffffff",
+                fontWeight: 700,
+                fontSize: "1rem",
+                padding: "0.9rem",
+                borderRadius: "10px",
+                border: "none",
+                cursor: "pointer"
+              }}
+            >
+              {isSubmitting
+                ? "Guardando firma en todas las planillas..."
+                : "✅ Guardar Firma de Instructor para toda la Capacitación"}
+            </button>
+          </form>
+        </div>
+      </div>
+    );
+  }
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -226,8 +437,8 @@ export function ResponderFormClient({
     let drawnSignature: string | null = null;
     try {
       drawnSignature = sigCanvasRef.current.getTrimmedCanvas().toDataURL("image/png");
-    } catch (sigErr) {
-      console.warn("Could not export signature canvas:", sigErr);
+    } catch {
+      drawnSignature = sigCanvasRef.current.toDataURL("image/png");
     }
 
     if (!drawnSignature) {
@@ -249,6 +460,7 @@ export function ResponderFormClient({
 
       if (res.ok) {
         setSubmittedData({
+          recordId: res.recordId,
           employeeName: res.employeeName || employeeName,
           legajo: res.legajo || legajo,
           sectorName: res.sectorName || "",
@@ -301,10 +513,10 @@ export function ResponderFormClient({
           ✓
         </div>
         <h2 style={{ color: "#1b365d", marginBottom: "0.5rem" }}>
-          ¡Capacitación Registrada y Firmada con Éxito!
+          ¡Capacitación Registrada y Firmada en el Registro de Asistencia!
         </h2>
         <p style={{ color: "#475569", marginBottom: "1.5rem" }}>
-          Tu respuesta y tu <strong>firma manuscrita</strong> fueron registradas automáticamente en el Sistema de Gestión de Competencia y Formación de AUBASA.
+          Tu respuesta y tu <strong>firma manuscrita</strong> quedaron estampadas automáticamente en el <strong>Registro de Asistencia Oficial (PAU/05 - Anexo 9.3)</strong>.
         </p>
 
         <div
@@ -339,9 +551,31 @@ export function ResponderFormClient({
             <strong>Calificación Obtenida:</strong> {submittedData.score} / 10
           </div>
           <div style={{ color: "#0d8383", fontWeight: 700, marginTop: "0.5rem" }}>
-            ✓ Tu firma manuscrita fue estampada en la planilla y el Instructor ({form.instructorName}) cuenta con su firma digital validada.
+            ✓ Firma del Participante y del Instructor ({form.instructorName}) asentadas en el Registro de Asistencia.
           </div>
         </div>
+
+        {submittedData.recordId && (
+          <Link
+            href={`/plan-anual/planilla/${submittedData.recordId}`}
+            target="_blank"
+            style={{
+              display: "inline-flex",
+              alignItems: "center",
+              justifyContent: "center",
+              gap: "0.5rem",
+              backgroundColor: "#1b365d",
+              color: "#ffffff",
+              fontWeight: 700,
+              fontSize: "0.95rem",
+              padding: "0.75rem 1.4rem",
+              borderRadius: "8px",
+              textDecoration: "none"
+            }}
+          >
+            📄 Ver Registro de Asistencia Firmado (PAU/05 - A9.3)
+          </Link>
+        )}
       </div>
     );
   }
@@ -410,25 +644,25 @@ export function ResponderFormClient({
         </div>
       </div>
 
-      {/* SECCIÓN MATERIAL: VIDEO Y PDF */}
+      {/* SECCIÓN MATERIAL INTERACTIVO: VIDEO Y PDF */}
       {(form.videoUrl || form.pdfUrl) && (
         <div
           className="card"
           style={{
             marginBottom: "1.5rem",
-            borderLeft: "4px solid #f59e0b",
+            borderLeft: "5px solid #f59e0b",
             backgroundColor: "#fffbeb"
           }}
         >
-          <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", marginBottom: "0.75rem" }}>
-            <span style={{ fontSize: "1.3rem" }}>🎬</span>
+          <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", marginBottom: "0.5rem" }}>
+            <span style={{ fontSize: "1.3rem" }}>🎬📄</span>
             <h3 style={{ margin: 0, color: "#92400e", fontSize: "1.1rem" }}>
-              Material de Capacitación (Revisalo antes de responder las preguntas)
+              Material Interactivo de la Capacitación (Miralo / Leelo aquí antes de responder)
             </h3>
           </div>
 
           <p style={{ margin: "0 0 1rem 0", fontSize: "0.88rem", color: "#78350f" }}>
-            Mirá el video instructivo y/o leé el material en PDF correspondiente a esta temática para poder completar la evaluación de forma satisfactoria.
+            Interactuá con el documento o video de la capacitación directamente en esta pantalla antes de contestar las preguntas:
           </p>
 
           <div style={{ display: "flex", flexDirection: "column", gap: "1.25rem" }}>
@@ -442,7 +676,7 @@ export function ResponderFormClient({
               </div>
             )}
 
-            {/* Documento PDF */}
+            {/* Visor Interactivo de Documento PDF */}
             {form.pdfUrl && (
               <div
                 style={{
@@ -463,7 +697,7 @@ export function ResponderFormClient({
                         {form.pdfName || "Material de Lectura / Presentación (PDF)"}
                       </div>
                       <div style={{ fontSize: "0.78rem", color: "#64748b" }}>
-                        Documento oficial adjunto a la capacitación
+                        Podés desplazarte por las páginas aquí mismo o abrirlo en pantalla completa
                       </div>
                     </div>
                   </div>
@@ -485,21 +719,21 @@ export function ResponderFormClient({
                       gap: "0.4rem"
                     }}
                   >
-                    🔍 Abrir / Descargar PDF
+                    🔍 Pantalla Completa / Descargar PDF
                   </a>
                 </div>
 
                 <div
                   style={{
                     width: "100%",
-                    height: "400px",
+                    height: "480px",
                     borderRadius: "8px",
                     overflow: "hidden",
-                    border: "1px solid #e2e8f0"
+                    border: "1px solid #cbd5e1"
                   }}
                 >
                   <iframe
-                    src={`${form.pdfUrl}#toolbar=1`}
+                    src={`${form.pdfUrl}#toolbar=1&view=FitH`}
                     title={form.pdfName || "Documento PDF"}
                     style={{ width: "100%", height: "100%", border: "none" }}
                   />
@@ -565,9 +799,6 @@ export function ResponderFormClient({
                 onChange={(e) => setEmail(e.target.value)}
                 required
               />
-              <span style={{ fontSize: "0.75rem", color: "#64748b" }}>
-                Para envío de constancia y registro institucional
-              </span>
             </div>
 
             <div>
@@ -583,75 +814,104 @@ export function ResponderFormClient({
           </div>
         </div>
 
-        {/* 2. PREGUNTAS */}
+        {/* 2. PREGUNTAS CON SU PUNTAJE */}
         <div className="card" style={{ marginBottom: "1.25rem", borderLeft: "4px solid #0d8383" }}>
           <h3 style={{ marginTop: 0, color: "#1b365d", fontSize: "1.08rem", marginBottom: "1rem" }}>
-            2. Cuestionario de la Capacitación
+            2. Cuestionario de la Capacitación (Puntaje Máximo: 10 puntos)
           </h3>
 
           <div style={{ display: "flex", flexDirection: "column", gap: "1.25rem" }}>
-            {form.questions.map((q, idx) => (
-              <div
-                key={q.id}
-                style={{
-                  border: "1px solid #e2e8f0",
-                  borderRadius: "10px",
-                  padding: "1.1rem",
-                  backgroundColor: "#f8fafc"
-                }}
-              >
-                <div style={{ fontWeight: 700, color: "#1b365d", marginBottom: "0.75rem", fontSize: "0.96rem" }}>
-                  {idx + 1}. {q.question}
-                </div>
+            {form.questions.map((q, idx) => {
+              const pts =
+                typeof q.points === "number"
+                  ? q.points
+                  : Number((10 / (form.questions.length || 1)).toFixed(2));
+              return (
+                <div
+                  key={q.id}
+                  style={{
+                    border: "1px solid #e2e8f0",
+                    borderRadius: "10px",
+                    padding: "1.1rem",
+                    backgroundColor: "#f8fafc"
+                  }}
+                >
+                  <div
+                    style={{
+                      display: "flex",
+                      justifyContent: "space-between",
+                      alignItems: "flex-start",
+                      gap: "0.75rem",
+                      marginBottom: "0.75rem"
+                    }}
+                  >
+                    <div style={{ fontWeight: 700, color: "#1b365d", fontSize: "0.96rem" }}>
+                      {idx + 1}. {q.question}
+                    </div>
+                    <span
+                      style={{
+                        whiteSpace: "nowrap",
+                        backgroundColor: "#e0f2fe",
+                        color: "#0369a1",
+                        fontSize: "0.75rem",
+                        fontWeight: 700,
+                        padding: "0.2rem 0.6rem",
+                        borderRadius: "999px"
+                      }}
+                    >
+                      Vale {pts} {pts === 1 ? "punto" : "puntos"}
+                    </span>
+                  </div>
 
-                <div style={{ display: "flex", flexDirection: "column", gap: "0.55rem" }}>
-                  {q.options.map((opt, oIdx) => {
-                    const isSelected = answers[q.id] === oIdx;
-                    return (
-                      <label
-                        key={oIdx}
-                        style={{
-                          display: "flex",
-                          alignItems: "flex-start",
-                          gap: "0.65rem",
-                          padding: "0.65rem 0.85rem",
-                          borderRadius: "8px",
-                          border: isSelected ? "2px solid #0d8383" : "1px solid #cbd5e1",
-                          backgroundColor: isSelected ? "#f0fdfa" : "#ffffff",
-                          cursor: "pointer",
-                          fontSize: "0.91rem",
-                          color: "#1e293b"
-                        }}
-                      >
-                        <input
-                          type="radio"
-                          name={`question_${q.id}`}
-                          checked={isSelected}
-                          onChange={() =>
-                            setAnswers((prev) => ({
-                              ...prev,
-                              [q.id]: oIdx
-                            }))
-                          }
-                          style={{ marginTop: "0.22rem" }}
-                        />
-                        <span>{opt}</span>
-                      </label>
-                    );
-                  })}
+                  <div style={{ display: "flex", flexDirection: "column", gap: "0.55rem" }}>
+                    {q.options.map((opt, oIdx) => {
+                      const isSelected = answers[q.id] === oIdx;
+                      return (
+                        <label
+                          key={oIdx}
+                          style={{
+                            display: "flex",
+                            alignItems: "flex-start",
+                            gap: "0.65rem",
+                            padding: "0.65rem 0.85rem",
+                            borderRadius: "8px",
+                            border: isSelected ? "2px solid #0d8383" : "1px solid #cbd5e1",
+                            backgroundColor: isSelected ? "#f0fdfa" : "#ffffff",
+                            cursor: "pointer",
+                            fontSize: "0.91rem",
+                            color: "#1e293b"
+                          }}
+                        >
+                          <input
+                            type="radio"
+                            name={`question_${q.id}`}
+                            checked={isSelected}
+                            onChange={() =>
+                              setAnswers((prev) => ({
+                                ...prev,
+                                [q.id]: oIdx
+                              }))
+                            }
+                            style={{ marginTop: "0.22rem" }}
+                          />
+                          <span>{opt}</span>
+                        </label>
+                      );
+                    })}
+                  </div>
                 </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
         </div>
 
-        {/* 3. FIRMA MANUSCRITA Y CONFORMIDAD */}
+        {/* 3. FIRMA MANUSCRITA PARA EL REGISTRO DE ASISTENCIA */}
         <div className="card" style={{ marginBottom: "1.25rem", borderLeft: "4px solid #63b5e5" }}>
           <h3 style={{ marginTop: 0, color: "#1b365d", fontSize: "1.08rem", marginBottom: "0.5rem" }}>
-            3. Firma Manuscrita del Participante y Declaración de Conformidad
+            3. Tu Firma para el Registro de Asistencia (PAU/05 - Anexo 9.3)
           </h3>
           <p style={{ margin: "0 0 1rem 0", fontSize: "0.88rem", color: "#475569" }}>
-            Dibujá tu firma en el recuadro a continuación con tu dedo (en celular/tablet) o con el puntero del mouse (en computadora). Esta firma quedará estampada en la planilla oficial de la capacitación.
+            Dibujá tu firma en el recuadro con tu dedo (en celular) o mouse (en PC). Tu firma irá directamente a la columna <strong>&ldquo;Firma&rdquo;</strong> del Registro de Asistencia oficial de la capacitación.
           </p>
 
           <div
@@ -694,13 +954,13 @@ export function ResponderFormClient({
                 marginTop: "-15px"
               }}
             >
-              Línea de firma del participante
+              Línea de firma para Registro de Asistencia
             </div>
           </div>
 
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: "0.5rem", marginBottom: "1.25rem" }}>
             <span style={{ fontSize: "0.8rem", color: hasDrawn ? "#0d8383" : "#64748b", fontWeight: 600 }}>
-              {hasDrawn ? "✓ Trazo detectado" : "Trazá tu firma dentro del recuadro"}
+              {hasDrawn ? "✓ Firma registrada" : "Trazá tu firma dentro del recuadro"}
             </span>
             <button
               type="button"
@@ -741,7 +1001,7 @@ export function ResponderFormClient({
               style={{ width: "20px", height: "20px", marginTop: "0.15rem" }}
             />
             <span>
-              <strong>Declaro bajo juramento haber recibido y comprendido la capacitación &ldquo;{form.trainingName}&rdquo;</strong>, prestando mi expresa conformidad para que mi firma manuscrita quede registrada en el sistema junto a la firma digital validada del Instructor ({form.instructorName}).
+              <strong>Declaro bajo juramento haber recibido y comprendido la capacitación &ldquo;{form.trainingName}&rdquo;</strong>, prestando mi conformidad para que mi firma quede asentada en el Registro de Asistencia junto a la firma del Instructor ({form.instructorName}).
             </span>
           </label>
         </div>
@@ -780,7 +1040,7 @@ export function ResponderFormClient({
             boxShadow: "0 4px 12px rgba(13, 131, 131, 0.25)"
           }}
         >
-          {isSubmitting ? "Registrando Capacitación y Firmas..." : "✅ Enviar Cuestionario y Firmar Planilla"}
+          {isSubmitting ? "Registrando en Planilla de Asistencia..." : "✅ Enviar Cuestionario y Firmar Registro de Asistencia"}
         </button>
       </form>
     </div>

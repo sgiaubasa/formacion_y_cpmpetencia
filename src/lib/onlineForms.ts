@@ -1,11 +1,11 @@
 import { prisma } from "./prisma";
-import { buildSvgSignatureDataUri } from "@/app/api/webhooks/microsoft-forms/route";
 
 export interface OnlineFormQuestion {
   id: string;
   question: string;
   options: string[];
   correctIndex: number;
+  points?: number; // Puntaje de la pregunta (la suma total del formulario no supera 10)
 }
 
 export interface OnlineTrainingForm {
@@ -15,6 +15,8 @@ export interface OnlineTrainingForm {
   trainingName: string;
   objective: string;
   instructorName: string;
+  instructorSignatureMode?: "digital" | "link"; // "digital" (automática) o "link" (firma manuscrita vía enlace)
+  instructorSignature?: string | null; // Firma manuscrita del instructor guardada vía link para todas las planillas
   ownerSectorName: string | null; // null = Global (SGI / RRHH / ADMIN), o nombre del sector propietario
   createdByRole: string;
   createdAt: string;
@@ -24,17 +26,104 @@ export interface OnlineTrainingForm {
   questions: OnlineFormQuestion[];
 }
 
+export function normalizeTrainingStr(s: string): string {
+  return (s || "")
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^a-z0-9\s]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+export function cleanTrainingTopic(s: string): string {
+  return normalizeTrainingStr(s)
+    .replace(/\baubasa\b/g, "")
+    .replace(/\bcapacitacion\b/g, "")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+export function isOnlineTrainingMatch(a: string, b: string): boolean {
+  const normA = cleanTrainingTopic(a);
+  const normB = cleanTrainingTopic(b);
+  if (!normA || !normB) return false;
+  return normA === normB || normA.includes(normB) || normB.includes(normA);
+}
+
 const SETTING_KEY = "online_training_forms_v1";
+const INSTRUCTOR_SIG_MAP_KEY = "training_instructor_signatures_v1";
+
+export interface SavedInstructorSignatureInfo {
+  instructorName: string;
+  instructorSignature: string;
+  mode: "digital" | "link";
+  updatedAt: string;
+}
+
+export async function getTrainingInstructorSignaturesMap(): Promise<
+  Record<string, SavedInstructorSignatureInfo>
+> {
+  try {
+    const setting = await prisma.appSetting.findUnique({
+      where: { id: INSTRUCTOR_SIG_MAP_KEY }
+    });
+    if (!setting?.value) return {};
+    const parsed = JSON.parse(setting.value);
+    return parsed && typeof parsed === "object" ? parsed : {};
+  } catch {
+    return {};
+  }
+}
+
+export async function saveTrainingInstructorSignatureForTopic(
+  trainingName: string,
+  info: SavedInstructorSignatureInfo
+): Promise<void> {
+  const key = cleanTrainingTopic(trainingName);
+  if (!key) return;
+  try {
+    const map = await getTrainingInstructorSignaturesMap();
+    map[key] = info;
+    await prisma.appSetting.upsert({
+      where: { id: INSTRUCTOR_SIG_MAP_KEY },
+      update: { value: JSON.stringify(map) },
+      create: {
+        id: INSTRUCTOR_SIG_MAP_KEY,
+        value: JSON.stringify(map),
+        description: "Firmas de instructores por tema de capacitación"
+      }
+    });
+  } catch (e) {
+    console.warn("Error guardando firma global de instructor por tema:", e);
+  }
+}
+
+export async function getSavedInstructorSignatureForTopic(
+  trainingName: string
+): Promise<SavedInstructorSignatureInfo | null> {
+  const key = cleanTrainingTopic(trainingName);
+  if (!key) return null;
+  const map = await getTrainingInstructorSignaturesMap();
+  if (map[key]) return map[key];
+  for (const [k, val] of Object.entries(map)) {
+    if (k.includes(key) || key.includes(k)) {
+      return val;
+    }
+  }
+  return null;
+}
 
 const DEFAULT_MANUAL_FORM: OnlineTrainingForm = {
   id: "manual-uso-sgcysv",
   title: "Capacitación: Uso del Sistema de Gestión de Competencia y Formación — AUBASA",
   description:
-    "Cuestionario de validación sobre el Manual de Uso del Sistema de Gestión de Competencia y Formación (SGCySV - AUBASA). Al enviarlo, quedará registrada automáticamente tu calificación y firma digital de realización.",
+    "Cuestionario de validación sobre el Manual de Uso del Sistema de Gestión de Competencia y Formación (SGCySV - AUBASA). Al enviarlo, quedará registrada automáticamente tu calificación y firma en el Registro de Asistencia.",
   trainingName: "Uso del Sistema de Gestión de Competencia y Formación",
   objective:
     "Que el personal conozca el funcionamiento integral de la aplicación, la planificación anual por sector/puesto/persona, la gestión de evaluaciones iniciales, el registro de firmas y la evaluación de la eficacia.",
   instructorName: "Montes Sergio (Leg. 11739)",
+  instructorSignatureMode: "digital",
   ownerSectorName: null,
   createdByRole: "SGI",
   createdAt: new Date().toISOString(),
@@ -48,7 +137,8 @@ const DEFAULT_MANUAL_FORM: OnlineTrainingForm = {
         "Por Sector completo, por Puesto (Perfil de Puesto) o por Persona en particular.",
         "Solo a través de planillas impresas fuera del sistema."
       ],
-      correctIndex: 1
+      correctIndex: 1,
+      points: 2
     },
     {
       id: "q2",
@@ -59,7 +149,8 @@ const DEFAULT_MANUAL_FORM: OnlineTrainingForm = {
         "Confirmar la transferencia en el sistema, programar obligatoriamente las fechas de las capacitaciones faltantes y completar su realización y eficacia en un plazo máximo de 90 días (3 meses).",
         "Tiene un plazo de 1 año sin necesidad de programar fechas."
       ],
-      correctIndex: 1
+      correctIndex: 1,
+      points: 2
     },
     {
       id: "q3",
@@ -70,7 +161,8 @@ const DEFAULT_MANUAL_FORM: OnlineTrainingForm = {
         "El lugar físico donde se va a dictar la charla.",
         "Únicamente la cantidad de horas de duración."
       ],
-      correctIndex: 0
+      correctIndex: 0,
+      points: 2
     },
     {
       id: "q4",
@@ -81,7 +173,8 @@ const DEFAULT_MANUAL_FORM: OnlineTrainingForm = {
         "Cualquiera de las modalidades habilitadas: 1) Adjuntar el documento/planilla firmada en la solapa de evidencia, 2) Firmar en el momento con la aplicación abierta en celular o PC, 3) Enviar el enlace (link) por Mail o WhatsApp, o 4) Formulario Online / Excel de Microsoft Forms.",
         "No hace falta registrar firmas ni evidencia."
       ],
-      correctIndex: 1
+      correctIndex: 1,
+      points: 2
     },
     {
       id: "q5",
@@ -92,7 +185,8 @@ const DEFAULT_MANUAL_FORM: OnlineTrainingForm = {
         "Verificando en el puesto de trabajo (dentro del plazo de seguimiento) si la persona cumple con el Objetivo fijado para esa capacitación, redactando una breve descripción de que posee los conocimientos y lleva adelante el trabajo como corresponde, y marcándola como Eficaz.",
         "Marcando 'Eficaz' sin escribir ninguna descripción ni revisar el objetivo."
       ],
-      correctIndex: 1
+      correctIndex: 1,
+      points: 2
     }
   ]
 };
@@ -128,9 +222,23 @@ export async function getAllOnlineForms(): Promise<OnlineTrainingForm[]> {
 
     let updated = false;
     for (const f of parsed) {
-      if (f.id === "manual-uso-sgcysv" && (!f.instructorName || f.instructorName.toLowerCase().includes("sgi"))) {
+      if (
+        f.id === "manual-uso-sgcysv" &&
+        (!f.instructorName || f.instructorName.toLowerCase().includes("sgi"))
+      ) {
         f.instructorName = "Montes Sergio (Leg. 11739)";
         updated = true;
+      }
+      // Asegurar que las preguntas tengan puntaje por defecto si no tenían
+      if (Array.isArray(f.questions) && f.questions.length > 0) {
+        const hasMissingPoints = f.questions.some((q) => typeof q.points !== "number");
+        if (hasMissingPoints) {
+          const defaultPts = Number((10 / f.questions.length).toFixed(2));
+          f.questions = f.questions.map((q) => ({
+            ...q,
+            points: typeof q.points === "number" ? q.points : defaultPts
+          }));
+        }
       }
     }
 
@@ -168,6 +276,7 @@ export async function getOnlineFormsForSector(
   }
   return all.filter(
     (f) =>
+      !f.ownerSectorName ||
       Boolean(f.ownerSectorName && allowedSectors.includes(f.ownerSectorName))
   );
 }

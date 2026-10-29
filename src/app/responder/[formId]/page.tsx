@@ -3,11 +3,16 @@ import { prisma } from "@/lib/prisma";
 import { ResponderFormClient } from "./ResponderFormClient";
 
 export default async function ResponderFormPage({
-  params
+  params,
+  searchParams
 }: {
   params: Promise<{ formId: string }>;
+  searchParams: Promise<{ modo?: string }>;
 }) {
   const { formId } = await params;
+  const sp = await searchParams;
+  const isInstructorMode = sp.modo === "instructor";
+
   const allForms = await getAllOnlineForms();
   const form = allForms.find((f) => f.id === formId);
 
@@ -23,20 +28,28 @@ export default async function ResponderFormPage({
     );
   }
 
-  const employees = await prisma.employee.findMany({
-    where: {
-      isActive: true,
-      ...(form.ownerSectorName
-        ? { sector: { name: form.ownerSectorName } }
-        : {})
-    },
-    select: {
-      id: true,
-      name: true,
-      legajo: true
-    },
-    orderBy: { name: "asc" }
-  });
+  const employees = isInstructorMode
+    ? []
+    : await prisma.employee.findMany({
+        where: {
+          isActive: true,
+          ...(form.ownerSectorName
+            ? { sector: { name: form.ownerSectorName } }
+            : {})
+        },
+        select: {
+          id: true,
+          name: true,
+          legajo: true
+        },
+        orderBy: { name: "asc" }
+      });
 
-  return <ResponderFormClient form={form} employees={employees} />;
+  return (
+    <ResponderFormClient
+      form={form}
+      employees={employees}
+      isInstructorMode={isInstructorMode}
+    />
+  );
 }

@@ -1,4 +1,4 @@
-"use server"
+"use server";
 
 import { prisma } from "@/lib/prisma";
 import { revalidatePath } from "next/cache";
@@ -9,10 +9,12 @@ import { encryptRecordId } from "@/lib/crypto";
 import { syncRecordToPowerAutomate } from "@/lib/powerAutomate";
 import { createClient } from "@supabase/supabase-js";
 import { saveTrainingMaterialForRecords } from "@/lib/trainingMaterials";
+import { buildSvgSignatureDataUri } from "@/app/api/webhooks/microsoft-forms/route";
 
 async function saveEvidenceFile(file: File, recordId: number): Promise<string> {
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
-  const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+  const supabaseKey =
+    process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
 
   if (supabaseUrl && supabaseKey) {
     try {
@@ -20,21 +22,21 @@ async function saveEvidenceFile(file: File, recordId: number): Promise<string> {
       const cleanName = file.name
         .normalize("NFD")
         .replace(/[\u0300-\u036f]/g, "")
-        .replace(/[^a-zA-Z0-9.-]/g, '_');
+        .replace(/[^a-zA-Z0-9.-]/g, "_");
       const filename = `${recordId}-${Date.now()}-${cleanName}`;
       const bytes = await file.arrayBuffer();
       const buffer = Buffer.from(bytes);
 
       const { data, error } = await supabaseAdmin.storage
-        .from('evidencias')
+        .from("evidencias")
         .upload(filename, buffer, {
-          contentType: file.type || 'application/octet-stream',
+          contentType: file.type || "application/octet-stream",
           upsert: true
         });
 
       if (!error && data) {
         const { data: publicData } = supabaseAdmin.storage
-          .from('evidencias')
+          .from("evidencias")
           .getPublicUrl(filename);
         return publicData.publicUrl;
       } else {
@@ -45,12 +47,11 @@ async function saveEvidenceFile(file: File, recordId: number): Promise<string> {
     }
   }
 
-  // Fallback for local development or if storage is unreachable
   try {
     const bytes = await file.arrayBuffer();
     const buffer = Buffer.from(bytes);
-    const filename = `${Date.now()}-${file.name.replace(/\s/g, '_')}`;
-    const uploadDir = join(process.cwd(), 'public/uploads');
+    const filename = `${Date.now()}-${file.name.replace(/\s/g, "_")}`;
+    const uploadDir = join(process.cwd(), "public/uploads");
     if (!fs.existsSync(uploadDir)) {
       fs.mkdirSync(uploadDir, { recursive: true });
     }
@@ -66,19 +67,34 @@ async function saveEvidenceFile(file: File, recordId: number): Promise<string> {
 export async function programarFecha(formData: FormData) {
   const recordId = parseInt(formData.get("recordId") as string);
   const dateStr = formData.get("scheduledDate") as string;
-  const materialUrl = formData.get("materialUrl") as string | null;
-  const materialName = formData.get("materialName") as string | null;
-  
+  const materialUrl = (formData.get("materialUrl") as string | null)?.trim() || null;
+  const materialName = (formData.get("materialName") as string | null)?.trim() || null;
+  const materialType = (formData.get("materialType") as "pdf" | "video" | null) || undefined;
+  const instructorName = (formData.get("instructorName") as string | null)?.trim() || null;
+  const instructorSignatureMode =
+    (formData.get("instructorSignatureMode") as "digital" | "link" | null) || "digital";
+
   const existing = await prisma.employeeTrainingRecord.findUnique({ where: { id: recordId } });
   const newDate = dateStr ? new Date(dateStr) : null;
-  
-  let updateData: any = { status: 'IN_PLAN' };
-  
-  // Si ya tenía fecha programada y se cambia, cuenta como reprogramación
+
+  const updateData: any = { status: "IN_PLAN" };
+
   if (existing?.scheduledDate && newDate && existing.scheduledDate.getTime() !== newDate.getTime()) {
     updateData.rescheduledDate = newDate;
   } else {
     updateData.scheduledDate = newDate;
+  }
+
+  if (instructorName) {
+    updateData.instructorName = instructorName;
+    if (instructorSignatureMode === "digital") {
+      const dateFormatted = (newDate || new Date()).toLocaleDateString("es-AR");
+      updateData.instructorSignature = buildSvgSignatureDataUri(
+        instructorName.replace(/\(Leg\.\s*\d+\)/i, "").trim(),
+        "Instructor — Firma Digital Validada",
+        `Fecha: ${dateFormatted}`
+      );
+    }
   }
 
   await prisma.employeeTrainingRecord.update({
@@ -89,13 +105,20 @@ export async function programarFecha(formData: FormData) {
   if (materialUrl) {
     await saveTrainingMaterialForRecords([recordId], {
       url: materialUrl,
-      name: materialName || "Material de Capacitación"
+      name: materialName || (materialType === "video" ? "Video de Capacitación" : "Material PDF"),
+      type: materialType
     });
   }
 
   await syncRecordToPowerAutomate(recordId).catch(() => {});
-  revalidatePath('/plan-anual');
-  revalidatePath('/');
+  revalidatePath("/plan-anual");
+  revalidatePath("/");
+
+  if (instructorSignatureMode === "link") {
+    const instructorToken = encryptRecordId(recordId, "instructor");
+    return { ok: true, instructorToken };
+  }
+  return { ok: true };
 }
 
 export async function marcarEjecutada(formData: FormData) {
@@ -109,18 +132,17 @@ export async function marcarEjecutada(formData: FormData) {
     const employeeSignature = formData.get("employeeSignature") as string | null;
     const instructorSignature = formData.get("instructorSignature") as string | null;
     const instructorName = formData.get("instructorName") as string | null;
-    
+
     let evidencePath: string | null = evidenceUrl || null;
     if (!evidencePath && mode === "upload" && file && file.size > 0) {
       evidencePath = await saveEvidenceFile(file, recordId);
     }
 
-    // Update the record
     await prisma.employeeTrainingRecord.update({
       where: { id: recordId },
       data: {
-        status: 'COMPLETED',
-        effectiveness: 'PENDING',
+        status: "COMPLETED",
+        effectiveness: "PENDING",
         completedAt: dateStr ? new Date(dateStr) : new Date(),
         ...(score ? { score } : {}),
         ...(evidencePath ? { evidencePath } : {}),
@@ -131,8 +153,8 @@ export async function marcarEjecutada(formData: FormData) {
     });
 
     await syncRecordToPowerAutomate(recordId).catch(() => {});
-    revalidatePath('/plan-anual');
-    revalidatePath('/');
+    revalidatePath("/plan-anual");
+    revalidatePath("/");
     return { success: true };
   } catch (err: any) {
     console.error("Error in marcarEjecutada:", err);
@@ -156,8 +178,8 @@ export async function borrarCapacitacion(formData: FormData) {
       trainingName: existing.trainingName
     }).catch(() => {});
   }
-  revalidatePath('/plan-anual');
-  revalidatePath('/');
+  revalidatePath("/plan-anual");
+  revalidatePath("/");
 }
 
 export async function sgiEditRecord(formData: FormData) {
@@ -173,7 +195,7 @@ export async function sgiEditRecord(formData: FormData) {
     const materialUrl = formData.get("materialUrl") as string | null;
     const materialName = formData.get("materialName") as string | null;
 
-    let updateData: any = {};
+    const updateData: any = {};
 
     if (objectiveStr !== null) updateData.objective = objectiveStr.trim();
     if (scheduledDateStr) updateData.scheduledDate = new Date(scheduledDateStr);
@@ -203,9 +225,9 @@ export async function sgiEditRecord(formData: FormData) {
         name: materialName || "Material de Capacitación"
       });
     }
-    
-    revalidatePath('/plan-anual');
-    revalidatePath('/');
+
+    revalidatePath("/plan-anual");
+    revalidatePath("/");
     return { success: true };
   } catch (err: any) {
     console.error("Error in sgiEditRecord:", err);

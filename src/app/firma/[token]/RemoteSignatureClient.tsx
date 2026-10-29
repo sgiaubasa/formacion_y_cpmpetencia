@@ -1,9 +1,73 @@
 "use client";
 
 import { useState, useRef } from "react";
+import Link from "next/link";
 import SignatureCanvas from "react-signature-canvas";
 import { saveRemoteSignature } from "./actions";
 import { MaterialViewerButton, MaterialInfo } from "@/components/MaterialViewerButton";
+
+function renderInlineMaterial(material?: MaterialInfo | null) {
+  if (!material?.url) return null;
+  const url = material.url.trim();
+  const lower = (material.name || url).toLowerCase().split("?")[0];
+
+  const ytMatch = url.match(
+    /(?:youtu\.be\/|youtube\.com\/(?:embed\/|v\/|watch\?v=|watch\?.+&v=))([\w-]{11})/
+  );
+  if (ytMatch) {
+    return (
+      <div style={{ position: "relative", paddingBottom: "56.25%", height: 0, overflow: "hidden", borderRadius: "8px", marginTop: "0.75rem" }}>
+        <iframe
+          src={`https://www.youtube.com/embed/${ytMatch[1]}`}
+          title="Video de Capacitación"
+          style={{ position: "absolute", top: 0, left: 0, width: "100%", height: "100%", border: "none" }}
+          allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+          allowFullScreen
+        />
+      </div>
+    );
+  }
+
+  const gdriveMatch = url.match(/drive\.google\.com\/file\/d\/([a-zA-Z0-9_-]+)/);
+  if (gdriveMatch) {
+    return (
+      <div style={{ position: "relative", paddingBottom: "56.25%", height: 0, overflow: "hidden", borderRadius: "8px", marginTop: "0.75rem" }}>
+        <iframe
+          src={`https://drive.google.com/file/d/${gdriveMatch[1]}/preview`}
+          title="Material de Capacitación"
+          style={{ position: "absolute", top: 0, left: 0, width: "100%", height: "100%", border: "none" }}
+          allow="autoplay"
+          allowFullScreen
+        />
+      </div>
+    );
+  }
+
+  const isVideo =
+    material.type === "video" ||
+    lower.endsWith(".mp4") ||
+    lower.endsWith(".webm") ||
+    lower.endsWith(".mov") ||
+    lower.endsWith(".ogg");
+
+  if (isVideo) {
+    return (
+      <div style={{ marginTop: "0.75rem", borderRadius: "8px", overflow: "hidden", background: "#000" }}>
+        <video controls playsInline style={{ width: "100%", maxHeight: "380px", display: "block" }} src={url} />
+      </div>
+    );
+  }
+
+  return (
+    <div style={{ marginTop: "0.75rem", height: "420px", borderRadius: "8px", overflow: "hidden", border: "1px solid #cbd5e1" }}>
+      <iframe
+        src={`${url}#toolbar=1&view=FitH`}
+        title={material.name || "Documento PDF"}
+        style={{ width: "100%", height: "100%", border: "none" }}
+      />
+    </div>
+  );
+}
 
 export default function RemoteSignatureClient({
   recordId,
@@ -84,7 +148,7 @@ export default function RemoteSignatureClient({
       } else {
         setError(result.error || "Ocurrió un error al guardar los datos.");
       }
-    } catch (err) {
+    } catch {
       setError("Error de conexión. Intentá de nuevo.");
     } finally {
       setIsSubmitting(false);
@@ -93,42 +157,62 @@ export default function RemoteSignatureClient({
 
   if (isSuccess) {
     return (
-      <div style={{ padding: "2rem 1rem", textAlign: "center", fontFamily: "sans-serif", maxWidth: "520px", margin: "2rem auto", background: "white", borderRadius: "12px", boxShadow: "0 4px 16px rgba(0,0,0,0.08)" }}>
+      <div style={{ padding: "2rem 1rem", textAlign: "center", fontFamily: "sans-serif", maxWidth: "560px", margin: "2rem auto", background: "white", borderRadius: "12px", boxShadow: "0 4px 16px rgba(0,0,0,0.08)" }}>
         <img src="/logo.png" alt="AUBASA" style={{ maxWidth: "160px", marginBottom: "1rem" }} />
         <div style={{ fontSize: "3.5rem", marginBottom: "0.75rem" }}>✅</div>
         <h2 style={{ color: "#10b981", marginBottom: "0.75rem" }}>
           {role === "instructor"
-            ? "¡Evaluación y Firma de Instructor Registradas!"
-            : "¡Firma de Asistencia Registrada!"}
+            ? "¡Firma de Instructor Guardada en todas las Planillas de la Capacitación!"
+            : "¡Firma Registrada en el Registro de Asistencia!"}
         </h2>
-        <p style={{ color: "#4b5563", lineHeight: 1.5 }}>
-          Los datos de la capacitación <strong>{trainingName}</strong> para <strong>{employeeName}</strong> fueron guardados exitosamente en el sistema.
+        <p style={{ color: "#4b5563", lineHeight: 1.5, marginBottom: "1.25rem" }}>
+          {role === "instructor" ? (
+            <>
+              La firma de instructor para <strong>{trainingName}</strong> fue guardada y aplicada automáticamente a todas las planillas de asistencia de esta capacitación.
+            </>
+          ) : (
+            <>
+              Tu firma para la capacitación <strong>{trainingName}</strong> ({employeeName}) fue guardada exitosamente en el Registro de Asistencia Oficial.
+            </>
+          )}
         </p>
-        <p style={{ marginTop: "1.5rem", fontSize: "0.85rem", color: "#9ca3af" }}>
-          Ya podés cerrar esta ventana.
-        </p>
+        <Link
+          href={`/plan-anual/planilla/${recordId}`}
+          target="_blank"
+          style={{
+            display: "inline-block",
+            backgroundColor: "#1b365d",
+            color: "#ffffff",
+            fontWeight: 700,
+            padding: "0.7rem 1.25rem",
+            borderRadius: "8px",
+            textDecoration: "none",
+            fontSize: "0.9rem"
+          }}
+        >
+          📄 Ver Registro de Asistencia Firmado (PAU/05 - A9.3)
+        </Link>
       </div>
     );
   }
 
   return (
-    <div style={{ padding: "1rem", fontFamily: "sans-serif", maxWidth: "540px", margin: "0 auto" }}>
+    <div style={{ padding: "1rem", fontFamily: "sans-serif", maxWidth: "680px", margin: "0 auto" }}>
       <div style={{ background: "white", padding: "1.5rem", borderRadius: "12px", boxShadow: "0 4px 20px rgba(0,0,0,0.08)", border: "1px solid #e5e7eb" }}>
         <div style={{ textAlign: "center", marginBottom: "1.25rem" }}>
           <img src="/logo.png" alt="AUBASA" style={{ maxWidth: "150px", marginBottom: "0.75rem" }} />
           <h1 style={{ fontSize: "1.35rem", color: "#0f172a", marginBottom: "0.25rem" }}>
             {role === "instructor"
-              ? "Registro del Instructor"
-              : "Confirmación de Asistencia"}
+              ? "Registro y Firma del Instructor (Aplica a todas las planillas del tema)"
+              : "Confirmación de Asistencia y Lectura de Material"}
           </h1>
           <p style={{ color: "#64748b", fontSize: "0.875rem", margin: 0 }}>
             {role === "instructor"
-              ? "Completá la fecha de realización, calificación y firma del instructor"
-              : "Firmá en el recuadro inferior para registrar tu asistencia a la capacitación"}
+              ? "Tu firma quedará plasmada automáticamente en todas las planillas de asistencia de esta capacitación"
+              : "Revisá el material interactivo y firmá en el recuadro inferior para el Registro de Asistencia"}
           </p>
         </div>
 
-        {/* Aviso si ya fue firmado previamente por esta misma parte */}
         {role === "empleado" && hasEmployeeSignature && (
           <div style={{ marginBottom: "1rem", padding: "0.65rem 0.85rem", borderRadius: "8px", fontSize: "0.82rem", fontWeight: 600, background: "#dcfce7", color: "#166534", border: "1px solid #bbf7d0" }}>
             ✅ Tu firma de asistencia ya figura registrada. Si firmás nuevamente, se actualizará.
@@ -140,7 +224,7 @@ export default function RemoteSignatureClient({
           </div>
         )}
 
-        {/* Datos de la Capacitación */}
+        {/* Datos de la Capacitación + Visor Interactivo de Material */}
         <div style={{ background: "#f8fafc", padding: "1rem", borderRadius: "8px", marginBottom: "1.25rem", border: "1px solid #e2e8f0" }}>
           <div style={{ marginBottom: "0.5rem" }}>
             <span style={{ fontSize: "0.75rem", color: "#64748b", textTransform: "uppercase", fontWeight: 700 }}>
@@ -166,8 +250,14 @@ export default function RemoteSignatureClient({
           </div>
 
           {material?.url && (
-            <div style={{ marginTop: "0.85rem", paddingTop: "0.85rem", borderTop: "1px solid #e2e8f0" }}>
-              <MaterialViewerButton material={material} trainingName={trainingName} fullWidth />
+            <div style={{ marginTop: "0.85rem", paddingTop: "0.85rem", borderTop: "1px solid #cbd5e1" }}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: "0.5rem" }}>
+                <strong style={{ fontSize: "0.88rem", color: "#1b365d" }}>
+                  📚 Material Interactivo de la Capacitación:
+                </strong>
+                <MaterialViewerButton material={material} trainingName={trainingName} />
+              </div>
+              {renderInlineMaterial(material)}
             </div>
           )}
         </div>
@@ -184,7 +274,7 @@ export default function RemoteSignatureClient({
                   name="instructorName"
                   defaultValue={existingInstructorName}
                   required
-                  placeholder="Ej. Juan Pérez"
+                  placeholder="Ej. David Ceballos / Horacio San Martin"
                   style={{ width: "100%", padding: "0.65rem", borderRadius: "6px", border: "1px solid #cbd5e1", fontSize: "0.95rem" }}
                 />
               </div>
@@ -222,7 +312,7 @@ export default function RemoteSignatureClient({
 
               <div>
                 <label style={{ display: "block", fontSize: "0.85rem", fontWeight: 600, color: "#334155", marginBottom: "0.35rem" }}>
-                  Firma del Instructor *
+                  Firma del Instructor (Se aplicará a todas las planillas de esta capacitación) *
                 </label>
                 <div style={{ border: "2px dashed #94a3b8", borderRadius: "8px", background: "white", touchAction: "none" }}>
                   <SignatureCanvas
@@ -247,7 +337,7 @@ export default function RemoteSignatureClient({
           ) : (
             <div style={{ background: "#f8fafc", padding: "1rem", borderRadius: "8px", border: "1px solid #e2e8f0" }}>
               <label style={{ display: "block", fontSize: "0.9rem", fontWeight: 600, color: "#334155", marginBottom: "0.5rem" }}>
-                ✍️ Firma del Empleado ({employeeName}) *
+                ✍️ Firma del Empleado ({employeeName}) para el Registro de Asistencia *
               </label>
               <div style={{ border: "2px dashed #94a3b8", borderRadius: "8px", background: "white", touchAction: "none" }}>
                 <SignatureCanvas
@@ -294,8 +384,8 @@ export default function RemoteSignatureClient({
             {isSubmitting
               ? "Guardando..."
               : role === "instructor"
-              ? "Confirmar Evaluación y Firma del Instructor"
-              : "Confirmar Asistencia del Empleado"}
+              ? "Guardar Firma de Instructor en todas las Planillas"
+              : "Confirmar Asistencia y Firmar Planilla"}
           </button>
         </form>
       </div>

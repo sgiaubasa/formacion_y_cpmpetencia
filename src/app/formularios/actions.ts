@@ -6,43 +6,25 @@ import {
   getAllOnlineForms,
   saveAllOnlineForms,
   OnlineTrainingForm,
-  OnlineFormQuestion
+  OnlineFormQuestion,
+  normalizeTrainingStr,
+  isOnlineTrainingMatch,
+  saveTrainingInstructorSignatureForTopic,
+  getSavedInstructorSignatureForTopic
 } from "@/lib/onlineForms";
 import { buildSvgSignatureDataUri } from "@/app/api/webhooks/microsoft-forms/route";
 import { syncRecordToPowerAutomate } from "@/lib/powerAutomate";
 import { getDefaultInstructorForSector } from "@/lib/instructorDefaults";
 import { revalidatePath } from "next/cache";
 
-function normalizeStr(s: string): string {
-  return (s || "")
-    .toLowerCase()
-    .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "")
-    .replace(/[^a-z0-9\s]/g, " ")
-    .replace(/\s+/g, " ")
-    .trim();
-}
-
-function cleanTopic(s: string): string {
-  return normalizeStr(s)
-    .replace(/\baubasa\b/g, "")
-    .replace(/\s+/g, " ")
-    .trim();
-}
-
-function isTrainingMatch(a: string, b: string): boolean {
-  const normA = cleanTopic(a);
-  const normB = cleanTopic(b);
-  if (!normA || !normB) return false;
-  return normA === normB || normA.includes(normB) || normB.includes(normA);
-}
-
 export async function createOnlineFormAction(payload: {
+  id?: string; // Si viene id, edita el formulario existente
   title: string;
   description: string;
   trainingName: string;
   objective: string;
   instructorName: string;
+  instructorSignatureMode?: "digital" | "link";
   videoUrl?: string | null;
   pdfUrl?: string | null;
   pdfName?: string | null;
@@ -53,6 +35,18 @@ export async function createOnlineFormAction(payload: {
   const isSector = await isSectorRole(role);
   const sectorRoleId = await getSectorIdFromRole(role);
 
+  // Validar que la suma de puntajes de las preguntas no supere 10
+  const totalPoints = (payload.questions || []).reduce(
+    (acc, q) => acc + (typeof q.points === "number" && !isNaN(q.points) ? q.points : 0),
+    0
+  );
+  if (totalPoints > 10.01) {
+    return {
+      ok: false,
+      error: `La suma de los puntajes de las preguntas (${Number(totalPoints.toFixed(2))} pts) no puede superar los 10 puntos.`
+    };
+  }
+
   let ownerSectorName: string | null = null;
   if (isSector && sectorRoleId) {
     const sec = await prisma.sector.findUnique({ where: { id: sectorRoleId } });
@@ -62,15 +56,43 @@ export async function createOnlineFormAction(payload: {
   }
 
   const allForms = await getAllOnlineForms();
-  const slugBase = normalizeStr(payload.title).replace(/\s+/g, "-").slice(0, 32) || "form";
-  
-  // Si no se proveyó un instructor particular, derivar según el sector o jerarquía
+
   let finalInstructor = payload.instructorName?.trim() || "";
   if (!finalInstructor) {
     const defaultInfo = getDefaultInstructorForSector(ownerSectorName);
     finalInstructor = `${defaultInfo.name}${defaultInfo.legajo ? ` (Leg. ${defaultInfo.legajo})` : ""}`;
   }
 
+  const sigMode: "digital" | "link" = payload.instructorSignatureMode === "link" ? "link" : "digital";
+
+  // Si estamos editando un formulario existente
+  if (payload.id) {
+    const existingIdx = allForms.findIndex((f) => f.id === payload.id);
+    if (existingIdx !== -1) {
+      const prev = allForms[existingIdx];
+      const updatedForm: OnlineTrainingForm = {
+        ...prev,
+        title: payload.title.trim(),
+        description: payload.description.trim(),
+        trainingName: payload.trainingName.trim(),
+        objective: payload.objective.trim(),
+        instructorName: finalInstructor,
+        instructorSignatureMode: sigMode,
+        ownerSectorName: !isSector ? (payload.targetSectorName === "GLOBAL" ? null : payload.targetSectorName || prev.ownerSectorName) : prev.ownerSectorName,
+        videoUrl: payload.videoUrl ? payload.videoUrl.trim() : null,
+        pdfUrl: payload.pdfUrl ? payload.pdfUrl.trim() : null,
+        pdfName: payload.pdfName ? payload.pdfName.trim() : null,
+        questions: payload.questions
+      };
+      allForms[existingIdx] = updatedForm;
+      await saveAllOnlineForms(allForms);
+      revalidatePath("/formularios");
+      revalidatePath(`/responder/${updatedForm.id}`);
+      return { ok: true, formId: updatedForm.id };
+    }
+  }
+
+  const slugBase = normalizeTrainingStr(payload.title).replace(/\s+/g, "-").slice(0, 32) || "form";
   const newForm: OnlineTrainingForm = {
     id: `${slugBase}-${Date.now().toString(36)}`,
     title: payload.title.trim(),
@@ -78,6 +100,8 @@ export async function createOnlineFormAction(payload: {
     trainingName: payload.trainingName.trim(),
     objective: payload.objective.trim(),
     instructorName: finalInstructor,
+    instructorSignatureMode: sigMode,
+    instructorSignature: null,
     ownerSectorName,
     createdByRole: role,
     createdAt: new Date().toISOString(),
@@ -101,6 +125,59 @@ export async function createOnlineFormAction(payload: {
   await saveAllOnlineForms(allForms);
   revalidatePath("/formularios");
   return { ok: true, formId: newForm.id };
+}
+
+export async function saveOnlineFormInstructorSignatureAction(payload: {
+  formId: string;
+  instructorName: string;
+  drawnSignature: string;
+}) {
+  const allForms = await getAllOnlineForms();
+  const idx = allForms.findIndex((f) => f.id === payload.formId);
+  if (idx === -1) {
+    return { ok: false, error: "Formulario no encontrado." };
+  }
+
+  const form = allForms[idx];
+  const cleanName = payload.instructorName.trim() || form.instructorName;
+  form.instructorName = cleanName;
+  form.instructorSignature = payload.drawnSignature;
+  form.instructorSignatureMode = "link";
+  allForms[idx] = form;
+
+  await saveAllOnlineForms(allForms);
+
+  // Guardar la firma de este instructor para este tema a nivel global
+  await saveTrainingInstructorSignatureForTopic(form.trainingName, {
+    instructorName: cleanName,
+    instructorSignature: payload.drawnSignature,
+    mode: "link",
+    updatedAt: new Date().toISOString()
+  });
+
+  // Aplicar esta firma y nombre de instructor a TODAS las planillas/registros de esta capacitación
+  const allRecords = await prisma.employeeTrainingRecord.findMany({
+    select: { id: true, trainingName: true }
+  });
+  const matchingIds = allRecords
+    .filter((r) => isOnlineTrainingMatch(r.trainingName, form.trainingName))
+    .map((r) => r.id);
+
+  if (matchingIds.length > 0) {
+    await prisma.employeeTrainingRecord.updateMany({
+      where: { id: { in: matchingIds } },
+      data: {
+        instructorName: cleanName,
+        instructorSignature: payload.drawnSignature
+      }
+    });
+  }
+
+  revalidatePath("/formularios");
+  revalidatePath("/plan-anual");
+  revalidatePath(`/responder/${form.id}`);
+
+  return { ok: true, updatedCount: matchingIds.length };
 }
 
 export async function deleteOnlineFormAction(formId: string) {
@@ -167,12 +244,12 @@ export async function submitOnlineFormResponseAction(payload: {
       allActiveEmployees.find((e) => (e.dni || "").replace(/\D/g, "") === dniRaw) || null;
   }
   if (!employee && empNameRaw) {
-    const targetNorm = normalizeStr(empNameRaw);
+    const targetNorm = normalizeTrainingStr(empNameRaw);
     const targetTokens = targetNorm.split(" ").filter(Boolean);
     employee =
-      allActiveEmployees.find((e) => normalizeStr(e.name) === targetNorm) ||
+      allActiveEmployees.find((e) => normalizeTrainingStr(e.name) === targetNorm) ||
       allActiveEmployees.find((e) => {
-        const empNorm = normalizeStr(e.name);
+        const empNorm = normalizeTrainingStr(e.name);
         return (
           targetTokens.length >= 2 &&
           targetTokens.every((tok) => empNorm.includes(tok))
@@ -188,16 +265,33 @@ export async function submitOnlineFormResponseAction(payload: {
     };
   }
 
-  // Calcular nota de 0 a 10 según respuestas correctas
+  // Calcular nota sumando el puntaje asignado a cada pregunta correcta (máximo 10)
   let scoreNum = 10;
   if (form.questions && form.questions.length > 0) {
-    let correctCount = 0;
-    for (const q of form.questions) {
-      if (payload.answers[q.id] === q.correctIndex) {
-        correctCount++;
+    const hasCustomPoints = form.questions.some(
+      (q) => typeof q.points === "number" && q.points > 0
+    );
+    if (hasCustomPoints) {
+      let earnedPoints = 0;
+      for (const q of form.questions) {
+        const qPts =
+          typeof q.points === "number" && q.points > 0
+            ? q.points
+            : 10 / form.questions.length;
+        if (payload.answers[q.id] === q.correctIndex) {
+          earnedPoints += qPts;
+        }
       }
+      scoreNum = Math.min(10, Math.round(earnedPoints * 10) / 10);
+    } else {
+      let correctCount = 0;
+      for (const q of form.questions) {
+        if (payload.answers[q.id] === q.correctIndex) {
+          correctCount++;
+        }
+      }
+      scoreNum = Math.round((correctCount / form.questions.length) * 100) / 10;
     }
-    scoreNum = Math.round((correctCount / form.questions.length) * 10);
   }
   const scoreStr = String(scoreNum);
 
@@ -213,9 +307,7 @@ export async function submitOnlineFormResponseAction(payload: {
     select: { employeeSignature: true }
   });
 
-  // Prioridad 1: Firma dibujada en pantalla por el colaborador (SignatureCanvas)
-  // Prioridad 2: Firma histórica previa
-  // Prioridad 3: Firma digital SVG estampada con su nombre
+  // Firma del colaborador que irá directamente al Registro de Asistencia (PAU/05 - A9.3)
   const employeeSignature =
     payload.drawnSignature ||
     prevRecordWithSig?.employeeSignature ||
@@ -225,48 +317,66 @@ export async function submitOnlineFormResponseAction(payload: {
       `Fecha: ${dateFormatted}`
     );
 
-  // Determinación del Instructor (Firma digital válida de instructor)
+  // Determinación de nombre y firma del Instructor
   let instructorDisplayName = "";
   let instructorDisplayTitle = "Instructor — Firma Digital Validada";
 
   if (form.id === "manual-uso-sgcysv") {
-    instructorDisplayName = "Montes Sergio";
+    instructorDisplayName = "Montes Sergio (Leg. 11739)";
     instructorDisplayTitle = "Legajo 11739 — Instructor SGI AUBASA";
   } else if (form.instructorName && !form.instructorName.toLowerCase().includes("sgi")) {
     instructorDisplayName = form.instructorName;
     instructorDisplayTitle = `Instructor — ${form.instructorName}`;
   } else {
     const secInfo = getDefaultInstructorForSector(employee.sector?.name);
-    instructorDisplayName = secInfo.name;
+    instructorDisplayName = `${secInfo.name}${secInfo.legajo ? ` (Leg. ${secInfo.legajo})` : ""}`;
     instructorDisplayTitle = secInfo.title;
   }
 
-  const instructorSignature = buildSvgSignatureDataUri(
-    instructorDisplayName,
-    instructorDisplayTitle,
-    `Fecha: ${dateFormatted}`
-  );
+  // Si el instructor ya firmó manuscritamente por link (en el formulario o en el tema), usar esa firma en todas las planillas
+  const savedTopicSig = await getSavedInstructorSignatureForTopic(form.trainingName);
+  const instructorSignature =
+    form.instructorSignature ||
+    savedTopicSig?.instructorSignature ||
+    buildSvgSignatureDataUri(
+      instructorDisplayName.replace(/\(Leg\.\s*\d+\)/i, "").trim(),
+      instructorDisplayTitle,
+      `Fecha: ${dateFormatted}`
+    );
+
+  if (savedTopicSig?.instructorName && !form.instructorName) {
+    instructorDisplayName = savedTopicSig.instructorName;
+  }
 
   // Buscar si el empleado ya tiene el registro en IN_PLAN, GAP o COMPLETED (para no duplicar)
   const existingRecords = await prisma.employeeTrainingRecord.findMany({
     where: { employeeId: employee.id },
+    select: {
+      id: true,
+      trainingName: true,
+      status: true,
+      objective: true,
+      effectiveness: true
+    },
     orderBy: { id: "desc" }
   });
 
   // Buscar el título oficial/canónico en el catálogo de capacitaciones
   const allTrainings = await prisma.training.findMany({ select: { title: true } });
-  const canonicalTraining = allTrainings.find((t) => isTrainingMatch(t.title, form.trainingName));
+  const canonicalTraining = allTrainings.find((t) =>
+    isOnlineTrainingMatch(t.title, form.trainingName)
+  );
   const finalTrainingTitle = canonicalTraining?.title || form.trainingName;
 
   const matchedPending = existingRecords.find(
     (r) =>
       (r.status === "IN_PLAN" || r.status === "GAP") &&
-      isTrainingMatch(r.trainingName, form.trainingName)
+      isOnlineTrainingMatch(r.trainingName, form.trainingName)
   );
   const matchedCompleted = existingRecords.find(
     (r) =>
       r.status === "COMPLETED" &&
-      isTrainingMatch(r.trainingName, form.trainingName)
+      isOnlineTrainingMatch(r.trainingName, form.trainingName)
   );
 
   let record;
@@ -347,11 +457,13 @@ export async function submitOnlineFormResponseAction(payload: {
 
   await syncRecordToPowerAutomate(record.id).catch(() => {});
   revalidatePath("/plan-anual");
+  revalidatePath(`/plan-anual/planilla/${record.id}`);
   revalidatePath("/formularios");
   revalidatePath("/");
 
   return {
     ok: true,
+    recordId: record.id,
     employeeName: employee.name,
     legajo: employee.legajo,
     sectorName: employee.sector.name,

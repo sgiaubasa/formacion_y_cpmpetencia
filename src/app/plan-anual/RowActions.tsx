@@ -36,6 +36,12 @@ export function RowActions({
     "none" | "schedule" | "execute" | "link_only" | "print_blank" | "sgi_edit"
   >("none");
   const [isSavingSchedule, setIsSavingSchedule] = useState(false);
+  const [materialChoice, setMaterialChoice] = useState<"none" | "pdf" | "video">("none");
+  const [materialLinkInput, setMaterialLinkInput] = useState("");
+  const [instructorNameInput, setInstructorNameInput] = useState("");
+  const [instructorSigMode, setInstructorSigMode] = useState<"digital" | "link">("digital");
+  const [generatedInstructorUrl, setGeneratedInstructorUrl] = useState<string | null>(null);
+
   const dropdownRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -53,9 +59,12 @@ export function RowActions({
     setIsSavingSchedule(true);
     try {
       const formData = new FormData(e.currentTarget);
+      formData.set("instructorName", instructorNameInput.trim());
+      formData.set("instructorSignatureMode", instructorSigMode);
+
       const materialFile = formData.get("materialFile") as File | null;
 
-      if (materialFile && materialFile.size > 0) {
+      if (materialChoice !== "none" && materialFile && materialFile.size > 0) {
         try {
           const cleanName = materialFile.name
             .normalize("NFD")
@@ -76,17 +85,30 @@ export function RowActions({
               .getPublicUrl(filename);
             formData.set("materialUrl", publicData.publicUrl);
             formData.set("materialName", materialFile.name);
+            formData.set("materialType", materialChoice);
             formData.delete("materialFile");
           }
         } catch (uploadEx) {
           console.warn("Client material upload error in schedule:", uploadEx);
         }
+      } else if (materialChoice !== "none" && materialLinkInput.trim()) {
+        formData.set("materialUrl", materialLinkInput.trim());
+        formData.set(
+          "materialName",
+          materialChoice === "video" ? "Video de Capacitación" : "Material PDF"
+        );
+        formData.set("materialType", materialChoice);
+        formData.delete("materialFile");
       } else {
         formData.delete("materialFile");
       }
 
-      await programarFecha(formData);
-      setActiveForm("none");
+      const res = await programarFecha(formData);
+      if (res && typeof res === "object" && "instructorToken" in res && res.instructorToken) {
+        setGeneratedInstructorUrl(`${window.location.origin}/firma/${res.instructorToken}`);
+      } else {
+        setActiveForm("none");
+      }
     } finally {
       setIsSavingSchedule(false);
     }
@@ -99,12 +121,12 @@ export function RowActions({
         style={{
           display: "flex",
           flexDirection: "column",
-          gap: "0.5rem",
+          gap: "0.55rem",
           background: "#f8fafc",
-          padding: "0.75rem",
+          padding: "0.85rem",
           borderRadius: "8px",
           border: "1px solid var(--border-color)",
-          minWidth: "240px"
+          minWidth: "270px"
         }}
       >
         <input type="hidden" name="recordId" value={recordId} />
@@ -121,36 +143,120 @@ export function RowActions({
             required
           />
         </div>
+
         <div>
           <label style={{ display: "block", fontSize: "0.72rem", fontWeight: 600, color: "#475569", marginBottom: "0.2rem" }}>
-            📎 Material PDF o Video (Opcional)
+            👨‍🏫 Nombre del Instructor (Opcional)
           </label>
           <input
-            type="file"
-            name="materialFile"
-            accept=".pdf,video/*"
+            type="text"
+            value={instructorNameInput}
+            onChange={(e) => setInstructorNameInput(e.target.value)}
+            placeholder="Ej: David Ceballos / Horacio San Martin"
             className="form-input"
-            style={{ width: "100%", padding: "0.25rem", fontSize: "0.75rem" }}
+            style={{ width: "100%", padding: "0.3rem", fontSize: "0.78rem" }}
           />
         </div>
-        <div style={{ display: "flex", gap: "0.5rem" }}>
-          <button
-            type="submit"
-            disabled={isSavingSchedule}
-            className="btn btn-primary"
-            style={{ flex: 1, padding: "0.3rem 0.5rem", fontSize: "0.75rem" }}
+
+        <div>
+          <label style={{ display: "block", fontSize: "0.72rem", fontWeight: 600, color: "#475569", marginBottom: "0.2rem" }}>
+            ✍️ Firma del Instructor en Planillas
+          </label>
+          <select
+            value={instructorSigMode}
+            onChange={(e) => setInstructorSigMode(e.target.value as "digital" | "link")}
+            className="form-input"
+            style={{ width: "100%", padding: "0.3rem", fontSize: "0.78rem" }}
           >
-            {isSavingSchedule ? "Guardando..." : "Guardar"}
-          </button>
-          <button
-            type="button"
-            onClick={() => setActiveForm("none")}
-            className="btn btn-secondary"
-            style={{ padding: "0.3rem 0.5rem", fontSize: "0.75rem" }}
-          >
-            Cancelar
-          </button>
+            <option value="digital">🖥️ Firma Digital Automática</option>
+            <option value="link">✍️ Generar Link para Firma del Instructor</option>
+          </select>
         </div>
+
+        <div>
+          <label style={{ display: "block", fontSize: "0.72rem", fontWeight: 600, color: "#475569", marginBottom: "0.2rem" }}>
+            🎬📄 Tipo de Material Interactivo
+          </label>
+          <select
+            value={materialChoice}
+            onChange={(e) => setMaterialChoice(e.target.value as "none" | "pdf" | "video")}
+            className="form-input"
+            style={{ width: "100%", padding: "0.3rem", fontSize: "0.78rem" }}
+          >
+            <option value="none">Sin material</option>
+            <option value="pdf">📄 Subir / Link Documento PDF</option>
+            <option value="video">🎬 Subir / Link Video</option>
+          </select>
+        </div>
+
+        {materialChoice !== "none" && (
+          <div style={{ display: "flex", flexDirection: "column", gap: "0.35rem", backgroundColor: "#fffbeb", padding: "0.5rem", borderRadius: "6px", border: "1px solid #fcd34d" }}>
+            <input
+              type="file"
+              name="materialFile"
+              accept={materialChoice === "pdf" ? ".pdf,application/pdf" : "video/*"}
+              className="form-input"
+              style={{ width: "100%", padding: "0.25rem", fontSize: "0.74rem", backgroundColor: "#ffffff" }}
+            />
+            <input
+              type="url"
+              value={materialLinkInput}
+              onChange={(e) => setMaterialLinkInput(e.target.value)}
+              placeholder={materialChoice === "pdf" ? "O pegá link al PDF..." : "O pegá link a YouTube / Video..."}
+              className="form-input"
+              style={{ width: "100%", padding: "0.25rem", fontSize: "0.74rem", backgroundColor: "#ffffff" }}
+            />
+          </div>
+        )}
+
+        {generatedInstructorUrl ? (
+          <div style={{ backgroundColor: "#f0fdfa", border: "1px solid #0d8383", padding: "0.5rem", borderRadius: "6px", display: "flex", flexDirection: "column", gap: "0.35rem" }}>
+            <span style={{ fontSize: "0.75rem", fontWeight: 700, color: "#0f766e" }}>
+              ✓ Fecha guardada. Link de firma del Instructor:
+            </span>
+            <input type="text" readOnly value={generatedInstructorUrl} className="form-input" style={{ fontSize: "0.72rem", padding: "0.25rem" }} />
+            <div style={{ display: "flex", gap: "0.35rem" }}>
+              <button
+                type="button"
+                onClick={() => navigator.clipboard.writeText(generatedInstructorUrl)}
+                className="btn btn-primary"
+                style={{ flex: 1, fontSize: "0.72rem", padding: "0.25rem" }}
+              >
+                📋 Copiar Link
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setGeneratedInstructorUrl(null);
+                  setActiveForm("none");
+                }}
+                className="btn btn-secondary"
+                style={{ fontSize: "0.72rem", padding: "0.25rem" }}
+              >
+                Cerrar
+              </button>
+            </div>
+          </div>
+        ) : (
+          <div style={{ display: "flex", gap: "0.5rem" }}>
+            <button
+              type="submit"
+              disabled={isSavingSchedule}
+              className="btn btn-primary"
+              style={{ flex: 1, padding: "0.3rem 0.5rem", fontSize: "0.75rem" }}
+            >
+              {isSavingSchedule ? "Guardando..." : "Guardar"}
+            </button>
+            <button
+              type="button"
+              onClick={() => setActiveForm("none")}
+              className="btn btn-secondary"
+              style={{ padding: "0.3rem 0.5rem", fontSize: "0.75rem" }}
+            >
+              Cancelar
+            </button>
+          </div>
+        )}
       </form>
     );
   }
@@ -253,7 +359,7 @@ export function RowActions({
                   setIsOpen(false);
                 }}
               >
-                {hasScheduledDate ? "🔄 Reprogramar Fecha / Material" : "📅 Programar Fecha / Material"}
+                {hasScheduledDate ? "🔄 Reprogramar / Material / Instructor" : "📅 Programar Fecha / Material / Instructor"}
               </button>
               <button
                 className="dropdown-item"

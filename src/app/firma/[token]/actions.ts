@@ -3,6 +3,10 @@
 import { prisma } from "@/lib/prisma";
 import { revalidatePath } from "next/cache";
 import { syncRecordToPowerAutomate } from "@/lib/powerAutomate";
+import {
+  isOnlineTrainingMatch,
+  saveTrainingInstructorSignatureForTopic
+} from "@/lib/onlineForms";
 
 export async function saveRemoteSignature(formData: FormData) {
   try {
@@ -29,7 +33,10 @@ export async function saveRemoteSignature(formData: FormData) {
 
     const updateData: any = {
       status: "COMPLETED",
-      effectiveness: record.effectiveness && record.effectiveness !== "NONE" ? record.effectiveness : "PENDING"
+      effectiveness:
+        record.effectiveness && record.effectiveness !== "NONE"
+          ? record.effectiveness
+          : "PENDING"
     };
 
     if ((roleMode === "empleado" || roleMode === "ambos") && employeeSignature) {
@@ -61,12 +68,40 @@ export async function saveRemoteSignature(formData: FormData) {
       data: updateData
     });
 
-    // Sincronizar con Power Automate (Excel Online)
+    // Si firmó el instructor, propagar su firma a todas las planillas de esta misma capacitación
+    if ((roleMode === "instructor" || roleMode === "ambos") && instructorSignature && instructorName) {
+      await saveTrainingInstructorSignatureForTopic(record.trainingName, {
+        instructorName,
+        instructorSignature,
+        mode: "link",
+        updatedAt: new Date().toISOString()
+      });
+
+      const allSameTraining = await prisma.employeeTrainingRecord.findMany({
+        select: { id: true, trainingName: true }
+      });
+      const targetIds = allSameTraining
+        .filter((r) => isOnlineTrainingMatch(r.trainingName, record.trainingName))
+        .map((r) => r.id);
+
+      if (targetIds.length > 0) {
+        await prisma.employeeTrainingRecord.updateMany({
+          where: { id: { in: targetIds } },
+          data: {
+            instructorName,
+            instructorSignature
+          }
+        });
+      }
+    }
+
     await syncRecordToPowerAutomate(recordId).catch(() => {});
 
     revalidatePath("/plan-anual");
+    revalidatePath(`/plan-anual/planilla/${recordId}`);
     revalidatePath("/brechas");
     revalidatePath("/transferencias");
+    revalidatePath("/formularios");
 
     return { success: true };
   } catch (error) {
