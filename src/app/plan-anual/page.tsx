@@ -287,215 +287,238 @@ export default async function PlanAnualPage({ searchParams }: { searchParams: Pr
       <div className="page-header" style={{ alignItems: 'flex-start' }}>
         <div>
           <h1 className="page-title" style={{ color: 'var(--teal-color)' }}>Plan Anual de Capacitación</h1>
-          <p style={{ color: 'var(--text-secondary)' }}>Gestión, programación y ejecución de necesidades de capacitación</p>
+          <p style={{ color: 'var(--text-secondary)' }}>
+            Hacé clic en el título de cada sección para desplegar u ocultar <strong>Programación</strong>, <strong>Importación de Formularios</strong> o <strong>Seguimiento del Plan</strong>.
+          </p>
         </div>
       </div>
 
-      {/* PANEL 1: PROGRAMAR / ASIGNAR NUEVA CAPACITACIÓN */}
-      <div
-        className="card"
-        style={{
-          marginBottom: '2.25rem',
-          borderLeft: '6px solid var(--teal-color)',
-          background: 'linear-gradient(to right, #f0fdfa, #ffffff 35%)',
-          boxShadow: '0 4px 12px rgba(13, 148, 136, 0.08)'
-        }}
-      >
-        <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem', marginBottom: '0.35rem', flexWrap: 'wrap' }}>
-          <span
-            style={{
-              background: 'var(--teal-color)',
-              color: 'white',
-              fontSize: '0.72rem',
-              fontWeight: 700,
-              padding: '0.25rem 0.6rem',
-              borderRadius: '6px',
-              textTransform: 'uppercase',
-              letterSpacing: '0.04em'
-            }}
-          >
-            ➕ Cargar Nueva Capacitación
-          </span>
-          <h3 style={{ margin: 0, color: 'var(--primary-color)', fontSize: '1.15rem' }}>
-            Programar y Asignar Capacitación al Plan
-          </h3>
-        </div>
-        <p style={{ fontSize: '0.85rem', color: '#475569', marginBottom: '1rem' }}>
-          Completá este formulario para programar una nueva capacitación a un empleado, puesto o sector, definir el Instructor (con firma digital o vía link para todas las planillas) y adjuntar el material interactivo en PDF o Video.
-        </p>
-        <AssignTrainingForm 
-          allEmployees={allEmployees}
-          allJobProfiles={allJobProfiles}
-          allSectors={allSectors}
-          isSector={isSector}
-          sectorRoleId={sectorRoleId ?? undefined}
-          allTrainings={allTrainings}
-          addAdHocNeed={addAdHocNeed}
-        />
-      </div>
-
-      {/* PANEL 1.B: IMPORTAR RESPUESTAS DE MICROSOFT FORMS (SIN ARMAR FLUJO) */}
-      <MicrosoftFormsImportCard allTrainings={allTrainings} />
-
-      {/* PANEL 2: FILTROS INTERACTIVOS + TABLA DEL PLAN ANUAL */}
-      <PlanAnualFilters
-        allSectors={allSectors}
-        allJobProfiles={allJobProfiles}
+      {/* PANEL 1: DESPLEGABLE DE PROGRAMAR / ASIGNAR NUEVA CAPACITACIÓN */}
+      <AssignTrainingForm 
         allEmployees={allEmployees}
-        allTrainings={allTrainings}
+        allJobProfiles={allJobProfiles}
+        allSectors={allSectors}
         isSector={isSector}
-        initialSectorId={sectorId ? String(sectorId) : ''}
-        initialJobProfileId={sp.jobProfileId || ''}
-        initialEmployeeId={sp.employeeId || ''}
-        initialEmpSearch={empName}
-        initialStatusFilter={sp.statusFilter || ''}
-        initialTopicQuery={q}
+        sectorRoleId={sectorRoleId ?? undefined}
+        allTrainings={allTrainings}
+        addAdHocNeed={addAdHocNeed}
       />
 
-      <div className="card" style={{ padding: 0, borderTopLeftRadius: 0, borderTopRightRadius: 0 }}>
-        <table className="data-table">
-          <thead>
-            <tr>
-              <th>EMPLEADO</th>
-              <th>SECTOR</th>
-              <th>CAPACITACIÓN</th>
-              <th>ESTADO</th>
-              <th>FECHA PROGRAMADA</th>
-              <th>GESTIÓN ...</th>
-            </tr>
-          </thead>
-          <tbody>
-            {records.map(r => {
-              const isCompleted = r.status === 'COMPLETED';
-              const material = materialsMap[`record_${r.id}`] || null;
-              const activeDateObj = r.rescheduledDate || r.scheduledDate;
-              return (
-                <tr key={r.id}>
-                  <td style={{ fontWeight: 500 }}>{r.employee.name}</td>
-                  <td>{r.employee.sector.name}</td>
-                  <td style={{ maxWidth: '250px' }}>
-                    <div>{r.trainingName}</div>
-                    {material && (
-                      <div style={{ marginTop: '0.35rem' }}>
-                        <MaterialViewerButton material={material} trainingName={r.trainingName} />
-                      </div>
-                    )}
-                  </td>
-                  <td>{getStateBadge(r)}</td>
-                  <td>
-                    {r.rescheduledDate ? (
-                      <div style={{ display: 'flex', flexDirection: 'column', gap: '0.15rem' }}>
-                        <span style={{ fontWeight: 700, color: '#ea580c', fontSize: '0.88rem' }} title="Nueva Fecha Reprogramada">
-                          🔄 Nueva: {new Date(r.rescheduledDate).toLocaleDateString('es-AR')}
-                        </span>
-                        {r.scheduledDate && (
-                          <span style={{ fontSize: '0.74rem', color: '#64748b' }} title="Fecha Programada Original">
-                            Orig.: <span style={{ textDecoration: 'line-through' }}>{new Date(r.scheduledDate).toLocaleDateString('es-AR')}</span>
-                          </span>
-                        )}
-                      </div>
-                    ) : (
-                      r.scheduledDate ? new Date(r.scheduledDate).toLocaleDateString('es-AR') : '-'
-                    )}
-                  </td>
-                  <td>
-                    {!isCompleted ? (
-                      <RowActions 
-                        recordId={r.id} 
-                        currentDate={activeDateObj ? activeDateObj.toISOString().split('T')[0] : ''} 
-                        currentScheduledDate={r.scheduledDate ? r.scheduledDate.toISOString().split('T')[0] : ''}
-                        currentRescheduledDate={r.rescheduledDate ? r.rescheduledDate.toISOString().split('T')[0] : ''}
-                        hasScheduledDate={Boolean(r.scheduledDate)}
-                        status={r.status} 
-                        isSgi={role === 'SGI'}
-                        currentObjective={r.objective || ""}
-                      />
-                    ) : (
-                      <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
-                        <div style={{ fontSize: '0.875rem' }}>Realizada el: <strong>{r.completedAt ? new Date(r.completedAt).toLocaleDateString('es-AR') : '-'}</strong></div>
-                        {r.score && <div style={{ fontSize: '0.875rem' }}>Nota: <strong>{r.score}</strong>/10</div>}
-                        <div style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>Instructor: <strong>{r.instructorName || getDefaultInstructorForSector(r.employee.sector?.name).name}</strong></div>
-                        {material && (
+      {/* PANEL 1.B: DESPLEGABLE DE IMPORTAR RESPUESTAS DE MICROSOFT FORMS */}
+      <MicrosoftFormsImportCard allTrainings={allTrainings} />
+
+      {/* PANEL 2: DESPLEGABLE DE SEGUIMIENTO Y FILTROS DE LA TABLA */}
+      <details open style={{ marginBottom: '2rem' }}>
+        <summary
+          className="card"
+          style={{
+            cursor: 'pointer',
+            userSelect: 'none',
+            listStyle: 'none',
+            marginBottom: '0.75rem',
+            padding: '1rem 1.5rem',
+            borderLeft: '6px solid #0f766e',
+            background: 'linear-gradient(to right, #f8fafc, #ffffff)',
+            display: 'flex',
+            justifyContent: 'space-between',
+            alignItems: 'center',
+            flexWrap: 'wrap',
+            gap: '0.75rem'
+          }}
+        >
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.7rem', flexWrap: 'wrap' }}>
+            <span
+              style={{
+                backgroundColor: '#0f766e',
+                color: '#ffffff',
+                fontSize: '0.72rem',
+                fontWeight: 700,
+                padding: '0.25rem 0.65rem',
+                borderRadius: '6px',
+                textTransform: 'uppercase',
+                letterSpacing: '0.04em'
+              }}
+            >
+              📊 Seguimiento del Plan Anual
+            </span>
+            <h3 style={{ margin: 0, color: '#1b365d', fontSize: '1.1rem' }}>
+              Filtros y Listado de Capacitaciones ({records.length} registros en vista)
+            </h3>
+          </div>
+          <span
+            style={{
+              fontSize: '0.82rem',
+              fontWeight: 700,
+              color: '#0f766e',
+              backgroundColor: '#f0fdfa',
+              border: '1px solid #99f6e4',
+              padding: '0.35rem 0.8rem',
+              borderRadius: '8px'
+            }}
+          >
+            ⇅ Clic para Desplegar / Ocultar Seguimiento
+          </span>
+        </summary>
+
+        <PlanAnualFilters
+          allSectors={allSectors}
+          allJobProfiles={allJobProfiles}
+          allEmployees={allEmployees}
+          allTrainings={allTrainings}
+          isSector={isSector}
+          initialSectorId={sectorId ? String(sectorId) : ''}
+          initialJobProfileId={sp.jobProfileId || ''}
+          initialEmployeeId={sp.employeeId || ''}
+          initialEmpSearch={empName}
+          initialStatusFilter={sp.statusFilter || ''}
+          initialTopicQuery={q}
+        />
+
+        <div className="card" style={{ padding: 0, borderTopLeftRadius: 0, borderTopRightRadius: 0 }}>
+          <table className="data-table">
+            <thead>
+              <tr>
+                <th>EMPLEADO</th>
+                <th>SECTOR</th>
+                <th>CAPACITACIÓN</th>
+                <th>ESTADO</th>
+                <th>FECHA PROGRAMADA</th>
+                <th>GESTIÓN ...</th>
+              </tr>
+            </thead>
+            <tbody>
+              {records.map(r => {
+                const isCompleted = r.status === 'COMPLETED';
+                const material = materialsMap[`record_${r.id}`] || null;
+                const activeDateObj = r.rescheduledDate || r.scheduledDate;
+                return (
+                  <tr key={r.id}>
+                    <td style={{ fontWeight: 500 }}>{r.employee.name}</td>
+                    <td>{r.employee.sector.name}</td>
+                    <td style={{ maxWidth: '250px' }}>
+                      <div>{r.trainingName}</div>
+                      {material && (
+                        <div style={{ marginTop: '0.35rem' }}>
                           <MaterialViewerButton material={material} trainingName={r.trainingName} />
-                        )}
-                        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.35rem', marginTop: '0.2rem' }}>
-                          <a 
-                            href={`/plan-anual/planilla/${r.id}`} 
-                            target="_blank" 
-                            rel="noopener noreferrer" 
-                            className="btn btn-secondary" 
-                            style={{ 
-                              padding: '0.3rem 0.65rem', 
-                              fontSize: '0.78rem', 
-                              width: 'fit-content',
-                              backgroundColor: '#0d8383',
-                              color: '#ffffff',
-                              fontWeight: 700,
-                              textDecoration: 'none',
-                              borderRadius: '4px',
-                              boxShadow: '0 1px 3px rgba(0,0,0,0.1)'
-                            }}
-                          >
-                            📄 Ver Planilla Firmada
-                          </a>
-                          {r.evidencePath && (
+                        </div>
+                      )}
+                    </td>
+                    <td>{getStateBadge(r)}</td>
+                    <td>
+                      {r.rescheduledDate ? (
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.15rem' }}>
+                          <span style={{ fontWeight: 700, color: '#ea580c', fontSize: '0.88rem' }} title="Nueva Fecha Reprogramada">
+                            🔄 Nueva: {new Date(r.rescheduledDate).toLocaleDateString('es-AR')}
+                          </span>
+                          {r.scheduledDate && (
+                            <span style={{ fontSize: '0.74rem', color: '#64748b' }} title="Fecha Programada Original">
+                              Orig.: <span style={{ textDecoration: 'line-through' }}>{new Date(r.scheduledDate).toLocaleDateString('es-AR')}</span>
+                            </span>
+                          )}
+                        </div>
+                      ) : (
+                        r.scheduledDate ? new Date(r.scheduledDate).toLocaleDateString('es-AR') : '-'
+                      )}
+                    </td>
+                    <td>
+                      {!isCompleted ? (
+                        <RowActions 
+                          recordId={r.id} 
+                          currentDate={activeDateObj ? activeDateObj.toISOString().split('T')[0] : ''} 
+                          currentScheduledDate={r.scheduledDate ? r.scheduledDate.toISOString().split('T')[0] : ''}
+                          currentRescheduledDate={r.rescheduledDate ? r.rescheduledDate.toISOString().split('T')[0] : ''}
+                          hasScheduledDate={Boolean(r.scheduledDate)}
+                          status={r.status} 
+                          isSgi={role === 'SGI'}
+                          currentObjective={r.objective || ""}
+                        />
+                      ) : (
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+                          <div style={{ fontSize: '0.875rem' }}>Realizada el: <strong>{r.completedAt ? new Date(r.completedAt).toLocaleDateString('es-AR') : '-'}</strong></div>
+                          {r.score && <div style={{ fontSize: '0.875rem' }}>Nota: <strong>{r.score}</strong>/10</div>}
+                          <div style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>Instructor: <strong>{r.instructorName || getDefaultInstructorForSector(r.employee.sector?.name).name}</strong></div>
+                          {material && (
+                            <MaterialViewerButton material={material} trainingName={r.trainingName} />
+                          )}
+                          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.35rem', marginTop: '0.2rem' }}>
                             <a 
-                              href={r.evidencePath} 
+                              href={`/plan-anual/planilla/${r.id}`} 
                               target="_blank" 
                               rel="noopener noreferrer" 
                               className="btn btn-secondary" 
-                              style={{ padding: '0.22rem 0.55rem', fontSize: '0.74rem', width: 'fit-content' }}
+                              style={{ 
+                                padding: '0.3rem 0.65rem', 
+                                fontSize: '0.78rem', 
+                                width: 'fit-content',
+                                backgroundColor: '#0d8383',
+                                color: '#ffffff',
+                                fontWeight: 700,
+                                textDecoration: 'none',
+                                borderRadius: '4px',
+                                boxShadow: '0 1px 3px rgba(0,0,0,0.1)'
+                              }}
                             >
-                              📎 Ver Evidencia Adjunta
+                              📄 Ver Planilla Firmada
                             </a>
+                            {r.evidencePath && (
+                              <a 
+                                href={r.evidencePath} 
+                                target="_blank" 
+                                rel="noopener noreferrer" 
+                                className="btn btn-secondary" 
+                                style={{ padding: '0.22rem 0.55rem', fontSize: '0.74rem', width: 'fit-content' }}
+                              >
+                                📎 Ver Evidencia Adjunta
+                              </a>
+                            )}
+                            <div style={{ fontSize: '0.72rem', color: '#475569' }}>
+                              Firma Participante: ✅ | Instructor: ✅
+                            </div>
+                          </div>
+                          {r.effectiveness === 'PENDING' && (
+                            <Link href={`/brechas/${r.employeeId}/evaluar`} className="btn btn-warning" style={{ padding: '0.25rem 0.5rem', fontSize: '0.75rem', width: 'fit-content' }}>
+                              Evaluar Eficacia
+                            </Link>
                           )}
-                          <div style={{ fontSize: '0.72rem', color: '#475569' }}>
-                            Firma Participante: ✅ | Instructor: ✅
+                          {r.effectiveness === 'EFFECTIVE' && <span className="badge badge-success" style={{ width: 'fit-content' }}>Eficaz</span>}
+                          {r.effectiveness === 'INEFFECTIVE' && <span className="badge badge-secondary" style={{ backgroundColor: '#ef4444', width: 'fit-content' }}>No Eficaz</span>}
+                          {traceMap[`record_${r.id}`]?.evaluatorName && (r.effectiveness === 'EFFECTIVE' || r.effectiveness === 'INEFFECTIVE') && (
+                            <div style={{ fontSize: '0.75rem', color: '#166534', fontWeight: 600 }}>
+                              👤 Evaluó eficacia: {traceMap[`record_${r.id}`].evaluatorName}
+                            </div>
+                          )}
+                          
+                          <div style={{ marginTop: '0.25rem' }}>
+                            <RowActions 
+                              recordId={r.id} 
+                              currentDate={activeDateObj ? activeDateObj.toISOString().split('T')[0] : ''} 
+                              currentScheduledDate={r.scheduledDate ? r.scheduledDate.toISOString().split('T')[0] : ''}
+                              currentRescheduledDate={r.rescheduledDate ? r.rescheduledDate.toISOString().split('T')[0] : ''}
+                              hasScheduledDate={Boolean(r.scheduledDate)}
+                              status={r.status}
+                              isSgi={role === 'SGI'}
+                              isCompleted={true}
+                              currentCompletedDate={r.completedAt ? r.completedAt.toISOString().split('T')[0] : ''}
+                              currentScore={r.score || ""}
+                              currentObjective={r.objective || ""}
+                            />
                           </div>
                         </div>
-                        {r.effectiveness === 'PENDING' && (
-                          <Link href={`/brechas/${r.employeeId}/evaluar`} className="btn btn-warning" style={{ padding: '0.25rem 0.5rem', fontSize: '0.75rem', width: 'fit-content' }}>
-                            Evaluar Eficacia
-                          </Link>
-                        )}
-                        {r.effectiveness === 'EFFECTIVE' && <span className="badge badge-success" style={{ width: 'fit-content' }}>Eficaz</span>}
-                        {r.effectiveness === 'INEFFECTIVE' && <span className="badge badge-secondary" style={{ backgroundColor: '#ef4444', width: 'fit-content' }}>No Eficaz</span>}
-                        {traceMap[`record_${r.id}`]?.evaluatorName && (r.effectiveness === 'EFFECTIVE' || r.effectiveness === 'INEFFECTIVE') && (
-                          <div style={{ fontSize: '0.75rem', color: '#166534', fontWeight: 600 }}>
-                            👤 Evaluó eficacia: {traceMap[`record_${r.id}`].evaluatorName}
-                          </div>
-                        )}
-                        
-                        <div style={{ marginTop: '0.25rem' }}>
-                          <RowActions 
-                            recordId={r.id} 
-                            currentDate={activeDateObj ? activeDateObj.toISOString().split('T')[0] : ''} 
-                            currentScheduledDate={r.scheduledDate ? r.scheduledDate.toISOString().split('T')[0] : ''}
-                            currentRescheduledDate={r.rescheduledDate ? r.rescheduledDate.toISOString().split('T')[0] : ''}
-                            hasScheduledDate={Boolean(r.scheduledDate)}
-                            status={r.status}
-                            isSgi={role === 'SGI'}
-                            isCompleted={true}
-                            currentCompletedDate={r.completedAt ? r.completedAt.toISOString().split('T')[0] : ''}
-                            currentScore={r.score || ""}
-                            currentObjective={r.objective || ""}
-                          />
-                        </div>
-                      </div>
-                    )}
-                  </td>
-                </tr>
-              );
-            })}
-            {records.length === 0 && (
-              <tr><td colSpan={6} style={{ textAlign: 'center' }}>No se encontraron registros.</td></tr>
-            )}
-          </tbody>
-        </table>
-        <div style={{ padding: '1rem', textAlign: 'center', color: 'var(--text-secondary)', fontSize: '0.875rem' }}>
-          Mostrando los últimos 300 resultados. Usa los filtros para buscar capacitaciones específicas.
+                      )}
+                    </td>
+                  </tr>
+                );
+              })}
+              {records.length === 0 && (
+                <tr><td colSpan={6} style={{ textAlign: 'center' }}>No se encontraron registros.</td></tr>
+              )}
+            </tbody>
+          </table>
+          <div style={{ padding: '1rem', textAlign: 'center', color: 'var(--text-secondary)', fontSize: '0.875rem' }}>
+            Mostrando los últimos 300 resultados. Usa los filtros para buscar capacitaciones específicas.
+          </div>
         </div>
-      </div>
+      </details>
     </div>
   );
 }

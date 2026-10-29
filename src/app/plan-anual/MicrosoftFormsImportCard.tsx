@@ -33,13 +33,10 @@ export function MicrosoftFormsImportCard({
     notFound?: string[];
   } | null>(null);
 
-  // Cuando el usuario selecciona el archivo Excel descargado de Microsoft Forms,
-  // detectamos automáticamente el Tema de Capacitación a partir del título del formulario (nombre del archivo Excel)
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
 
-    // Microsoft Forms nombra el Excel como: "Nombre del Formulario(1-25).xlsx"
     const baseName = file.name
       .replace(/\.(xlsx|xls|csv)$/i, "")
       .replace(/\(\d+\s*-\s*\d+\)$/g, "")
@@ -174,29 +171,33 @@ export function MicrosoftFormsImportCard({
     <div
       className="card"
       style={{
-        marginBottom: "1.75rem",
+        marginBottom: "1.5rem",
         borderLeft: "6px solid #1b365d",
         background: "#ffffff",
         padding: "1.1rem 1.5rem"
       }}
     >
+      {/* CABECERA CLICKEABLE DESPLEGABLE */}
       <div
+        onClick={() => setIsOpen(!isOpen)}
         style={{
           display: "flex",
           justifyContent: "space-between",
           alignItems: "center",
           flexWrap: "wrap",
-          gap: "1rem"
+          gap: "1rem",
+          cursor: "pointer",
+          userSelect: "none"
         }}
       >
-        <div style={{ flex: "1 1 420px" }}>
+        <div style={{ display: "flex", alignItems: "center", gap: "0.7rem", flexWrap: "wrap" }}>
           <span
             style={{
               backgroundColor: "#e0f2fe",
               color: "#1b365d",
               fontSize: "0.72rem",
               fontWeight: 700,
-              padding: "0.2rem 0.6rem",
+              padding: "0.25rem 0.65rem",
               borderRadius: "6px",
               textTransform: "uppercase",
               letterSpacing: "0.04em"
@@ -204,15 +205,15 @@ export function MicrosoftFormsImportCard({
           >
             Formularios Online &amp; Microsoft Forms 365
           </span>
-          <h3 style={{ margin: "0.35rem 0 0 0", fontSize: "1.05rem", color: "#1b365d" }}>
+          <h3 style={{ margin: 0, fontSize: "1.05rem", color: "#1b365d" }}>
             📥 Cargar / Actualizar Excel de Microsoft Forms o Usar Formulario Online
           </h3>
-          <p style={{ margin: "0.2rem 0 0 0", fontSize: "0.85rem", color: "#64748b" }}>
-            Si en Microsoft Forms le ponés al formulario el <strong>mismo título que el Tema de Capacitación de la aplicación</strong>, al subir el Excel lo detecta automáticamente. También podés volver a subir el mismo Excel con nuevas cargas sin duplicar las anteriores.
-          </p>
         </div>
 
-        <div style={{ display: "flex", gap: "0.6rem", flexWrap: "wrap" }}>
+        <div
+          style={{ display: "flex", gap: "0.6rem", flexWrap: "wrap" }}
+          onClick={(e) => e.stopPropagation()}
+        >
           <Link
             href="/formularios"
             className="btn"
@@ -220,7 +221,8 @@ export function MicrosoftFormsImportCard({
               backgroundColor: "#0d8383",
               color: "#ffffff",
               fontWeight: 600,
-              padding: "0.5rem 1rem",
+              fontSize: "0.84rem",
+              padding: "0.45rem 0.9rem",
               borderRadius: "8px",
               textDecoration: "none"
             }}
@@ -235,130 +237,134 @@ export function MicrosoftFormsImportCard({
             style={{
               backgroundColor: isOpen ? "#f1f5f9" : "#1b365d",
               color: isOpen ? "#1e293b" : "#ffffff",
-              fontWeight: 600,
-              padding: "0.5rem 1rem",
+              fontWeight: 700,
+              fontSize: "0.84rem",
+              padding: "0.45rem 0.9rem",
               borderRadius: "8px",
-              border: "1px solid #cbd5e1"
+              border: isOpen ? "1px solid #cbd5e1" : "none"
             }}
           >
-            {isOpen ? "▲ Ocultar Carga de Excel" : "📥 Subir / Actualizar Excel de Forms"}
+            {isOpen ? "▲ Ocultar Carga de Excel" : "▼ Subir / Actualizar Excel de Forms"}
           </button>
         </div>
       </div>
 
       {isOpen && (
-        <form
-          onSubmit={handleFileSubmit}
-          style={{
-            marginTop: "1.25rem",
-            paddingTop: "1.25rem",
-            borderTop: "1px solid #e2e8f0",
-            display: "grid",
-            gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))",
-            gap: "1rem",
-            alignItems: "end"
-          }}
-        >
-          <div>
-            <label className="form-label">1. Archivo Excel de Microsoft Forms (.xlsx) *</label>
-            <input
-              type="file"
-              name="formsExcel"
-              accept=".xlsx,.xls,.csv"
-              onChange={handleFileChange}
-              className="form-input"
-              required
-            />
-          </div>
+        <div style={{ marginTop: "1rem", paddingTop: "1rem", borderTop: "1px solid #e2e8f0" }}>
+          <p style={{ margin: "0 0 1rem 0", fontSize: "0.85rem", color: "#64748b" }}>
+            Si en Microsoft Forms le ponés al formulario el <strong>mismo título que el Tema de Capacitación de la aplicación</strong>, al subir el Excel lo detecta automáticamente. También podés volver a subir el mismo Excel con nuevas cargas sin duplicar las anteriores.
+          </p>
 
-          <div>
-            <label className="form-label">
-              2. Tema de Capacitación en la App *{" "}
-              {autoDetectedTopic && (
-                <span style={{ color: "#15803d", fontSize: "0.75rem", fontWeight: 700 }}>
-                  (✓ Detectado del título)
-                </span>
-              )}
-            </label>
-            <input
-              list="ms-forms-trainings-list"
-              value={trainingName}
-              onChange={(e) => {
-                setTrainingName(e.target.value);
-                setAutoDetectedTopic(false);
-              }}
-              placeholder="Debe coincidir con el Tema en la aplicación..."
-              className="form-input"
-              required
-            />
-            <datalist id="ms-forms-trainings-list">
-              {allTrainings.map((t) => (
-                <option key={t.id} value={t.title} />
-              ))}
-            </datalist>
-          </div>
-
-          <div>
-            <label className="form-label">3. Nombre del Instructor (Firma Instructor) *</label>
-            <input
-              type="text"
-              value={instructorName}
-              onChange={(e) => setInstructorName(e.target.value)}
-              className="form-input"
-              required
-            />
-          </div>
-
-          <div>
-            <label className="form-label">4. Objetivo (Opcional si ya estaba en Plan)</label>
-            <input
-              type="text"
-              value={objective}
-              onChange={(e) => setObjective(e.target.value)}
-              placeholder="Ej: Conocer el uso del sistema..."
-              className="form-input"
-            />
-          </div>
-
-          <div style={{ gridColumn: "1 / -1", display: "flex", justifyContent: "flex-end" }}>
-            <button
-              type="submit"
-              disabled={isProcessing}
-              className="btn btn-primary"
-              style={{
-                backgroundColor: "#0d8383",
-                padding: "0.6rem 1.4rem",
-                fontWeight: 700
-              }}
-            >
-              {isProcessing
-                ? "Procesando respuestas y generando firmas digitales..."
-                : "✅ Importar / Actualizar Nuevas Cargas y Firmar"}
-            </button>
-          </div>
-
-          {resultMsg && (
-            <div
-              style={{
-                gridColumn: "1 / -1",
-                padding: "0.85rem 1rem",
-                borderRadius: "8px",
-                backgroundColor: resultMsg.ok ? "#dcfce7" : "#fee2e2",
-                color: resultMsg.ok ? "#166534" : "#991b1b",
-                border: `1px solid ${resultMsg.ok ? "#86efac" : "#fca5a5"}`,
-                fontSize: "0.9rem",
-                fontWeight: 600
-              }}
-            >
-              <div>{resultMsg.text}</div>
-              {resultMsg.notFound && resultMsg.notFound.length > 0 && (
-                <div style={{ marginTop: "0.4rem", fontSize: "0.82rem", fontWeight: 500 }}>
-                  Omitidos (no pertenecen a tu sector o no se encontraron): {resultMsg.notFound.join(", ")}
-                </div>
-              )}
+          <form
+            onSubmit={handleFileSubmit}
+            style={{
+              display: "grid",
+              gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))",
+              gap: "1rem",
+              alignItems: "end"
+            }}
+          >
+            <div>
+              <label className="form-label">1. Archivo Excel de Microsoft Forms (.xlsx) *</label>
+              <input
+                type="file"
+                name="formsExcel"
+                accept=".xlsx,.xls,.csv"
+                onChange={handleFileChange}
+                className="form-input"
+                required
+              />
             </div>
-          )}
-        </form>
+
+            <div>
+              <label className="form-label">
+                2. Tema de Capacitación en la App *{" "}
+                {autoDetectedTopic && (
+                  <span style={{ color: "#15803d", fontSize: "0.75rem", fontWeight: 700 }}>
+                    (✓ Detectado del título)
+                  </span>
+                )}
+              </label>
+              <input
+                list="ms-forms-trainings-list"
+                value={trainingName}
+                onChange={(e) => {
+                  setTrainingName(e.target.value);
+                  setAutoDetectedTopic(false);
+                }}
+                placeholder="Debe coincidir con el Tema en la aplicación..."
+                className="form-input"
+                required
+              />
+              <datalist id="ms-forms-trainings-list">
+                {allTrainings.map((t) => (
+                  <option key={t.id} value={t.title} />
+                ))}
+              </datalist>
+            </div>
+
+            <div>
+              <label className="form-label">3. Nombre del Instructor (Firma Instructor) *</label>
+              <input
+                type="text"
+                value={instructorName}
+                onChange={(e) => setInstructorName(e.target.value)}
+                className="form-input"
+                required
+              />
+            </div>
+
+            <div>
+              <label className="form-label">4. Objetivo (Opcional si ya estaba en Plan)</label>
+              <input
+                type="text"
+                value={objective}
+                onChange={(e) => setObjective(e.target.value)}
+                placeholder="Ej: Conocer el uso del sistema..."
+                className="form-input"
+              />
+            </div>
+
+            <div style={{ gridColumn: "1 / -1", display: "flex", justifyContent: "flex-end" }}>
+              <button
+                type="submit"
+                disabled={isProcessing}
+                className="btn btn-primary"
+                style={{
+                  backgroundColor: "#0d8383",
+                  padding: "0.6rem 1.4rem",
+                  fontWeight: 700
+                }}
+              >
+                {isProcessing
+                  ? "Procesando respuestas y generando firmas digitales..."
+                  : "✅ Importar / Actualizar Nuevas Cargas y Firmar"}
+              </button>
+            </div>
+
+            {resultMsg && (
+              <div
+                style={{
+                  gridColumn: "1 / -1",
+                  padding: "0.85rem 1rem",
+                  borderRadius: "8px",
+                  backgroundColor: resultMsg.ok ? "#dcfce7" : "#fee2e2",
+                  color: resultMsg.ok ? "#166534" : "#991b1b",
+                  border: `1px solid ${resultMsg.ok ? "#86efac" : "#fca5a5"}`,
+                  fontSize: "0.9rem",
+                  fontWeight: 600
+                }}
+              >
+                <div>{resultMsg.text}</div>
+                {resultMsg.notFound && resultMsg.notFound.length > 0 && (
+                  <div style={{ marginTop: "0.4rem", fontSize: "0.82rem", fontWeight: 500 }}>
+                    Omitidos (no pertenecen a tu sector o no se encontraron): {resultMsg.notFound.join(", ")}
+                  </div>
+                )}
+              </div>
+            )}
+          </form>
+        </div>
       )}
     </div>
   );
