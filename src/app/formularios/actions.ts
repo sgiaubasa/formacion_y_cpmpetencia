@@ -10,6 +10,7 @@ import {
 } from "@/lib/onlineForms";
 import { buildSvgSignatureDataUri } from "@/app/api/webhooks/microsoft-forms/route";
 import { syncRecordToPowerAutomate } from "@/lib/powerAutomate";
+import { getDefaultInstructorForSector } from "@/lib/instructorDefaults";
 import { revalidatePath } from "next/cache";
 
 function normalizeStr(s: string): string {
@@ -42,6 +43,9 @@ export async function createOnlineFormAction(payload: {
   trainingName: string;
   objective: string;
   instructorName: string;
+  videoUrl?: string | null;
+  pdfUrl?: string | null;
+  pdfName?: string | null;
   questions: OnlineFormQuestion[];
   targetSectorName?: string | null;
 }) {
@@ -59,16 +63,27 @@ export async function createOnlineFormAction(payload: {
 
   const allForms = await getAllOnlineForms();
   const slugBase = normalizeStr(payload.title).replace(/\s+/g, "-").slice(0, 32) || "form";
+  
+  // Si no se proveyó un instructor particular, derivar según el sector o jerarquía
+  let finalInstructor = payload.instructorName?.trim() || "";
+  if (!finalInstructor) {
+    const defaultInfo = getDefaultInstructorForSector(ownerSectorName);
+    finalInstructor = `${defaultInfo.name}${defaultInfo.legajo ? ` (Leg. ${defaultInfo.legajo})` : ""}`;
+  }
+
   const newForm: OnlineTrainingForm = {
     id: `${slugBase}-${Date.now().toString(36)}`,
     title: payload.title.trim(),
     description: payload.description.trim(),
     trainingName: payload.trainingName.trim(),
     objective: payload.objective.trim(),
-    instructorName: payload.instructorName.trim() || "Montes Sergio (Leg. 11739)",
+    instructorName: finalInstructor,
     ownerSectorName,
     createdByRole: role,
     createdAt: new Date().toISOString(),
+    videoUrl: payload.videoUrl ? payload.videoUrl.trim() : null,
+    pdfUrl: payload.pdfUrl ? payload.pdfUrl.trim() : null,
+    pdfName: payload.pdfName ? payload.pdfName.trim() : null,
     questions: payload.questions
   };
 
@@ -123,6 +138,7 @@ export async function submitOnlineFormResponseAction(payload: {
   legajo: string;
   dni: string;
   employeeName: string;
+  email?: string;
   answers: Record<string, number>;
   drawnSignature?: string | null;
 }) {
@@ -197,6 +213,9 @@ export async function submitOnlineFormResponseAction(payload: {
     select: { employeeSignature: true }
   });
 
+  // Prioridad 1: Firma dibujada en pantalla por el colaborador (SignatureCanvas)
+  // Prioridad 2: Firma histórica previa
+  // Prioridad 3: Firma digital SVG estampada con su nombre
   const employeeSignature =
     payload.drawnSignature ||
     prevRecordWithSig?.employeeSignature ||
@@ -206,19 +225,25 @@ export async function submitOnlineFormResponseAction(payload: {
       `Fecha: ${dateFormatted}`
     );
 
-  const isSgiOrMontes =
-    !form.instructorName ||
-    form.instructorName.toLowerCase().includes("sgi") ||
-    form.instructorName.toLowerCase().includes("montes");
-  const finalInstructorName = isSgiOrMontes
-    ? "Montes Sergio (Leg. 11739)"
-    : form.instructorName;
+  // Determinación del Instructor (Firma digital válida de instructor)
+  let instructorDisplayName = "";
+  let instructorDisplayTitle = "Instructor — Firma Digital Validada";
+
+  if (form.id === "manual-uso-sgcysv") {
+    instructorDisplayName = "Montes Sergio";
+    instructorDisplayTitle = "Legajo 11739 — Instructor SGI AUBASA";
+  } else if (form.instructorName && !form.instructorName.toLowerCase().includes("sgi")) {
+    instructorDisplayName = form.instructorName;
+    instructorDisplayTitle = `Instructor — ${form.instructorName}`;
+  } else {
+    const secInfo = getDefaultInstructorForSector(employee.sector?.name);
+    instructorDisplayName = secInfo.name;
+    instructorDisplayTitle = secInfo.title;
+  }
 
   const instructorSignature = buildSvgSignatureDataUri(
-    isSgiOrMontes ? "Montes Sergio" : finalInstructorName,
-    isSgiOrMontes
-      ? "Legajo 11739 — Instructor SGI AUBASA"
-      : "Instructor — Firma Digital Validada",
+    instructorDisplayName,
+    instructorDisplayTitle,
     `Fecha: ${dateFormatted}`
   );
 
@@ -252,7 +277,7 @@ export async function submitOnlineFormResponseAction(payload: {
         status: "COMPLETED",
         completedAt: completedDate,
         score: scoreStr,
-        instructorName: finalInstructorName,
+        instructorName: instructorDisplayName,
         employeeSignature,
         instructorSignature,
         objective: matchedPending.objective || form.objective || null,
@@ -265,7 +290,7 @@ export async function submitOnlineFormResponseAction(payload: {
       data: {
         completedAt: completedDate,
         score: scoreStr,
-        instructorName: finalInstructorName,
+        instructorName: instructorDisplayName,
         employeeSignature,
         instructorSignature,
         objective: matchedCompleted.objective || form.objective || null
@@ -281,13 +306,43 @@ export async function submitOnlineFormResponseAction(payload: {
         scheduledDate: completedDate,
         completedAt: completedDate,
         score: scoreStr,
-        instructorName: finalInstructorName,
+        instructorName: instructorDisplayName,
         employeeSignature,
         instructorSignature,
         sourceProfileId: employee.jobProfileId ?? null,
         effectiveness: "PENDING"
       }
     });
+  }
+
+  // Guardar log de auditoría con email en AppSetting para visualización y exportación
+  try {
+    const respKey = "online_form_responses_v1";
+    const setting = await prisma.appSetting.findUnique({ where: { id: respKey } });
+    const existing: any[] = setting?.value ? JSON.parse(setting.value) : [];
+    existing.unshift({
+      id: record.id,
+      formId: form.id,
+      employeeName: employee.name,
+      legajo: employee.legajo,
+      email: (payload.email || "").trim(),
+      sectorName: employee.sector.name,
+      trainingName: finalTrainingTitle,
+      score: scoreStr,
+      completedAt: completedDate.toISOString()
+    });
+    const trimmed = existing.slice(0, 500);
+    await prisma.appSetting.upsert({
+      where: { id: respKey },
+      update: { value: JSON.stringify(trimmed) },
+      create: {
+        id: respKey,
+        value: JSON.stringify(trimmed),
+        description: "Historial de respuestas de formularios online con correo electrónico"
+      }
+    });
+  } catch (logErr) {
+    console.warn("Could not record response audit log:", logErr);
   }
 
   await syncRecordToPowerAutomate(record.id).catch(() => {});

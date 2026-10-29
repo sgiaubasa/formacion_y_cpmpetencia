@@ -1,8 +1,140 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useRef } from "react";
+import SignatureCanvas from "react-signature-canvas";
 import { OnlineTrainingForm } from "@/lib/onlineForms";
 import { submitOnlineFormResponseAction } from "@/app/formularios/actions";
+
+function renderVideoPlayer(url: string) {
+  if (!url) return null;
+  const trimmed = url.trim();
+
+  // YouTube
+  const ytMatch = trimmed.match(
+    /(?:youtu\.be\/|youtube\.com\/(?:embed\/|v\/|watch\?v=|watch\?.+&v=))([\w-]{11})/
+  );
+  if (ytMatch) {
+    return (
+      <div
+        style={{
+          position: "relative",
+          paddingBottom: "56.25%",
+          height: 0,
+          overflow: "hidden",
+          borderRadius: "10px",
+          boxShadow: "0 4px 14px rgba(0,0,0,0.12)"
+        }}
+      >
+        <iframe
+          src={`https://www.youtube.com/embed/${ytMatch[1]}`}
+          title="Video de Capacitación"
+          style={{
+            position: "absolute",
+            top: 0,
+            left: 0,
+            width: "100%",
+            height: "100%",
+            border: "none"
+          }}
+          allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+          allowFullScreen
+        />
+      </div>
+    );
+  }
+
+  // Vimeo
+  const vimeoMatch = trimmed.match(
+    /vimeo\.com\/(?:channels\/(?:\w+\/)?|groups\/([^\/]*)\/videos\/|album\/(\d+)\/video\/|)(\d+)/
+  );
+  if (vimeoMatch && vimeoMatch[3]) {
+    return (
+      <div
+        style={{
+          position: "relative",
+          paddingBottom: "56.25%",
+          height: 0,
+          overflow: "hidden",
+          borderRadius: "10px",
+          boxShadow: "0 4px 14px rgba(0,0,0,0.12)"
+        }}
+      >
+        <iframe
+          src={`https://player.vimeo.com/video/${vimeoMatch[3]}`}
+          title="Video de Capacitación"
+          style={{
+            position: "absolute",
+            top: 0,
+            left: 0,
+            width: "100%",
+            height: "100%",
+            border: "none"
+          }}
+          allow="autoplay; fullscreen; picture-in-picture"
+          allowFullScreen
+        />
+      </div>
+    );
+  }
+
+  // Google Drive
+  const gdriveMatch = trimmed.match(/drive\.google\.com\/file\/d\/([a-zA-Z0-9_-]+)/);
+  if (gdriveMatch) {
+    return (
+      <div
+        style={{
+          position: "relative",
+          paddingBottom: "56.25%",
+          height: 0,
+          overflow: "hidden",
+          borderRadius: "10px",
+          boxShadow: "0 4px 14px rgba(0,0,0,0.12)"
+        }}
+      >
+        <iframe
+          src={`https://drive.google.com/file/d/${gdriveMatch[1]}/preview`}
+          title="Video de Capacitación"
+          style={{
+            position: "absolute",
+            top: 0,
+            left: 0,
+            width: "100%",
+            height: "100%",
+            border: "none"
+          }}
+          allow="autoplay"
+          allowFullScreen
+        />
+      </div>
+    );
+  }
+
+  // Video directo (MP4, WebM, Supabase Storage, etc.)
+  return (
+    <div
+      style={{
+        width: "100%",
+        borderRadius: "10px",
+        overflow: "hidden",
+        backgroundColor: "#000000",
+        boxShadow: "0 4px 14px rgba(0,0,0,0.12)"
+      }}
+    >
+      <video
+        controls
+        playsInline
+        preload="metadata"
+        style={{ width: "100%", maxHeight: "460px", display: "block" }}
+        src={trimmed}
+      >
+        Tu navegador no soporta el reproductor de video. Podés acceder al enlace directo:{" "}
+        <a href={trimmed} target="_blank" rel="noopener noreferrer" style={{ color: "#38bdf8" }}>
+          Ver video
+        </a>
+      </video>
+    </div>
+  );
+}
 
 export function ResponderFormClient({
   form,
@@ -14,8 +146,10 @@ export function ResponderFormClient({
   const [legajo, setLegajo] = useState("");
   const [dni, setDni] = useState("");
   const [employeeName, setEmployeeName] = useState("");
+  const [email, setEmail] = useState("");
   const [answers, setAnswers] = useState<Record<string, number>>({});
   const [acceptedSignature, setAcceptedSignature] = useState(false);
+  const [hasDrawn, setHasDrawn] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [submittedData, setSubmittedData] = useState<{
@@ -24,6 +158,8 @@ export function ResponderFormClient({
     sectorName: string;
     score: string;
   } | null>(null);
+
+  const sigCanvasRef = useRef<any>(null);
 
   const handleNameChange = (val: string) => {
     setEmployeeName(val);
@@ -49,6 +185,13 @@ export function ResponderFormClient({
     }
   };
 
+  const handleClearSignature = () => {
+    if (sigCanvasRef.current) {
+      sigCanvasRef.current.clear();
+      setHasDrawn(false);
+    }
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setErrorMsg(null);
@@ -58,15 +201,37 @@ export function ResponderFormClient({
       return;
     }
 
+    if (!email.trim() || !email.includes("@")) {
+      setErrorMsg("Por favor ingresá una dirección de Correo Electrónico (Mail) válida.");
+      return;
+    }
+
     for (const q of form.questions) {
       if (answers[q.id] === undefined) {
-        setErrorMsg("Por favor respondé todas las preguntas antes de enviar.");
+        setErrorMsg("Por favor respondé todas las preguntas del cuestionario antes de enviar.");
         return;
       }
     }
 
+    if (!sigCanvasRef.current || sigCanvasRef.current.isEmpty()) {
+      setErrorMsg("Por favor realizá tu firma manuscrita en el recuadro antes de continuar.");
+      return;
+    }
+
     if (!acceptedSignature) {
-      setErrorMsg("Debés marcar la casilla de Declaración de Conformidad y Firma Digital.");
+      setErrorMsg("Debés marcar la casilla de Declaración de Conformidad.");
+      return;
+    }
+
+    let drawnSignature: string | null = null;
+    try {
+      drawnSignature = sigCanvasRef.current.getTrimmedCanvas().toDataURL("image/png");
+    } catch (sigErr) {
+      console.warn("Could not export signature canvas:", sigErr);
+    }
+
+    if (!drawnSignature) {
+      setErrorMsg("No se pudo procesar tu firma manuscrita. Por favor dibujala nuevamente.");
       return;
     }
 
@@ -77,6 +242,8 @@ export function ResponderFormClient({
         legajo,
         dni,
         employeeName,
+        email,
+        drawnSignature,
         answers
       });
 
@@ -137,7 +304,7 @@ export function ResponderFormClient({
           ¡Capacitación Registrada y Firmada con Éxito!
         </h2>
         <p style={{ color: "#475569", marginBottom: "1.5rem" }}>
-          Tu respuesta fue procesada automáticamente en el Sistema de Gestión de Competencia y Formación de AUBASA.
+          Tu respuesta y tu <strong>firma manuscrita</strong> fueron registradas automáticamente en el Sistema de Gestión de Competencia y Formación de AUBASA.
         </p>
 
         <div
@@ -155,6 +322,11 @@ export function ResponderFormClient({
           <div style={{ marginBottom: "0.4rem" }}>
             <strong>Colaborador:</strong> {submittedData.employeeName} (Legajo {submittedData.legajo})
           </div>
+          {email && (
+            <div style={{ marginBottom: "0.4rem" }}>
+              <strong>Correo Electrónico:</strong> {email}
+            </div>
+          )}
           {submittedData.sectorName && (
             <div style={{ marginBottom: "0.4rem" }}>
               <strong>Sector:</strong> {submittedData.sectorName}
@@ -166,8 +338,8 @@ export function ResponderFormClient({
           <div style={{ marginBottom: "0.4rem" }}>
             <strong>Calificación Obtenida:</strong> {submittedData.score} / 10
           </div>
-          <div style={{ color: "#0d8383", fontWeight: 700 }}>
-            ✓ Firma Digital del Participante y del Instructor ({form.instructorName}) registradas. Estado: REALIZADO.
+          <div style={{ color: "#0d8383", fontWeight: 700, marginTop: "0.5rem" }}>
+            ✓ Tu firma manuscrita fue estampada en la planilla y el Instructor ({form.instructorName}) cuenta con su firma digital validada.
           </div>
         </div>
       </div>
@@ -176,6 +348,7 @@ export function ResponderFormClient({
 
   return (
     <div style={{ maxWidth: "780px", margin: "1.5rem auto", padding: "0 1rem 3rem 1rem" }}>
+      {/* CABECERA DEL FORMULARIO */}
       <div
         className="card"
         style={{
@@ -237,11 +410,111 @@ export function ResponderFormClient({
         </div>
       </div>
 
+      {/* SECCIÓN MATERIAL: VIDEO Y PDF */}
+      {(form.videoUrl || form.pdfUrl) && (
+        <div
+          className="card"
+          style={{
+            marginBottom: "1.5rem",
+            borderLeft: "4px solid #f59e0b",
+            backgroundColor: "#fffbeb"
+          }}
+        >
+          <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", marginBottom: "0.75rem" }}>
+            <span style={{ fontSize: "1.3rem" }}>🎬</span>
+            <h3 style={{ margin: 0, color: "#92400e", fontSize: "1.1rem" }}>
+              Material de Capacitación (Revisalo antes de responder las preguntas)
+            </h3>
+          </div>
+
+          <p style={{ margin: "0 0 1rem 0", fontSize: "0.88rem", color: "#78350f" }}>
+            Mirá el video instructivo y/o leé el material en PDF correspondiente a esta temática para poder completar la evaluación de forma satisfactoria.
+          </p>
+
+          <div style={{ display: "flex", flexDirection: "column", gap: "1.25rem" }}>
+            {/* Reproductor de Video */}
+            {form.videoUrl && (
+              <div style={{ backgroundColor: "#ffffff", padding: "1rem", borderRadius: "10px", border: "1px solid #fde68a" }}>
+                <div style={{ fontWeight: 700, color: "#1b365d", marginBottom: "0.6rem", fontSize: "0.95rem" }}>
+                  🎥 Video de la Capacitación
+                </div>
+                {renderVideoPlayer(form.videoUrl)}
+              </div>
+            )}
+
+            {/* Documento PDF */}
+            {form.pdfUrl && (
+              <div
+                style={{
+                  backgroundColor: "#ffffff",
+                  padding: "1rem",
+                  borderRadius: "10px",
+                  border: "1px solid #fde68a",
+                  display: "flex",
+                  flexDirection: "column",
+                  gap: "0.75rem"
+                }}
+              >
+                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: "0.5rem" }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
+                    <span style={{ fontSize: "1.5rem" }}>📄</span>
+                    <div>
+                      <div style={{ fontWeight: 700, color: "#1b365d", fontSize: "0.95rem" }}>
+                        {form.pdfName || "Material de Lectura / Presentación (PDF)"}
+                      </div>
+                      <div style={{ fontSize: "0.78rem", color: "#64748b" }}>
+                        Documento oficial adjunto a la capacitación
+                      </div>
+                    </div>
+                  </div>
+                  <a
+                    href={form.pdfUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="btn"
+                    style={{
+                      backgroundColor: "#1b365d",
+                      color: "#ffffff",
+                      padding: "0.45rem 1rem",
+                      fontSize: "0.85rem",
+                      borderRadius: "6px",
+                      textDecoration: "none",
+                      fontWeight: 600,
+                      display: "inline-flex",
+                      alignItems: "center",
+                      gap: "0.4rem"
+                    }}
+                  >
+                    🔍 Abrir / Descargar PDF
+                  </a>
+                </div>
+
+                <div
+                  style={{
+                    width: "100%",
+                    height: "400px",
+                    borderRadius: "8px",
+                    overflow: "hidden",
+                    border: "1px solid #e2e8f0"
+                  }}
+                >
+                  <iframe
+                    src={`${form.pdfUrl}#toolbar=1`}
+                    title={form.pdfName || "Documento PDF"}
+                    style={{ width: "100%", height: "100%", border: "none" }}
+                  />
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
       <form onSubmit={handleSubmit}>
         {/* 1. IDENTIFICACIÓN */}
         <div className="card" style={{ marginBottom: "1.25rem", borderLeft: "4px solid #1b365d" }}>
           <h3 style={{ marginTop: 0, color: "#1b365d", fontSize: "1.08rem", marginBottom: "0.85rem" }}>
-            1. Tus Datos de Identificación (Buscate en la lista por Apellido o Legajo)
+            1. Tus Datos de Identificación (Nombre, Legajo y Mail)
           </h3>
           <div
             style={{
@@ -271,14 +544,30 @@ export function ResponderFormClient({
             </div>
 
             <div>
-              <label className="form-label">Número de Legajo (Se completa solo al elegir tu nombre)</label>
+              <label className="form-label">Número de Legajo *</label>
               <input
                 type="text"
                 className="form-input"
                 placeholder="Ej: 12807"
                 value={legajo}
                 onChange={(e) => handleLegajoChange(e.target.value)}
+                required
               />
+            </div>
+
+            <div>
+              <label className="form-label">Correo Electrónico (Mail) *</label>
+              <input
+                type="email"
+                className="form-input"
+                placeholder="ejemplo@aubasa.com.ar"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                required
+              />
+              <span style={{ fontSize: "0.75rem", color: "#64748b" }}>
+                Para envío de constancia y registro institucional
+              </span>
             </div>
 
             <div>
@@ -356,11 +645,81 @@ export function ResponderFormClient({
           </div>
         </div>
 
-        {/* 3. CONFORMIDAD Y FIRMA DIGITAL */}
+        {/* 3. FIRMA MANUSCRITA Y CONFORMIDAD */}
         <div className="card" style={{ marginBottom: "1.25rem", borderLeft: "4px solid #63b5e5" }}>
-          <h3 style={{ marginTop: 0, color: "#1b365d", fontSize: "1.08rem", marginBottom: "0.75rem" }}>
-            3. Declaración de Conformidad y Registro de Firma Digital
+          <h3 style={{ marginTop: 0, color: "#1b365d", fontSize: "1.08rem", marginBottom: "0.5rem" }}>
+            3. Firma Manuscrita del Participante y Declaración de Conformidad
           </h3>
+          <p style={{ margin: "0 0 1rem 0", fontSize: "0.88rem", color: "#475569" }}>
+            Dibujá tu firma en el recuadro a continuación con tu dedo (en celular/tablet) o con el puntero del mouse (en computadora). Esta firma quedará estampada en la planilla oficial de la capacitación.
+          </p>
+
+          <div
+            style={{
+              border: "2px dashed #94a3b8",
+              borderRadius: "10px",
+              backgroundColor: "#ffffff",
+              padding: "0.5rem",
+              position: "relative"
+            }}
+          >
+            <SignatureCanvas
+              ref={sigCanvasRef}
+              onBegin={() => setHasDrawn(true)}
+              canvasProps={{
+                style: {
+                  width: "100%",
+                  height: 180,
+                  display: "block",
+                  cursor: "crosshair"
+                }
+              }}
+            />
+            <div
+              style={{
+                position: "absolute",
+                bottom: "35px",
+                left: "20px",
+                right: "20px",
+                borderBottom: "1px solid #e2e8f0",
+                pointerEvents: "none"
+              }}
+            />
+            <div
+              style={{
+                fontSize: "0.75rem",
+                color: "#94a3b8",
+                textAlign: "center",
+                pointerEvents: "none",
+                marginTop: "-15px"
+              }}
+            >
+              Línea de firma del participante
+            </div>
+          </div>
+
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: "0.5rem", marginBottom: "1.25rem" }}>
+            <span style={{ fontSize: "0.8rem", color: hasDrawn ? "#0d8383" : "#64748b", fontWeight: 600 }}>
+              {hasDrawn ? "✓ Trazo detectado" : "Trazá tu firma dentro del recuadro"}
+            </span>
+            <button
+              type="button"
+              onClick={handleClearSignature}
+              style={{
+                background: "none",
+                border: "1px solid #cbd5e1",
+                borderRadius: "6px",
+                padding: "0.3rem 0.75rem",
+                fontSize: "0.8rem",
+                color: "#dc2626",
+                cursor: "pointer",
+                fontWeight: 600
+              }}
+            >
+              ↺ Limpiar / Volver a firmar
+            </button>
+          </div>
+
           <label
             style={{
               display: "flex",
@@ -382,7 +741,7 @@ export function ResponderFormClient({
               style={{ width: "20px", height: "20px", marginTop: "0.15rem" }}
             />
             <span>
-              <strong>Declaro haber recibido y comprendido la capacitación &ldquo;{form.trainingName}&rdquo;</strong>, prestando mi conformidad para que mis datos queden registrados como <strong>Firma Digital de Realización</strong> junto a la firma del Instructor ({form.instructorName}).
+              <strong>Declaro bajo juramento haber recibido y comprendido la capacitación &ldquo;{form.trainingName}&rdquo;</strong>, prestando mi expresa conformidad para que mi firma manuscrita quede registrada en el sistema junto a la firma digital validada del Instructor ({form.instructorName}).
             </span>
           </label>
         </div>
@@ -414,14 +773,14 @@ export function ResponderFormClient({
             color: "#ffffff",
             fontWeight: 700,
             fontSize: "1.05rem",
-            padding: "0.9rem",
+            padding: "0.95rem",
             borderRadius: "10px",
             border: "none",
             cursor: "pointer",
             boxShadow: "0 4px 12px rgba(13, 131, 131, 0.25)"
           }}
         >
-          {isSubmitting ? "Registrando Calificación y Firmas..." : "✅ Enviar Cuestionario y Registrar Firma Digital"}
+          {isSubmitting ? "Registrando Capacitación y Firmas..." : "✅ Enviar Cuestionario y Firmar Planilla"}
         </button>
       </form>
     </div>

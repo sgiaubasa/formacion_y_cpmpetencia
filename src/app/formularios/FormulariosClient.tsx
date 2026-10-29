@@ -5,6 +5,8 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { OnlineTrainingForm, OnlineFormQuestion } from "@/lib/onlineForms";
 import { createOnlineFormAction, deleteOnlineFormAction } from "./actions";
+import { getDefaultInstructorForSector } from "@/lib/instructorDefaults";
+import { supabase } from "@/lib/supabase";
 
 interface CompletedResponseItem {
   id: number;
@@ -14,6 +16,7 @@ interface CompletedResponseItem {
   trainingName: string;
   score: string | null;
   completedAt: string | null;
+  email?: string | null;
 }
 
 export function FormulariosClient({
@@ -38,15 +41,30 @@ export function FormulariosClient({
   const [selectedFormForResponses, setSelectedFormForResponses] = useState<string | null>(null);
   const [copiedId, setCopiedId] = useState<string | null>(null);
 
+  // Derivación del instructor predeterminado respetando jerarquías
+  const defaultInst = getDefaultInstructorForSector(mySectorName);
+  const initialInstructor = mySectorName
+    ? `${defaultInst.name}${defaultInst.legajo ? ` (Leg. ${defaultInst.legajo})` : ""}`
+    : "Montes Sergio (Leg. 11739)";
+
   // Estado del creador de formularios
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
   const [trainingName, setTrainingName] = useState("");
   const [objective, setObjective] = useState("");
   const [targetSectorName, setTargetSectorName] = useState<string>("GLOBAL");
-  const [instructorName, setInstructorName] = useState(
-    mySectorName ? `Instructor — ${mySectorName}` : "Montes Sergio (Leg. 11739)"
-  );
+  const [instructorName, setInstructorName] = useState(initialInstructor);
+
+  // Material audiovisual y de lectura
+  const [videoUrl, setVideoUrl] = useState("");
+  const [isUploadingVideo, setIsUploadingVideo] = useState(false);
+  const [videoUploadError, setVideoUploadError] = useState<string | null>(null);
+
+  const [pdfUrl, setPdfUrl] = useState("");
+  const [pdfName, setPdfName] = useState("");
+  const [isUploadingPdf, setIsUploadingPdf] = useState(false);
+  const [pdfUploadError, setPdfUploadError] = useState<string | null>(null);
+
   const [questions, setQuestions] = useState<OnlineFormQuestion[]>([
     {
       id: "q_1",
@@ -62,6 +80,65 @@ export function FormulariosClient({
     navigator.clipboard.writeText(url);
     setCopiedId(formId);
     setTimeout(() => setCopiedId(null), 2500);
+  };
+
+  const handleVideoFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setIsUploadingVideo(true);
+    setVideoUploadError(null);
+    try {
+      const cleanName = file.name
+        .normalize("NFD")
+        .replace(/[\u0300-\u036f]/g, "")
+        .replace(/[^a-zA-Z0-9.-]/g, "_");
+      const filename = `video-form-${Date.now()}-${cleanName}`;
+      const { error: uploadError } = await supabase.storage
+        .from("evidencias")
+        .upload(filename, file, {
+          contentType: file.type || "video/mp4",
+          upsert: true
+        });
+      if (uploadError) throw uploadError;
+      const { data: pubData } = supabase.storage.from("evidencias").getPublicUrl(filename);
+      setVideoUrl(pubData.publicUrl);
+    } catch (err: any) {
+      console.error("Error al subir video:", err);
+      setVideoUploadError(
+        "No se pudo subir el archivo de video. Podés pegar un enlace directo (ej: YouTube o Google Drive)."
+      );
+    } finally {
+      setIsUploadingVideo(false);
+    }
+  };
+
+  const handlePdfFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setIsUploadingPdf(true);
+    setPdfUploadError(null);
+    try {
+      const cleanName = file.name
+        .normalize("NFD")
+        .replace(/[\u0300-\u036f]/g, "")
+        .replace(/[^a-zA-Z0-9.-]/g, "_");
+      const filename = `pdf-form-${Date.now()}-${cleanName}`;
+      const { error: uploadError } = await supabase.storage
+        .from("evidencias")
+        .upload(filename, file, {
+          contentType: "application/pdf",
+          upsert: true
+        });
+      if (uploadError) throw uploadError;
+      const { data: pubData } = supabase.storage.from("evidencias").getPublicUrl(filename);
+      setPdfUrl(pubData.publicUrl);
+      setPdfName(file.name);
+    } catch (err: any) {
+      console.error("Error al subir PDF:", err);
+      setPdfUploadError("No se pudo subir el archivo PDF. Podés pegar el enlace directamente.");
+    } finally {
+      setIsUploadingPdf(false);
+    }
   };
 
   const handleAddQuestion = () => {
@@ -100,6 +177,9 @@ export function FormulariosClient({
         trainingName,
         objective,
         instructorName,
+        videoUrl: videoUrl.trim() || null,
+        pdfUrl: pdfUrl.trim() || null,
+        pdfName: pdfName.trim() || null,
         questions: cleanQuestions,
         targetSectorName: isAdmin ? targetSectorName : undefined
       });
@@ -110,6 +190,9 @@ export function FormulariosClient({
         setDescription("");
         setTrainingName("");
         setObjective("");
+        setVideoUrl("");
+        setPdfUrl("");
+        setPdfName("");
         setTargetSectorName("GLOBAL");
         router.refresh();
       }
@@ -163,7 +246,7 @@ export function FormulariosClient({
             📝 Formularios Online de Capacitación (Cierre y Firmas en el Acto)
           </h2>
           <p style={{ margin: 0, color: "#475569", fontSize: "0.9rem" }}>
-            Compartí el enlace por <strong>WhatsApp o Mail</strong> (funciona con o sin correo corporativo). Cuando la persona responde, el sistema calcula la nota, estampa automáticamente la <strong>Firma del Capacitado y del Instructor</strong> y pasa la capacitación a <strong>Realizado</strong>.
+            Compartí el enlace por <strong>WhatsApp o Mail</strong>. Ahora podés incorporar un <strong>Video de Capacitación</strong> y/o un <strong>Documento PDF</strong> para que el colaborador lo revise antes de responder. Al enviar, el colaborador estampa su <strong>Firma Manuscrita en pantalla</strong> y el Instructor queda validado digitalmente.
           </p>
         </div>
 
@@ -214,7 +297,7 @@ export function FormulariosClient({
                 className="form-input"
                 value={title}
                 onChange={(e) => setTitle(e.target.value)}
-                placeholder="Ej: Evaluación de Seguridad Vial"
+                placeholder="Ej: Capacitación de Seguridad e Higiene"
                 required
               />
             </div>
@@ -237,7 +320,7 @@ export function FormulariosClient({
             </div>
 
             <div>
-              <label className="form-label">Nombre del Instructor (Firma Automática) *</label>
+              <label className="form-label">Nombre del Instructor (Firma Digital) *</label>
               <input
                 type="text"
                 className="form-input"
@@ -295,10 +378,207 @@ export function FormulariosClient({
                   ))}
                 </select>
                 <span style={{ fontSize: "0.75rem", color: "#64748b" }}>
-                  Si seleccionás un sector específico (ej: Asistencia Vial), solo ese sector y los administradores verán este formulario.
+                  Si seleccionás un sector específico, solo ese sector y los administradores verán este formulario.
                 </span>
               </div>
             )}
+          </div>
+
+          {/* MATERIAL AUDIOVISUAL Y DOCUMENTAL (VIDEO Y PDF) */}
+          <div
+            style={{
+              border: "1px solid #cbd5e1",
+              backgroundColor: "#f8fafc",
+              borderRadius: "10px",
+              padding: "1.25rem",
+              marginBottom: "1.5rem"
+            }}
+          >
+            <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", marginBottom: "0.35rem" }}>
+              <span style={{ fontSize: "1.25rem" }}>🎬</span>
+              <h4 style={{ margin: 0, color: "#1b365d", fontSize: "1.05rem" }}>
+                Material de Capacitación: Video y PDF (Opcional)
+              </h4>
+            </div>
+            <p style={{ margin: "0 0 1rem 0", fontSize: "0.86rem", color: "#64748b" }}>
+              El participante podrá ver el video instructivo y/o descargar y leer el documento PDF antes de responder el cuestionario.
+            </p>
+
+            <div
+              style={{
+                display: "grid",
+                gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))",
+                gap: "1.25rem"
+              }}
+            >
+              {/* VIDEO */}
+              <div
+                style={{
+                  backgroundColor: "#ffffff",
+                  padding: "1rem",
+                  borderRadius: "8px",
+                  border: "1px solid #e2e8f0"
+                }}
+              >
+                <div style={{ fontWeight: 700, color: "#1b365d", marginBottom: "0.35rem", fontSize: "0.92rem" }}>
+                  🎥 Video de la Capacitación
+                </div>
+                <div style={{ fontSize: "0.78rem", color: "#64748b", marginBottom: "0.6rem" }}>
+                  Pegá un link de YouTube, Vimeo, Google Drive o subí un archivo de video (.mp4).
+                </div>
+
+                <input
+                  type="url"
+                  className="form-input"
+                  placeholder="https://www.youtube.com/watch?v=... o https://drive.google.com/..."
+                  value={videoUrl}
+                  onChange={(e) => setVideoUrl(e.target.value)}
+                  style={{ marginBottom: "0.6rem" }}
+                />
+
+                <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", flexWrap: "wrap" }}>
+                  <label
+                    style={{
+                      cursor: isUploadingVideo ? "not-allowed" : "pointer",
+                      backgroundColor: "#eff6ff",
+                      color: "#1d4ed8",
+                      border: "1px solid #bfdbfe",
+                      padding: "0.35rem 0.75rem",
+                      borderRadius: "6px",
+                      fontSize: "0.8rem",
+                      fontWeight: 600,
+                      display: "inline-flex",
+                      alignItems: "center",
+                      gap: "0.35rem"
+                    }}
+                  >
+                    <span>{isUploadingVideo ? "⏳ Subiendo archivo..." : "📤 Subir Video (.mp4)"}</span>
+                    <input
+                      type="file"
+                      accept="video/mp4,video/webm,video/ogg,video/quicktime"
+                      style={{ display: "none" }}
+                      disabled={isUploadingVideo}
+                      onChange={handleVideoFileUpload}
+                    />
+                  </label>
+
+                  {videoUrl && (
+                    <button
+                      type="button"
+                      onClick={() => setVideoUrl("")}
+                      style={{
+                        background: "none",
+                        border: "none",
+                        color: "#dc2626",
+                        cursor: "pointer",
+                        fontSize: "0.8rem",
+                        fontWeight: 600
+                      }}
+                    >
+                      ✕ Quitar video
+                    </button>
+                  )}
+                </div>
+
+                {videoUrl && (
+                  <div style={{ marginTop: "0.5rem", fontSize: "0.78rem", color: "#166534", fontWeight: 600 }}>
+                    ✓ Video configurado correctamente
+                  </div>
+                )}
+                {videoUploadError && (
+                  <div style={{ marginTop: "0.5rem", fontSize: "0.78rem", color: "#dc2626" }}>
+                    {videoUploadError}
+                  </div>
+                )}
+              </div>
+
+              {/* PDF */}
+              <div
+                style={{
+                  backgroundColor: "#ffffff",
+                  padding: "1rem",
+                  borderRadius: "8px",
+                  border: "1px solid #e2e8f0"
+                }}
+              >
+                <div style={{ fontWeight: 700, color: "#1b365d", marginBottom: "0.35rem", fontSize: "0.92rem" }}>
+                  📄 Material PDF de Lectura / Presentación
+                </div>
+                <div style={{ fontSize: "0.78rem", color: "#64748b", marginBottom: "0.6rem" }}>
+                  Subí un documento PDF oficial o pegá un enlace directo.
+                </div>
+
+                <input
+                  type="url"
+                  className="form-input"
+                  placeholder="https://... enlace al archivo PDF"
+                  value={pdfUrl}
+                  onChange={(e) => {
+                    setPdfUrl(e.target.value);
+                    if (!pdfName) setPdfName("Documento PDF");
+                  }}
+                  style={{ marginBottom: "0.6rem" }}
+                />
+
+                <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", flexWrap: "wrap" }}>
+                  <label
+                    style={{
+                      cursor: isUploadingPdf ? "not-allowed" : "pointer",
+                      backgroundColor: "#f0fdfa",
+                      color: "#0f766e",
+                      border: "1px solid #99f6e4",
+                      padding: "0.35rem 0.75rem",
+                      borderRadius: "6px",
+                      fontSize: "0.8rem",
+                      fontWeight: 600,
+                      display: "inline-flex",
+                      alignItems: "center",
+                      gap: "0.35rem"
+                    }}
+                  >
+                    <span>{isUploadingPdf ? "⏳ Subiendo archivo..." : "📤 Subir PDF (.pdf)"}</span>
+                    <input
+                      type="file"
+                      accept=".pdf,application/pdf"
+                      style={{ display: "none" }}
+                      disabled={isUploadingPdf}
+                      onChange={handlePdfFileUpload}
+                    />
+                  </label>
+
+                  {pdfUrl && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setPdfUrl("");
+                        setPdfName("");
+                      }}
+                      style={{
+                        background: "none",
+                        border: "none",
+                        color: "#dc2626",
+                        cursor: "pointer",
+                        fontSize: "0.8rem",
+                        fontWeight: 600
+                      }}
+                    >
+                      ✕ Quitar PDF
+                    </button>
+                  )}
+                </div>
+
+                {pdfUrl && (
+                  <div style={{ marginTop: "0.5rem", fontSize: "0.78rem", color: "#166534", fontWeight: 600 }}>
+                    ✓ PDF: {pdfName || "Material de capacitación"}
+                  </div>
+                )}
+                {pdfUploadError && (
+                  <div style={{ marginTop: "0.5rem", fontSize: "0.78rem", color: "#dc2626" }}>
+                    {pdfUploadError}
+                  </div>
+                )}
+              </div>
+            </div>
           </div>
 
           <h4 style={{ color: "#0d8383", marginBottom: "0.75rem" }}>
@@ -370,20 +650,24 @@ export function FormulariosClient({
                       <input
                         type="text"
                         className="form-input"
-                        placeholder={`Opción ${oIdx + 1}${q.correctIndex === oIdx ? " (Respuesta Correcta ✓)" : ""}`}
+                        placeholder={`Opción ${oIdx + 1}${oIdx === q.correctIndex ? " (Respuesta Correcta)" : ""}`}
                         value={opt}
                         onChange={(e) => {
                           const val = e.target.value;
                           setQuestions((prev) =>
                             prev.map((item, i) => {
                               if (i !== qIdx) return item;
-                              const nextOpts = [...item.options];
-                              nextOpts[oIdx] = val;
-                              return { ...item, options: nextOpts };
+                              const updatedOptions = [...item.options];
+                              updatedOptions[oIdx] = val;
+                              return { ...item, options: updatedOptions };
                             })
                           );
                         }}
-                        required={oIdx < 2}
+                        style={{
+                          borderColor: oIdx === q.correctIndex ? "#0d8383" : undefined,
+                          backgroundColor: oIdx === q.correctIndex ? "#f0fdfa" : undefined
+                        }}
+                        required
                       />
                     </div>
                   ))}
@@ -392,34 +676,41 @@ export function FormulariosClient({
             ))}
           </div>
 
-          <div style={{ display: "flex", justifyContent: "space-between", flexWrap: "wrap", gap: "1rem" }}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: "1rem" }}>
             <button
               type="button"
               onClick={handleAddQuestion}
               className="btn btn-secondary"
-              style={{ fontWeight: 600 }}
+              style={{ fontSize: "0.88rem" }}
             >
               ➕ Agregar otra pregunta
             </button>
 
-            <button
-              type="submit"
-              disabled={isSaving}
-              className="btn btn-primary"
-              style={{ backgroundColor: "#0d8383", fontWeight: 700, padding: "0.6rem 1.5rem" }}
-            >
-              {isSaving ? "Guardando Formulario..." : "💾 Guardar y Publicar Formulario"}
-            </button>
+            <div style={{ display: "flex", gap: "0.75rem" }}>
+              <button
+                type="button"
+                onClick={() => setShowBuilder(false)}
+                className="btn btn-secondary"
+              >
+                Cancelar
+              </button>
+              <button
+                type="submit"
+                className="btn btn-primary"
+                disabled={isSaving || isUploadingVideo || isUploadingPdf}
+                style={{ backgroundColor: "#0d8383" }}
+              >
+                {isSaving ? "Guardando formulario..." : "💾 Guardar y Publicar Formulario"}
+              </button>
+            </div>
           </div>
         </form>
       )}
 
-      {/* LISTADO DE FORMULARIOS DISPONIBLES */}
-      <div style={{ display: "grid", gap: "1.25rem" }}>
+      {/* LISTADO DE FORMULARIOS ACTIVOS */}
+      <div style={{ display: "flex", flexDirection: "column", gap: "1.25rem" }}>
         {forms.map((form) => {
-          const formResponses = completedResponses.filter(
-            (r) => r.trainingName.trim().toLowerCase() === form.trainingName.trim().toLowerCase()
-          );
+          const formResponses = completedResponses.filter((r) => r.trainingName === form.trainingName);
           const isShowingResponses = selectedFormForResponses === form.id;
 
           return (
@@ -427,8 +718,8 @@ export function FormulariosClient({
               key={form.id}
               className="card"
               style={{
-                borderLeft: "5px solid #0d8383",
-                padding: "1.25rem 1.5rem"
+                borderLeft: form.id === "manual-uso-sgcysv" ? "6px solid #1b365d" : "6px solid #0d8383",
+                boxShadow: "0 2px 8px rgba(0,0,0,0.04)"
               }}
             >
               <div
@@ -440,13 +731,13 @@ export function FormulariosClient({
                   gap: "1rem"
                 }}
               >
-                <div style={{ flex: "1 1 420px" }}>
-                  <div style={{ display: "flex", gap: "0.5rem", alignItems: "center", flexWrap: "wrap", marginBottom: "0.35rem" }}>
+                <div style={{ flex: "1 1 450px" }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", flexWrap: "wrap", marginBottom: "0.35rem" }}>
                     <span
                       style={{
-                        backgroundColor: form.ownerSectorName ? "#e0f2fe" : "#dcfce7",
-                        color: form.ownerSectorName ? "#1b365d" : "#166534",
-                        fontSize: "0.72rem",
+                        backgroundColor: form.id === "manual-uso-sgcysv" ? "#e0f2fe" : "#f0fdfa",
+                        color: form.id === "manual-uso-sgcysv" ? "#0369a1" : "#0f766e",
+                        fontSize: "0.74rem",
                         fontWeight: 700,
                         padding: "0.2rem 0.6rem",
                         borderRadius: "999px"
@@ -454,6 +745,37 @@ export function FormulariosClient({
                     >
                       {form.ownerSectorName ? `Sector: ${form.ownerSectorName}` : "Institucional AUBASA (SGI / RRHH)"}
                     </span>
+
+                    {form.videoUrl && (
+                      <span
+                        style={{
+                          backgroundColor: "#fef3c7",
+                          color: "#92400e",
+                          fontSize: "0.72rem",
+                          fontWeight: 700,
+                          padding: "0.18rem 0.55rem",
+                          borderRadius: "999px"
+                        }}
+                      >
+                        🎬 Con Video
+                      </span>
+                    )}
+
+                    {form.pdfUrl && (
+                      <span
+                        style={{
+                          backgroundColor: "#dbeafe",
+                          color: "#1e40af",
+                          fontSize: "0.72rem",
+                          fontWeight: 700,
+                          padding: "0.18rem 0.55rem",
+                          borderRadius: "999px"
+                        }}
+                      >
+                        📄 Con PDF
+                      </span>
+                    )}
+
                     <span style={{ fontSize: "0.8rem", color: "#64748b" }}>
                       • {form.questions.length} preguntas • Instructor: <strong>{form.instructorName}</strong>
                     </span>
@@ -551,38 +873,40 @@ export function FormulariosClient({
                       Aún no se registran respuestas completadas para este tema en tu vista.
                     </p>
                   ) : (
-                    <table className="data-table" style={{ fontSize: "0.86rem" }}>
-                      <thead>
-                        <tr>
-                          <th>Legajo</th>
-                          <th>Colaborador</th>
-                          <th>Sector</th>
-                          <th>Fecha Realización</th>
-                          <th>Nota</th>
-                          <th>Estado Firma</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {formResponses.slice(0, 50).map((r) => (
-                          <tr key={r.id}>
-                            <td>{r.legajo}</td>
-                            <td style={{ fontWeight: 600 }}>{r.employeeName}</td>
-                            <td>{r.sectorName}</td>
-                            <td>
-                              {r.completedAt
-                                ? new Date(r.completedAt).toLocaleDateString("es-AR")
-                                : "-"}
-                            </td>
-                            <td>
-                              <strong>{r.score || "10"}</strong> / 10
-                            </td>
-                            <td style={{ color: "#15803d", fontWeight: 600 }}>
-                              ✓ Firmado (Empleado + Instructor)
-                            </td>
+                    <div style={{ overflowX: "auto" }}>
+                      <table className="data-table" style={{ fontSize: "0.86rem", width: "100%" }}>
+                        <thead>
+                          <tr>
+                            <th>Legajo</th>
+                            <th>Colaborador</th>
+                            <th>Sector</th>
+                            <th>Fecha Realización</th>
+                            <th>Nota</th>
+                            <th>Estado Firma</th>
                           </tr>
-                        ))}
-                      </tbody>
-                    </table>
+                        </thead>
+                        <tbody>
+                          {formResponses.slice(0, 50).map((r) => (
+                            <tr key={r.id}>
+                              <td>{r.legajo}</td>
+                              <td style={{ fontWeight: 600 }}>{r.employeeName}</td>
+                              <td>{r.sectorName}</td>
+                              <td>
+                                {r.completedAt
+                                  ? new Date(r.completedAt).toLocaleDateString("es-AR")
+                                  : "-"}
+                              </td>
+                              <td>
+                                <strong>{r.score || "10"}</strong> / 10
+                              </td>
+                              <td style={{ color: "#15803d", fontWeight: 600 }}>
+                                ✓ Firmado Manuscrito (Instructor Digital)
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
                   )}
                 </div>
               )}

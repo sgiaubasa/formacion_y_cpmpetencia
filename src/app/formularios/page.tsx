@@ -21,10 +21,11 @@ export default async function FormulariosPage() {
     }
   }
 
-  const [forms, allTrainings, sectors] = await Promise.all([
+  const [forms, allTrainings, sectors, respSetting] = await Promise.all([
     getOnlineFormsForSector(allowedSectors),
     getTrainingsForSectors(allowedSectors),
-    prisma.sector.findMany({ select: { id: true, name: true }, orderBy: { name: "asc" } })
+    prisma.sector.findMany({ select: { id: true, name: true }, orderBy: { name: "asc" } }),
+    prisma.appSetting.findUnique({ where: { id: "online_form_responses_v1" } }).catch(() => null)
   ]);
 
   const formTrainingTitles = forms.map((f) => f.trainingName);
@@ -47,15 +48,33 @@ export default async function FormulariosPage() {
     take: 400
   });
 
-  const completedResponses = completedRecords.map((r) => ({
-    id: r.id,
-    employeeName: r.employee.name,
-    legajo: r.employee.legajo,
-    sectorName: r.employee.sector.name,
-    trainingName: r.trainingName,
-    score: r.score,
-    completedAt: r.completedAt ? r.completedAt.toISOString() : null
-  }));
+  const auditList: any[] = respSetting?.value ? JSON.parse(respSetting.value) : [];
+  const auditMapByRecordId = new Map<number, any>();
+  const auditMapByLegajoTopic = new Map<string, any>();
+  for (const item of auditList) {
+    if (item.id) auditMapByRecordId.set(item.id, item);
+    if (item.legajo && item.trainingName) {
+      const key = `${item.legajo}_${item.trainingName}`.toLowerCase();
+      if (!auditMapByLegajoTopic.has(key)) {
+        auditMapByLegajoTopic.set(key, item);
+      }
+    }
+  }
+
+  const completedResponses = completedRecords.map((r) => {
+    const key = `${r.employee.legajo}_${r.trainingName}`.toLowerCase();
+    const audit = auditMapByRecordId.get(r.id) || auditMapByLegajoTopic.get(key);
+    return {
+      id: r.id,
+      employeeName: r.employee.name,
+      legajo: r.employee.legajo,
+      sectorName: r.employee.sector.name,
+      trainingName: r.trainingName,
+      score: r.score,
+      completedAt: r.completedAt ? r.completedAt.toISOString() : null,
+      email: audit?.email || null
+    };
+  });
 
   return (
     <div style={{ maxWidth: "1080px", margin: "0 auto", paddingBottom: "3rem" }}>

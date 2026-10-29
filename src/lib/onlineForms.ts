@@ -18,6 +18,9 @@ export interface OnlineTrainingForm {
   ownerSectorName: string | null; // null = Global (SGI / RRHH / ADMIN), o nombre del sector propietario
   createdByRole: string;
   createdAt: string;
+  videoUrl?: string | null; // URL de video (YouTube, Vimeo, Google Drive, MP4)
+  pdfUrl?: string | null; // URL de documento PDF de lectura obligatoria
+  pdfName?: string | null; // Nombre original o descripción del archivo PDF
   questions: OnlineFormQuestion[];
 }
 
@@ -99,8 +102,6 @@ export async function migrateSgiInstructorRecordsToMontesSergio() {
 }
 
 export async function getAllOnlineForms(): Promise<OnlineTrainingForm[]> {
-  await migrateSgiInstructorRecordsToMontesSergio();
-
   try {
     const setting = await prisma.appSetting.findUnique({
       where: { id: SETTING_KEY }
@@ -127,7 +128,7 @@ export async function getAllOnlineForms(): Promise<OnlineTrainingForm[]> {
 
     let updated = false;
     for (const f of parsed) {
-      if (!f.instructorName || f.instructorName.toLowerCase().includes("sgi")) {
+      if (f.id === "manual-uso-sgcysv" && (!f.instructorName || f.instructorName.toLowerCase().includes("sgi"))) {
         f.instructorName = "Montes Sergio (Leg. 11739)";
         updated = true;
       }
