@@ -271,7 +271,7 @@ export default async function PlanAnualPage({ searchParams }: { searchParams: Pr
 
   const allEmployees = await prisma.employee.findMany({ 
     where: { isActive: true },
-    select: { id: true, name: true, legajo: true, sectorId: true },
+    select: { id: true, name: true, legajo: true, sectorId: true, jobProfileId: true },
     orderBy: { name: 'asc' } 
   });
   const allSectors = await prisma.sector.findMany({
