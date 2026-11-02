@@ -2,6 +2,8 @@
 
 import { useState, useMemo } from "react";
 import { useRouter } from "next/navigation";
+import { BASES_OPERATIVAS } from "@/lib/constants";
+import { getUniqueCanonicalTopics } from "@/lib/canonicalTrainings";
 
 interface EmployeeItem {
   id: number;
@@ -9,6 +11,7 @@ interface EmployeeItem {
   legajo: string;
   sectorId: number;
   jobProfileId: number | null;
+  baseOperativa?: string | null;
 }
 
 interface JobProfileItem {
@@ -29,6 +32,7 @@ export function PlanAnualFilters({
   allTrainings,
   isSector,
   initialSectorId,
+  initialBaseOperativa,
   initialJobProfileId,
   initialEmployeeId,
   initialEmpSearch,
@@ -41,6 +45,7 @@ export function PlanAnualFilters({
   allTrainings: { id: number; title: string }[];
   isSector: boolean;
   initialSectorId?: string;
+  initialBaseOperativa?: string;
   initialJobProfileId?: string;
   initialEmployeeId?: string;
   initialEmpSearch?: string;
@@ -50,33 +55,63 @@ export function PlanAnualFilters({
   const router = useRouter();
 
   const [selectedSectorId, setSelectedSectorId] = useState(initialSectorId || "");
+  const [selectedBase, setSelectedBase] = useState(initialBaseOperativa || "");
   const [selectedJobProfileId, setSelectedJobProfileId] = useState(initialJobProfileId || "");
   const [selectedEmployeeId, setSelectedEmployeeId] = useState(initialEmployeeId || "");
   const [empSearch, setEmpSearch] = useState(initialEmpSearch || "");
   const [statusFilter, setStatusFilter] = useState(initialStatusFilter || "");
   const [topicQuery, setTopicQuery] = useState(initialTopicQuery || "");
 
-  // 1. Filtrar puestos según el sector elegido
-  const filteredJobProfiles = useMemo(() => {
-    if (!selectedSectorId) return allJobProfiles;
+  // 1. Bases operativas dinámicas según el sector elegido
+  const availableBases = useMemo(() => {
+    if (!selectedSectorId) return BASES_OPERATIVAS;
     const secIdNum = parseInt(selectedSectorId, 10);
-    const selectedSectorObj = allSectors.find((s) => s.id === secIdNum);
-    const profileIdsInSector = new Set(
-      allEmployees
-        .filter((e) => e.sectorId === secIdNum && e.jobProfileId)
-        .map((e) => e.jobProfileId as number)
-    );
+    const basesInSector = new Set<string>();
+    allEmployees.forEach((e) => {
+      if (e.sectorId === secIdNum && e.baseOperativa) {
+        basesInSector.add(e.baseOperativa);
+      }
+    });
+    if (basesInSector.size > 0) {
+      return Array.from(basesInSector).sort((a, b) => a.localeCompare(b, "es"));
+    }
+    return BASES_OPERATIVAS;
+  }, [selectedSectorId, allEmployees]);
 
-    return allJobProfiles.filter(
-      (jp) =>
-        profileIdsInSector.has(jp.id) ||
-        (selectedSectorObj &&
-          jp.gerencia &&
-          jp.gerencia.toLowerCase().trim() === selectedSectorObj.name.toLowerCase().trim())
-    );
-  }, [selectedSectorId, allJobProfiles, allEmployees, allSectors]);
+  // 2. Filtrar puestos según el sector elegido y la base operativa
+  const filteredJobProfiles = useMemo(() => {
+    let pool = allEmployees;
+    if (selectedSectorId) {
+      const secIdNum = parseInt(selectedSectorId, 10);
+      pool = pool.filter((e) => e.sectorId === secIdNum);
+    }
+    if (selectedBase) {
+      pool = pool.filter((e) => e.baseOperativa === selectedBase);
+    }
 
-  // 2. Filtrar empleados según el sector elegido, puesto elegido y texto escrito
+    const profileIds = new Set(pool.filter((e) => e.jobProfileId).map((e) => e.jobProfileId as number));
+
+    if (selectedSectorId) {
+      const secIdNum = parseInt(selectedSectorId, 10);
+      const selectedSectorObj = allSectors.find((s) => s.id === secIdNum);
+      return allJobProfiles.filter(
+        (jp) =>
+          profileIds.has(jp.id) ||
+          (selectedSectorObj &&
+            !selectedBase &&
+            jp.gerencia &&
+            jp.gerencia.toLowerCase().trim() === selectedSectorObj.name.toLowerCase().trim())
+      );
+    }
+
+    if (selectedBase) {
+      return allJobProfiles.filter((jp) => profileIds.has(jp.id));
+    }
+
+    return allJobProfiles;
+  }, [selectedSectorId, selectedBase, allJobProfiles, allEmployees, allSectors]);
+
+  // 3. Filtrar empleados según el sector elegido, base, puesto elegido y texto escrito
   const filteredEmployees = useMemo(() => {
     const secIdNum = selectedSectorId ? parseInt(selectedSectorId, 10) : null;
     const profIdNum = selectedJobProfileId ? parseInt(selectedJobProfileId, 10) : null;
@@ -84,6 +119,7 @@ export function PlanAnualFilters({
 
     return allEmployees.filter((e) => {
       if (secIdNum && e.sectorId !== secIdNum) return false;
+      if (selectedBase && e.baseOperativa !== selectedBase) return false;
       if (profIdNum && e.jobProfileId !== profIdNum) return false;
       if (
         searchLower &&
@@ -94,11 +130,23 @@ export function PlanAnualFilters({
       }
       return true;
     });
-  }, [selectedSectorId, selectedJobProfileId, empSearch, allEmployees]);
+  }, [selectedSectorId, selectedBase, selectedJobProfileId, empSearch, allEmployees]);
+
+  // 4. Lista de temas de capacitación unificados (canónicos, sin repetidos)
+  const canonicalTrainings = useMemo(() => {
+    const rawTitles = allTrainings.map((t) => t.title);
+    return getUniqueCanonicalTopics(rawTitles);
+  }, [allTrainings]);
 
   const handleSectorChange = (newSectorId: string) => {
     setSelectedSectorId(newSectorId);
-    // Resetear puesto y empleado al cambiar de sector para mantener coherencia
+    setSelectedBase("");
+    setSelectedJobProfileId("");
+    setSelectedEmployeeId("");
+  };
+
+  const handleBaseChange = (newBase: string) => {
+    setSelectedBase(newBase);
     setSelectedJobProfileId("");
     setSelectedEmployeeId("");
   };
@@ -112,6 +160,7 @@ export function PlanAnualFilters({
     e.preventDefault();
     const params = new URLSearchParams();
     if (selectedSectorId && !isSector) params.set("sectorId", selectedSectorId);
+    if (selectedBase) params.set("baseOperativa", selectedBase);
     if (selectedJobProfileId) params.set("jobProfileId", selectedJobProfileId);
     if (selectedEmployeeId) params.set("employeeId", selectedEmployeeId);
     if (empSearch.trim()) params.set("empName", empSearch.trim());
@@ -123,6 +172,7 @@ export function PlanAnualFilters({
 
   const handleClearFilters = () => {
     if (!isSector) setSelectedSectorId("");
+    setSelectedBase("");
     setSelectedJobProfileId("");
     setSelectedEmployeeId("");
     setEmpSearch("");
@@ -133,6 +183,7 @@ export function PlanAnualFilters({
 
   const hasAnyFilter = Boolean(
     (!isSector && selectedSectorId) ||
+      selectedBase ||
       selectedJobProfileId ||
       selectedEmployeeId ||
       empSearch.trim() ||
@@ -177,7 +228,7 @@ export function PlanAnualFilters({
             🔍 Filtros de la Tabla
           </span>
           <span style={{ fontSize: "0.85rem", color: "#475569", fontWeight: 500 }}>
-            Buscá y filtrá las capacitaciones cargadas en el listado inferior (los filtros se relacionan entre sí)
+            Buscá y filtrá las capacitaciones cargadas en el listado inferior (dinámicos según sector y sitio)
           </span>
         </div>
       </div>
@@ -189,7 +240,7 @@ export function PlanAnualFilters({
         {!isSector && (
           <div style={{ flex: "1 1 160px" }}>
             <label className="form-label" style={{ fontSize: "0.75rem", marginBottom: "0.25rem", color: "#334155" }}>
-              1. Sector
+              1. Sector / Gerencia
             </label>
             <select
               name="sectorId"
@@ -208,9 +259,30 @@ export function PlanAnualFilters({
           </div>
         )}
 
+        {/* Sitio / Base Operativa (Dock Sud, Berazategui, Quilmes, Hudson, etc.) */}
+        <div style={{ flex: "1 1 150px" }}>
+          <label className="form-label" style={{ fontSize: "0.75rem", marginBottom: "0.25rem", color: "#334155" }}>
+            2. Sitio / Base {selectedSectorId ? `(${availableBases.length})` : ""}
+          </label>
+          <select
+            name="baseOperativa"
+            className="form-input"
+            value={selectedBase}
+            onChange={(e) => handleBaseChange(e.target.value)}
+            style={{ borderRadius: "8px", backgroundColor: "white", fontSize: "0.85rem" }}
+          >
+            <option value="">Todos los sitios</option>
+            {availableBases.map((b) => (
+              <option key={b} value={b}>
+                {b}
+              </option>
+            ))}
+          </select>
+        </div>
+
         <div style={{ flex: "1 1 170px" }}>
           <label className="form-label" style={{ fontSize: "0.75rem", marginBottom: "0.25rem", color: "#334155" }}>
-            2. Perfil de Puesto {selectedSectorId ? `(${filteredJobProfiles.length})` : ""}
+            3. Perfil de Puesto {selectedSectorId || selectedBase ? `(${filteredJobProfiles.length})` : ""}
           </label>
           <select
             name="jobProfileId"
@@ -228,9 +300,9 @@ export function PlanAnualFilters({
           </select>
         </div>
 
-        <div style={{ flex: "1 1 190px" }}>
+        <div style={{ flex: "1 1 170px" }}>
           <label className="form-label" style={{ fontSize: "0.75rem", marginBottom: "0.25rem", color: "#334155" }}>
-            3. Escribir Nombre o Legajo
+            4. Escribir Nombre / Legajo
           </label>
           <input
             type="text"
@@ -240,15 +312,15 @@ export function PlanAnualFilters({
               setEmpSearch(e.target.value);
               setSelectedEmployeeId("");
             }}
-            placeholder="Ej. Montes, Lettieri..."
+            placeholder="Ej. Montes, Sassone..."
             className="form-input"
             style={{ borderRadius: "8px", backgroundColor: "white", fontSize: "0.85rem" }}
           />
         </div>
 
-        <div style={{ flex: "1 1 190px" }}>
+        <div style={{ flex: "1 1 180px" }}>
           <label className="form-label" style={{ fontSize: "0.75rem", marginBottom: "0.25rem", color: "#334155" }}>
-            4. Empleado ({filteredEmployees.length})
+            5. Empleado ({filteredEmployees.length})
           </label>
           <select
             name="employeeId"
@@ -258,7 +330,7 @@ export function PlanAnualFilters({
             style={{ borderRadius: "8px", backgroundColor: "white", fontSize: "0.85rem" }}
           >
             <option value="">
-              {selectedSectorId || selectedJobProfileId || empSearch
+              {selectedSectorId || selectedBase || selectedJobProfileId || empSearch
                 ? `Todos los filtrados (${filteredEmployees.length})`
                 : "Todos los empleados"}
             </option>
@@ -270,9 +342,9 @@ export function PlanAnualFilters({
           </select>
         </div>
 
-        <div style={{ flex: "1 1 150px" }}>
+        <div style={{ flex: "1 1 140px" }}>
           <label className="form-label" style={{ fontSize: "0.75rem", marginBottom: "0.25rem", color: "#334155" }}>
-            5. Estado
+            6. Estado
           </label>
           <select
             name="statusFilter"
@@ -291,7 +363,7 @@ export function PlanAnualFilters({
 
         <div style={{ flex: "1.5 1 190px" }}>
           <label className="form-label" style={{ fontSize: "0.75rem", marginBottom: "0.25rem", color: "#334155" }}>
-            6. Tema de Capacitación
+            7. Tema de Capacitación ({canonicalTrainings.length})
           </label>
           <select
             name="q"
@@ -301,9 +373,9 @@ export function PlanAnualFilters({
             style={{ borderRadius: "8px", backgroundColor: "white", fontSize: "0.85rem" }}
           >
             <option value="">Todos los temas</option>
-            {allTrainings.map((t) => (
-              <option key={t.id} value={t.title}>
-                {t.title}
+            {canonicalTrainings.map((title) => (
+              <option key={title} value={title}>
+                {title}
               </option>
             ))}
           </select>

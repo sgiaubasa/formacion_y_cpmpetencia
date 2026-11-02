@@ -17,8 +17,9 @@ import { MicrosoftFormsImportCard } from "./MicrosoftFormsImportCard";
 import { getDefaultInstructorForSector } from "@/lib/instructorDefaults";
 import { encryptRecordId } from "@/lib/crypto";
 import { buildSvgSignatureDataUri } from "@/app/api/webhooks/microsoft-forms/route";
+import { getCanonicalTrainingName } from "@/lib/canonicalTrainings";
 
-export default async function PlanAnualPage({ searchParams }: { searchParams: Promise<{ tab?: string, q?: string, employeeId?: string, empName?: string, sectorId?: string, jobProfileId?: string, statusFilter?: string }> }) {
+export default async function PlanAnualPage({ searchParams }: { searchParams: Promise<{ tab?: string, q?: string, employeeId?: string, empName?: string, sectorId?: string, baseOperativa?: string, jobProfileId?: string, statusFilter?: string }> }) {
   const role = await getCurrentRole();
   const isSector = await isSectorRole(role);
   const sectorRoleId = await getSectorIdFromRole(role);
@@ -34,6 +35,7 @@ export default async function PlanAnualPage({ searchParams }: { searchParams: Pr
   const sp = await searchParams;
   const q = sp.q || '';
   const empName = sp.empName?.trim() || '';
+  const baseOperativa = sp.baseOperativa || '';
   
   const rawSectorId = sp.sectorId ? parseInt(sp.sectorId) : undefined;
   const sectorId = isSector ? sectorRoleId : rawSectorId;
@@ -44,6 +46,7 @@ export default async function PlanAnualPage({ searchParams }: { searchParams: Pr
   const employeeFilters: any = {};
   if (sectorId) employeeFilters.sectorId = sectorId;
   if (jobProfileId) employeeFilters.jobProfileId = jobProfileId;
+  if (baseOperativa) employeeFilters.baseOperativa = baseOperativa;
   if (empName) {
     employeeFilters.OR = [
       { name: { contains: empName, mode: 'insensitive' } },
@@ -60,19 +63,59 @@ export default async function PlanAnualPage({ searchParams }: { searchParams: Pr
     statusWhere = { status: statusFilter };
   }
 
+  // Si el usuario seleccionó un tema canónico, buscamos por subcadenas clave para abarcar variantes históricas sin perder nada
+  let trainingFilterWhere: any = {};
+  if (q.trim()) {
+    const qClean = q.trim();
+    // Búsqueda inteligente por palabras clave principales si es un título largo
+    if (qClean.toLowerCase().includes("identificaci") && qClean.toLowerCase().includes("peligro")) {
+      trainingFilterWhere = {
+        trainingName: { contains: "identificaci", mode: "insensitive" }
+      };
+    } else if (qClean.toLowerCase().includes("autoprotecci") || qClean.toLowerCase().includes("focos")) {
+      trainingFilterWhere = {
+        trainingName: { contains: "autoprotecci", mode: "insensitive" }
+      };
+    } else if (qClean.toLowerCase().includes("eléctrico") || qClean.toLowerCase().includes("electrico")) {
+      if (qClean.toLowerCase().includes("oficina")) {
+        trainingFilterWhere = {
+          OR: [
+            { trainingName: { contains: "oficina", mode: "insensitive" } },
+            { trainingName: { contains: "eléctrico en oficinas", mode: "insensitive" } },
+            { trainingName: { contains: "eléctricos oficina", mode: "insensitive" } }
+          ]
+        };
+      } else {
+        trainingFilterWhere = {
+          trainingName: { contains: "eléctric", mode: "insensitive" }
+        };
+      }
+    } else if (qClean.toLowerCase().includes("carga") || qClean.toLowerCase().includes("ergonom")) {
+      trainingFilterWhere = {
+        trainingName: { contains: "ergonom", mode: "insensitive" }
+      };
+    } else if (qClean.toLowerCase().includes("itinere")) {
+      trainingFilterWhere = {
+        trainingName: { contains: "itinere", mode: "insensitive" }
+      };
+    } else {
+      trainingFilterWhere = {
+        trainingName: { contains: qClean, mode: "insensitive" }
+      };
+    }
+  }
+
   const globalFilters = {
     ...(employeeId && { employeeId: employeeId }),
     ...(Object.keys(employeeFilters).length > 0 && { employee: employeeFilters }),
     ...statusWhere,
+    ...trainingFilterWhere,
     ...(isSector ? buildSectorRecordSourceFilter(allowedSectors) : {})
   };
 
   const [records, materialsMap, traceMap] = await Promise.all([
     prisma.employeeTrainingRecord.findMany({
-      where: {
-        trainingName: { contains: q, mode: 'insensitive' },
-        ...globalFilters
-      },
+      where: globalFilters,
       select: {
         id: true,
         employeeId: true,
@@ -91,6 +134,7 @@ export default async function PlanAnualPage({ searchParams }: { searchParams: Pr
             id: true,
             name: true,
             legajo: true,
+            baseOperativa: true,
             sector: { select: { id: true, name: true } }
           }
         }
@@ -271,7 +315,7 @@ export default async function PlanAnualPage({ searchParams }: { searchParams: Pr
 
   const allEmployees = await prisma.employee.findMany({ 
     where: { isActive: true },
-    select: { id: true, name: true, legajo: true, sectorId: true, jobProfileId: true },
+    select: { id: true, name: true, legajo: true, baseOperativa: true, sectorId: true, jobProfileId: true },
     orderBy: { name: 'asc' } 
   });
   const allSectors = await prisma.sector.findMany({
@@ -367,6 +411,7 @@ export default async function PlanAnualPage({ searchParams }: { searchParams: Pr
           allTrainings={allTrainings}
           isSector={isSector}
           initialSectorId={sectorId ? String(sectorId) : ''}
+          initialBaseOperativa={baseOperativa}
           initialJobProfileId={sp.jobProfileId || ''}
           initialEmployeeId={sp.employeeId || ''}
           initialEmpSearch={empName}
@@ -380,6 +425,7 @@ export default async function PlanAnualPage({ searchParams }: { searchParams: Pr
               <tr>
                 <th>EMPLEADO</th>
                 <th>SECTOR</th>
+                <th>SITIO / BASE</th>
                 <th>CAPACITACIÓN</th>
                 <th>ESTADO</th>
                 <th>FECHA PROGRAMADA</th>
@@ -391,15 +437,17 @@ export default async function PlanAnualPage({ searchParams }: { searchParams: Pr
                 const isCompleted = r.status === 'COMPLETED';
                 const material = materialsMap[`record_${r.id}`] || null;
                 const activeDateObj = r.rescheduledDate || r.scheduledDate;
+                const displayTopic = getCanonicalTrainingName(r.trainingName);
                 return (
                   <tr key={r.id}>
                     <td style={{ fontWeight: 500 }}>{r.employee.name}</td>
                     <td>{r.employee.sector.name}</td>
+                    <td style={{ fontSize: '0.82rem', color: '#475569' }}>{r.employee.baseOperativa || '-'}</td>
                     <td style={{ maxWidth: '250px' }}>
-                      <div>{r.trainingName}</div>
+                      <div title={r.trainingName}>{displayTopic}</div>
                       {material && (
                         <div style={{ marginTop: '0.35rem' }}>
-                          <MaterialViewerButton material={material} trainingName={r.trainingName} />
+                          <MaterialViewerButton material={material} trainingName={displayTopic} />
                         </div>
                       )}
                     </td>
@@ -438,7 +486,7 @@ export default async function PlanAnualPage({ searchParams }: { searchParams: Pr
                           {r.score && <div style={{ fontSize: '0.875rem' }}>Nota: <strong>{r.score}</strong>/10</div>}
                           <div style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>Instructor: <strong>{r.instructorName || getDefaultInstructorForSector(r.employee.sector?.name).name}</strong></div>
                           {material && (
-                            <MaterialViewerButton material={material} trainingName={r.trainingName} />
+                            <MaterialViewerButton material={material} trainingName={displayTopic} />
                           )}
                           <div style={{ display: 'flex', flexDirection: 'column', gap: '0.35rem', marginTop: '0.2rem' }}>
                             <a 
@@ -510,7 +558,7 @@ export default async function PlanAnualPage({ searchParams }: { searchParams: Pr
                 );
               })}
               {records.length === 0 && (
-                <tr><td colSpan={6} style={{ textAlign: 'center' }}>No se encontraron registros.</td></tr>
+                <tr><td colSpan={7} style={{ textAlign: 'center' }}>No se encontraron registros.</td></tr>
               )}
             </tbody>
           </table>

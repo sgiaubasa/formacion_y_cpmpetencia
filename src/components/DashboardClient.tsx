@@ -5,12 +5,15 @@ import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer,
   PieChart, Pie, Cell
 } from 'recharts';
+import { BASES_OPERATIVAS } from '@/lib/constants';
+import { getUniqueCanonicalTopics } from '@/lib/canonicalTrainings';
 
 type DashboardData = {
   id: number;
   status: string;
   effectiveness: string | null;
   trainingName: string;
+  rawTrainingName?: string;
   date: string | null;
   scheduledDate?: string | null;
   rescheduledDate?: string | null;
@@ -18,6 +21,7 @@ type DashboardData = {
   isRescheduled?: boolean;
   employeeName: string;
   employeeId: number;
+  baseOperativa?: string | null;
   sectorId: number;
   sectorName: string;
   profileId: number | null;
@@ -46,13 +50,14 @@ export default function DashboardClient({ data, sectors, profiles, isSector }: P
   const [selectedMonth, setSelectedMonth] = useState<string>('Todos');
   const [selectedStatus, setSelectedStatus] = useState<string>('Todos');
   const [selectedSector, setSelectedSector] = useState<string>('Todos');
+  const [selectedBase, setSelectedBase] = useState<string>('Todos');
   const [selectedProfile, setSelectedProfile] = useState<string>('Todos');
   const [selectedEmployee, setSelectedEmployee] = useState<string>('Todos');
   const [selectedTopic, setSelectedTopic] = useState<string>('Todos');
 
   const [crossFilter, setCrossFilter] = useState<CrossFilter | null>(null);
 
-  // Extract unique years and employees for filters
+  // Extract unique years for filters
   const availableYears = useMemo(() => {
     const years = new Set<string>();
     data.forEach(d => {
@@ -61,64 +66,103 @@ export default function DashboardClient({ data, sectors, profiles, isSector }: P
     return Array.from(years).sort().reverse();
   }, [data]);
 
+  // Dynamic Bases Operativas (Sitios: Dock Sud, Berazategui, Quilmes, Hudson, etc.)
+  // Filtrado dinámicamente según el Sector elegido
+  const availableBases = useMemo(() => {
+    const basesFound = new Set<string>();
+    data.forEach(d => {
+      if (selectedSector !== 'Todos' && d.sectorId.toString() !== selectedSector) return;
+      if (d.baseOperativa) basesFound.add(d.baseOperativa);
+    });
+
+    if (basesFound.size > 0) {
+      return Array.from(basesFound).sort((a, b) => a.localeCompare(b, 'es'));
+    }
+    return BASES_OPERATIVAS;
+  }, [data, selectedSector]);
+
   // Map specific Sectors to their Gerencia
   const getGerenciaForSector = (sectorName: string) => {
     const map: Record<string, string> = {
       'Asistencia Vial': 'Gerencia de Prevencion y Seguridad Integral',
       'Seguridad Patrimonial': 'Gerencia de Prevencion y Seguridad Integral',
       'CCM': 'Gerencia de Prevencion y Seguridad Integral',
-      'SGI': 'Auditoría Interna y Control de Gestión', // Optional guess based on DB
+      'SGI': 'Auditoría Interna y Control de Gestión',
     };
     return map[sectorName] || sectorName;
   };
 
-  // Cascading logic for Profiles (depends on Sector)
+  // Cascading logic for Profiles (depends on Sector and Base Operativa)
   const availableProfiles = useMemo(() => {
-    if (selectedSector === 'Todos') return profiles;
+    if (selectedSector === 'Todos') {
+      if (selectedBase === 'Todos') return profiles;
+      const baseProfileIds = new Set<number>();
+      data.forEach(d => {
+        if (d.baseOperativa === selectedBase && d.profileId) {
+          baseProfileIds.add(d.profileId);
+        }
+      });
+      return profiles.filter(p => baseProfileIds.has(p.id));
+    }
     
     const sectorObj = sectors.find(s => s.id.toString() === selectedSector);
     const sectorName = sectorObj?.name || "";
     const mappedGerencia = getGerenciaForSector(sectorName);
     
+    // Si además filtró por base operativa, cruzamos con la base
+    const sectorDataProfileIds = new Set<number>();
+    data.forEach(d => {
+      if (d.sectorId.toString() === selectedSector) {
+        if (selectedBase === 'Todos' || d.baseOperativa === selectedBase) {
+          if (d.profileId) sectorDataProfileIds.add(d.profileId);
+        }
+      }
+    });
+
+    if (selectedBase !== 'Todos') {
+      return profiles.filter(p => sectorDataProfileIds.has(p.id));
+    }
+
     const staticProfiles = profiles.filter(p => p.gerencia === mappedGerencia || p.gerencia === sectorName);
     if (staticProfiles.length > 0) return staticProfiles;
     
-    // Fallback: If no static matches, use the data-driven approach
-    const sectorProfileIds = new Set<number>();
-    data.forEach(d => {
-      if (d.sectorId.toString() === selectedSector && d.profileId) {
-        sectorProfileIds.add(d.profileId);
-      }
-    });
-    return profiles.filter(p => sectorProfileIds.has(p.id));
-  }, [profiles, data, selectedSector, sectors]);
+    return profiles.filter(p => sectorDataProfileIds.has(p.id));
+  }, [profiles, data, selectedSector, selectedBase, sectors]);
 
-  // Cascading logic for Employees (depends on Sector and Profile)
+  // Cascading logic for Employees (depends on Sector, Base, and Profile)
   const availableEmployees = useMemo(() => {
     const emps = new Set<string>();
     data.forEach(d => {
       let pass = true;
       if (selectedSector !== 'Todos' && d.sectorId.toString() !== selectedSector) pass = false;
+      if (selectedBase !== 'Todos' && d.baseOperativa !== selectedBase) pass = false;
       if (selectedProfile !== 'Todos' && d.profileId?.toString() !== selectedProfile) pass = false;
       if (pass) emps.add(d.employeeName);
     });
-    return Array.from(emps).sort();
-  }, [data, selectedSector, selectedProfile]);
+    return Array.from(emps).sort((a, b) => a.localeCompare(b, 'es'));
+  }, [data, selectedSector, selectedBase, selectedProfile]);
 
-  // Cascading logic for Topics
+  // Cascading logic for Topics (unificados y canónicos sin repetidos)
   const availableTopics = useMemo(() => {
-    const topics = new Set<string>();
+    const rawTopics: string[] = [];
     data.forEach(d => {
       let pass = true;
       if (selectedSector !== 'Todos' && d.sectorId.toString() !== selectedSector) pass = false;
+      if (selectedBase !== 'Todos' && d.baseOperativa !== selectedBase) pass = false;
       if (selectedProfile !== 'Todos' && d.profileId?.toString() !== selectedProfile) pass = false;
       if (selectedEmployee !== 'Todos' && d.employeeName !== selectedEmployee) pass = false;
-      if (pass && d.trainingName) topics.add(d.trainingName);
+      if (pass && d.trainingName) rawTopics.push(d.trainingName);
     });
-    return Array.from(topics).sort((a, b) => a.localeCompare(b, 'es'));
-  }, [data, selectedSector, selectedProfile, selectedEmployee]);
+    return getUniqueCanonicalTopics(rawTopics);
+  }, [data, selectedSector, selectedBase, selectedProfile, selectedEmployee]);
 
   // Reset dependent filters if they become invalid
+  React.useEffect(() => {
+    if (selectedBase !== 'Todos' && !availableBases.includes(selectedBase)) {
+      setSelectedBase('Todos');
+    }
+  }, [availableBases, selectedBase]);
+
   React.useEffect(() => {
     if (selectedProfile !== 'Todos' && !availableProfiles.some(p => p.id.toString() === selectedProfile)) {
       setSelectedProfile('Todos');
@@ -142,6 +186,7 @@ export default function DashboardClient({ data, sectors, profiles, isSector }: P
     return data.filter(d => {
       let pass = true;
       if (selectedSector !== 'Todos' && d.sectorId.toString() !== selectedSector) pass = false;
+      if (selectedBase !== 'Todos' && d.baseOperativa !== selectedBase) pass = false;
       if (selectedProfile !== 'Todos' && d.profileId?.toString() !== selectedProfile) pass = false;
       if (selectedEmployee !== 'Todos' && d.employeeName !== selectedEmployee) pass = false;
 
@@ -160,7 +205,7 @@ export default function DashboardClient({ data, sectors, profiles, isSector }: P
       
       return pass;
     });
-  }, [data, selectedYear, selectedMonth, selectedStatus, selectedSector, selectedProfile, selectedEmployee]);
+  }, [data, selectedYear, selectedMonth, selectedStatus, selectedSector, selectedBase, selectedProfile, selectedEmployee]);
 
   // Apply GLOBAL filters INCLUDING topic (used for BarChart, detailedData, and KPIs)
   const filteredData = useMemo(() => {
@@ -198,16 +243,16 @@ export default function DashboardClient({ data, sectors, profiles, isSector }: P
     return result;
   }, [filteredData, crossFilter]);
 
-  // Chart 1: Donut (Categorías/Temas de las Realizadas) -> Always use global filteredData so it doesn't disappear when clicked
+  // Chart 1: Donut (Categorías/Temas de las Realizadas)
   const donutData = useMemo(() => {
     const counts: Record<string, number> = {};
     filteredData.filter(d => d.status === 'COMPLETED').forEach(d => {
       counts[d.trainingName] = (counts[d.trainingName] || 0) + 1;
     });
-    return Object.keys(counts).map(key => ({ name: key, value: counts[key] })).sort((a,b) => b.value - a.value).slice(0, 8); // top 8
+    return Object.keys(counts).map(key => ({ name: key, value: counts[key] })).sort((a,b) => b.value - a.value).slice(0, 8);
   }, [filteredData]);
 
-  // Chart 2: Bar (Mensual) -> Compara Programadas contra Realizadas, y las que están en estado Reprogramada suman solo en Reprogramadas sin duplicar Programadas
+  // Chart 2: Bar (Mensual)
   const monthlyData = useMemo(() => {
     const mData = MONTHS.map((m) => ({ name: m, Programadas: 0, Realizadas: 0, Reprogramadas: 0 }));
     filteredData.forEach(d => {
@@ -226,7 +271,7 @@ export default function DashboardClient({ data, sectors, profiles, isSector }: P
     return mData;
   }, [filteredData]);
 
-  // KPIs -> Programadas incluye las Realizadas + Programadas pendientes para comparar Realizadas contra Programadas; Reprogramadas suma solo las que están en estado reprogramado sin duplicar en Programadas
+  // KPIs
   const realizadas = detailedData.filter(d => d.status === 'COMPLETED').length;
   const programadas = detailedData.filter(d => d.status === 'COMPLETED' || (d.status === 'IN_PLAN' && !d.isRescheduled)).length;
   const reprogramadas = detailedData.filter(d => d.status === 'IN_PLAN' && Boolean(d.isRescheduled)).length;
@@ -237,7 +282,7 @@ export default function DashboardClient({ data, sectors, profiles, isSector }: P
   const strokeDasharray = 125.6;
   const strokeDashoffset = strokeDasharray - (strokeDasharray * tasaCumplimiento) / 100;
 
-  // Table: Cumplimiento PAC por Tema -> Computed from baseFilteredData so all topics remain visible
+  // Table: Cumplimiento PAC por Tema
   const { pacData, pacTotals } = useMemo(() => {
     const stats: Record<string, { realizadas: number, programadas: number, eficaces: number }> = {};
     let totalRealizadas = 0;
@@ -249,10 +294,9 @@ export default function DashboardClient({ data, sectors, profiles, isSector }: P
       if (!stats[d.trainingName]) {
         stats[d.trainingName] = { realizadas: 0, programadas: 0, eficaces: 0 };
       }
-      if (d.status === 'IN_PLAN' || d.status === 'COMPLETED') {
-        stats[d.trainingName].programadas += 1;
-        totalProgramadas += 1;
-      }
+      stats[d.trainingName].programadas += 1;
+      totalProgramadas += 1;
+
       if (d.status === 'COMPLETED') {
         stats[d.trainingName].realizadas += 1;
         totalRealizadas += 1;
@@ -263,37 +307,34 @@ export default function DashboardClient({ data, sectors, profiles, isSector }: P
       }
     });
 
-    const rows = Object.keys(stats).map(key => {
-      const s = stats[key];
-      const cump = s.programadas > 0 ? (s.realizadas / s.programadas) * 100 : 0;
-      // De lo realizado, cuántas tienen la eficacia cumplida
-      const efic = s.realizadas > 0 ? (s.eficaces / s.realizadas) * 100 : 0;
-      return { tema: key, cump, efic, realizadas: s.realizadas, programadas: s.programadas, eficaces: s.eficaces };
-    }).sort((a,b) => b.cump - a.cump);
+    const rows = Object.keys(stats).map(topic => {
+      const { realizadas: r, programadas: p, eficaces: e } = stats[topic];
+      const cumPct = p > 0 ? Math.round((r / p) * 100) : 0;
+      const eficPct = r > 0 ? Math.round((e / r) * 100) : 0;
+      return { topic, programadas: p, realizadas: r, cumPct, eficaces: e, eficPct };
+    }).sort((a, b) => b.programadas - a.programadas);
+
+    const cumTotalPct = totalProgramadas > 0 ? Math.round((totalRealizadas / totalProgramadas) * 100) : 0;
+    const eficTotalPct = totalRealizadas > 0 ? Math.round((totalEficaces / totalRealizadas) * 100) : 0;
 
     return {
       pacData: rows,
       pacTotals: {
-        cump: totalProgramadas > 0 ? (totalRealizadas / totalProgramadas) * 100 : 0,
-        efic: totalRealizadas > 0 ? (totalEficaces / totalRealizadas) * 100 : 0
+        programadas: totalProgramadas,
+        realizadas: totalRealizadas,
+        cumPct: cumTotalPct,
+        eficaces: totalEficaces,
+        eficPct: eficTotalPct
       }
     };
   }, [baseFilteredData]);
 
-  // Handlers
-  const handleTopicRowClick = (tema: string) => {
-    if (selectedTopic === tema) {
-      setSelectedTopic('Todos');
-    } else {
-      setSelectedTopic(tema);
-    }
-  };
-
-  const handleBarClick = (data: any, index: number, key: string) => {
-    if (crossFilter?.source === 'BarChart' && crossFilter.monthIndex === index && crossFilter.statusKey === key) {
+  // Handle Chart Clicks
+  const handleBarClick = (data: any, index: number, statusKey: string) => {
+    if (crossFilter?.source === 'BarChart' && crossFilter.monthIndex === index && crossFilter.statusKey === statusKey) {
       setCrossFilter(null);
     } else {
-      setCrossFilter({ source: 'BarChart', monthIndex: index, statusKey: key });
+      setCrossFilter({ source: 'BarChart', monthIndex: index, statusKey });
     }
   };
 
@@ -348,27 +389,44 @@ export default function DashboardClient({ data, sectors, profiles, isSector }: P
       <div style={{ display: 'flex', gap: '1rem', alignItems: 'flex-start' }}>
         
         {/* Left Sidebar Filters */}
-        <div className="card" style={{ width: '250px', flexShrink: 0, display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+        <div className="card" style={{ width: '260px', flexShrink: 0, display: 'flex', flexDirection: 'column', gap: '1rem' }}>
           {!isSector && (
             <div>
               <label style={{ fontSize: '0.875rem', fontWeight: 'bold', color: 'var(--primary-color)' }}>Gerencia / Sector</label>
               <select value={selectedSector} onChange={e => setSelectedSector(e.target.value)} className="form-input">
-                <option value="Todos">Todas</option>
+                <option value="Todos">Todas las gerencias</option>
                 {sectors.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
               </select>
             </div>
           )}
+
+          {/* Sitio / Base Operativa (Dock Sud, Berazategui, Quilmes, Hudson, etc.) */}
           <div>
-            <label style={{ fontSize: '0.875rem', fontWeight: 'bold', color: 'var(--primary-color)' }}>Perfil de Puesto</label>
+            <label style={{ fontSize: '0.875rem', fontWeight: 'bold', color: 'var(--primary-color)' }}>
+              Sitio / Base Operativa {selectedSector !== 'Todos' ? `(${availableBases.length})` : ''}
+            </label>
+            <select value={selectedBase} onChange={e => setSelectedBase(e.target.value)} className="form-input">
+              <option value="Todos">Todos los sitios</option>
+              {availableBases.map(b => <option key={b} value={b}>{b}</option>)}
+            </select>
+          </div>
+
+          <div>
+            <label style={{ fontSize: '0.875rem', fontWeight: 'bold', color: 'var(--primary-color)' }}>
+              Perfil de Puesto {selectedSector !== 'Todos' || selectedBase !== 'Todos' ? `(${availableProfiles.length})` : ''}
+            </label>
             <select value={selectedProfile} onChange={e => setSelectedProfile(e.target.value)} className="form-input">
-              <option value="Todos">Todos</option>
+              <option value="Todos">Todos los puestos</option>
               {availableProfiles.map(p => <option key={p.id} value={p.id}>{p.title}</option>)}
             </select>
           </div>
+
           <div>
-            <label style={{ fontSize: '0.875rem', fontWeight: 'bold', color: 'var(--primary-color)' }}>Nombre y Apellido</label>
+            <label style={{ fontSize: '0.875rem', fontWeight: 'bold', color: 'var(--primary-color)' }}>
+              Nombre y Apellido ({availableEmployees.length})
+            </label>
             <select value={selectedEmployee} onChange={e => setSelectedEmployee(e.target.value)} className="form-input">
-              <option value="Todos">Todos</option>
+              <option value="Todos">Todos los colaboradores</option>
               {availableEmployees.map(e => <option key={e} value={e}>{e}</option>)}
             </select>
           </div>
@@ -544,200 +602,151 @@ export default function DashboardClient({ data, sectors, profiles, isSector }: P
             </ResponsiveContainer>
           </div>
 
-          <div style={{ display: 'flex', gap: '1rem', alignItems: 'flex-start' }}>
-            {/* Table Cumplimiento */}
-            <div className="card" style={{ flex: 1, padding: 0, overflow: 'hidden' }}>
-              <h3 style={{ fontSize: '1rem', textAlign: 'center', color: 'white', background: '#0078D4', padding: '0.35rem', margin: 0 }}>
-                Cumplimiento del PAC por Tema
-              </h3>
-              <div style={{ maxHeight: '280px', overflowY: 'auto' }}>
-                <table className="data-table" style={{ fontSize: '0.875rem', borderCollapse: 'collapse', width: '100%' }}>
-                  <thead>
-                    <tr>
-                      <th style={{ position: 'sticky', top: 0, background: '#f8fafc', color: '#0f172a', fontWeight: 700, borderBottom: '2px solid #0078D4', textTransform: 'none', zIndex: 2 }}>
-                        Tema a capacitar
-                      </th>
-                      <th style={{ position: 'sticky', top: 0, background: '#f8fafc', color: '#0f172a', fontWeight: 700, textAlign: 'right', borderBottom: '2px solid #0078D4', textTransform: 'none', width: '160px', zIndex: 2 }}>
-                        % Cumplimiento
-                      </th>
-                      <th style={{ position: 'sticky', top: 0, background: '#f8fafc', color: '#0f172a', fontWeight: 700, textAlign: 'right', borderBottom: '2px solid #0078D4', textTransform: 'none', width: '180px', zIndex: 2 }}>
-                        % Eficacias Cumplidas
-                      </th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {pacData.map((r, i) => {
-                      const isSelected = selectedTopic === r.tema;
-                      return (
-                        <tr
-                          key={i}
-                          onClick={() => handleTopicRowClick(r.tema)}
-                          style={{
-                            cursor: 'pointer',
-                            backgroundColor: isSelected ? '#dbeafe' : undefined,
-                            borderLeft: isSelected ? '4px solid #0078D4' : 'none',
-                            transition: 'background-color 0.15s ease'
-                          }}
-                          title={isSelected ? "Click para quitar el filtro de este tema" : "Click para filtrar el gráfico de barras y las personas por este tema"}
-                        >
-                          <td style={{ color: isSelected ? '#004B8B' : '#1e293b', fontWeight: isSelected ? 700 : 500 }}>
-                            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '0.5rem' }}>
-                              <span>{r.tema}</span>
-                              {isSelected && (
-                                <span style={{ fontSize: '0.68rem', backgroundColor: '#0078D4', color: 'white', padding: '1px 6px', borderRadius: '4px', whiteSpace: 'nowrap' }}>
-                                  ✓ Activo
-                                </span>
-                              )}
-                            </div>
-                          </td>
-                          <td style={{
-                            textAlign: 'right',
-                            fontWeight: 600,
-                            color: '#0f172a',
-                            background: r.cump >= 80 ? '#10b981' : (r.cump > 0 ? '#fde047' : '#e05252'),
-                            borderLeft: '1px solid #e2e8f0'
-                          }}>
-                            {r.cump.toFixed(1).replace('.', ',')} %
-                          </td>
-                          <td style={{
-                            textAlign: 'right',
-                            fontWeight: 600,
-                            color: '#0f172a',
-                            background: r.efic >= 80 ? '#10b981' : (r.efic > 0 ? '#fde047' : '#e05252'),
-                            borderLeft: '1px solid #e2e8f0'
-                          }}>
-                            {r.efic.toFixed(1).replace('.', ',')} %
-                          </td>
-                        </tr>
-                      );
-                    })}
-                    {pacData.length === 0 && (
-                      <tr><td colSpan={3} style={{ textAlign: 'center' }}>Sin datos</td></tr>
-                    )}
-                  </tbody>
-                  {pacData.length > 0 && (
-                    <tfoot>
-                      <tr>
-                        <td style={{ position: 'sticky', bottom: 0, background: '#f8fafc', fontWeight: 700, color: '#0f172a', borderTop: '2px solid #cbd5e1' }}>
-                          Total
-                        </td>
-                        <td style={{ position: 'sticky', bottom: 0, background: '#f8fafc', fontWeight: 700, color: '#0f172a', textAlign: 'right', borderTop: '2px solid #cbd5e1' }}>
-                          {pacTotals.cump.toFixed(1).replace('.', ',')} %
-                        </td>
-                        <td style={{ position: 'sticky', bottom: 0, background: '#f8fafc', fontWeight: 700, color: '#0f172a', textAlign: 'right', borderTop: '2px solid #cbd5e1' }}>
-                          {pacTotals.efic.toFixed(1).replace('.', ',')} %
-                        </td>
-                      </tr>
-                    </tfoot>
-                  )}
-                </table>
-              </div>
-              <div style={{ padding: '0.4rem 0.75rem', backgroundColor: '#f8fafc', borderTop: '1px solid #e2e8f0', fontSize: '0.72rem', color: '#64748b', textAlign: 'center' }}>
-                💡 Haz clic en cualquier tema para filtrar el gráfico de barras y el listado de personas
-              </div>
-            </div>
-          </div>
-          
-          {/* Detailed Records Table */}
-          <div className="card" style={{ padding: 0, overflow: 'hidden', borderLeft: (crossFilter || selectedTopic !== 'Todos') ? '4px solid var(--secondary-color)' : 'none' }}>
-            <h3 style={{ fontSize: '1rem', textAlign: 'center', color: 'white', background: '#004B8B', padding: '0.25rem', margin: 0, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <span style={{ paddingLeft: '1rem' }}>
-                Listado de Empleados {selectedTopic !== 'Todos' ? `— Tema: "${selectedTopic}"` : '(Impactado por Filtros)'}
-              </span>
-              <span style={{ paddingRight: '1rem', fontSize: '0.75rem', background: '#ffffff33', padding: '2px 8px', borderRadius: '10px' }}>
-                {detailedData.length} registros
-              </span>
+          {/* Bottom Table: Cumplimiento del PAC por Tema */}
+          <div className="card" style={{ padding: 0 }}>
+            <h3 style={{ fontSize: '1rem', textAlign: 'center', color: 'white', background: '#0078D4', padding: '0.5rem', margin: 0, borderRadius: '4px 4px 0 0' }}>
+              Cumplimiento del PAC por Tema
             </h3>
-            <div style={{ maxHeight: '350px', overflowY: 'auto' }}>
-              <table className="data-table" style={{ fontSize: '0.875rem' }}>
-                <thead>
+            <div style={{ maxHeight: '250px', overflowY: 'auto' }}>
+              <table className="data-table" style={{ margin: 0 }}>
+                <thead style={{ position: 'sticky', top: 0, background: '#f8fafc', zIndex: 1 }}>
                   <tr>
-                    <th style={{ position: 'sticky', top: 0, background: '#f8fafc', color: '#0f172a', fontWeight: 700, borderBottom: '2px solid #cbd5e1', zIndex: 2 }}>Fecha</th>
-                    <th style={{ position: 'sticky', top: 0, background: '#f8fafc', color: '#0f172a', fontWeight: 700, borderBottom: '2px solid #cbd5e1', zIndex: 2 }}>Empleado</th>
-                    <th style={{ position: 'sticky', top: 0, background: '#f8fafc', color: '#0f172a', fontWeight: 700, borderBottom: '2px solid #cbd5e1', zIndex: 2 }}>Sector</th>
-                    <th style={{ position: 'sticky', top: 0, background: '#f8fafc', color: '#0f172a', fontWeight: 700, borderBottom: '2px solid #cbd5e1', zIndex: 2 }}>Tema</th>
-                    <th style={{ position: 'sticky', top: 0, background: '#f8fafc', color: '#0f172a', fontWeight: 700, borderBottom: '2px solid #cbd5e1', zIndex: 2 }}>Estado</th>
+                    <th>Tema a capacitar</th>
+                    <th style={{ textAlign: 'center' }}>% Cumplimiento</th>
+                    <th style={{ textAlign: 'center' }}>% Eficacia</th>
+                    <th style={{ textAlign: 'right' }}>Total</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {detailedData.slice(0, 100).map(d => (
-                    <tr key={d.id}>
-                      <td>
-                        {d.isRescheduled && d.rescheduledDate ? (
-                          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.1rem' }}>
-                            {d.status === 'COMPLETED' && d.completedAt ? (
-                              <>
-                                <span style={{ fontWeight: 600, color: '#0f172a' }}>
-                                  Realiz.: {new Date(d.completedAt).toLocaleDateString('es-AR')}
-                                </span>
-                                <span style={{ fontSize: '0.73rem', color: '#ea580c', fontWeight: 600 }}>
-                                  🔄 Reprog.: {new Date(d.rescheduledDate).toLocaleDateString('es-AR')}
-                                </span>
-                              </>
-                            ) : (
-                              <>
-                                <span style={{ fontWeight: 700, color: '#ea580c' }}>
-                                  🔄 Nueva: {new Date(d.rescheduledDate).toLocaleDateString('es-AR')}
-                                </span>
-                                {d.scheduledDate && (
-                                  <span style={{ fontSize: '0.72rem', color: '#64748b' }}>
-                                    Orig.: <span style={{ textDecoration: 'line-through' }}>{new Date(d.scheduledDate).toLocaleDateString('es-AR')}</span>
-                                  </span>
-                                )}
-                              </>
-                            )}
-                          </div>
-                        ) : (
-                          d.date ? new Date(d.date).toLocaleDateString('es-AR') : '-'
-                        )}
-                      </td>
-                      <td style={{ fontWeight: 500, color: 'var(--primary-color)' }}>{d.employeeName}</td>
-                      <td>{d.sectorName}</td>
-                      <td>{d.trainingName}</td>
-                      <td>
-                        {d.status === 'COMPLETED' ? (
-                          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.2rem' }}>
-                            <span className="badge badge-success" style={{ width: 'fit-content' }}>Realizada</span>
-                            {d.isRescheduled && (
-                              <span style={{ fontSize: '0.68rem', color: '#ea580c', fontWeight: 600 }}>
-                                🔄 Fue reprogramada
-                              </span>
-                            )}
-                          </div>
-                        ) : d.isRescheduled ? (
-                          <span className="badge" style={{ backgroundColor: '#f97316', color: 'white' }}>
-                            Reprogramada
+                  {pacData.map(row => {
+                    const isSelected = selectedTopic === row.topic;
+                    return (
+                      <tr 
+                        key={row.topic} 
+                        onClick={() => setSelectedTopic(isSelected ? 'Todos' : row.topic)}
+                        style={{ 
+                          cursor: 'pointer',
+                          backgroundColor: isSelected ? '#eff6ff' : 'transparent',
+                          fontWeight: isSelected ? 'bold' : 'normal'
+                        }}
+                        title={isSelected ? 'Click para quitar filtro de tema' : `Click para filtrar gráfico por ${row.topic}`}
+                      >
+                        <td>
+                          {isSelected && <span style={{ marginRight: '0.4rem', color: '#0078D4' }}>✓</span>}
+                          {row.topic}
+                        </td>
+                        <td style={{ textAlign: 'center' }}>
+                          <span style={{ 
+                            color: row.cumPct >= 80 ? '#00CC6A' : row.cumPct >= 50 ? '#FFB900' : '#D83B01',
+                            fontWeight: 'bold'
+                          }}>
+                            {row.cumPct}%
                           </span>
-                        ) : d.status === 'IN_PLAN' ? (
-                          <span className="badge badge-warning">Programada</span>
-                        ) : (
-                          <span className="badge">Brecha</span>
-                        )}
-                      </td>
-                    </tr>
-                  ))}
-                  {detailedData.length > 100 && (
+                          <span style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', marginLeft: '0.25rem' }}>
+                            ({row.realizadas}/{row.programadas})
+                          </span>
+                        </td>
+                        <td style={{ textAlign: 'center' }}>
+                          <span style={{ 
+                            color: row.eficPct >= 80 ? '#00CC6A' : row.eficPct >= 50 ? '#FFB900' : '#D83B01',
+                            fontWeight: 'bold'
+                          }}>
+                            {row.eficPct}%
+                          </span>
+                          <span style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', marginLeft: '0.25rem' }}>
+                            ({row.eficaces}/{row.realizadas})
+                          </span>
+                        </td>
+                        <td style={{ textAlign: 'right', fontWeight: 'bold' }}>{row.programadas}</td>
+                      </tr>
+                    );
+                  })}
+                  {pacData.length === 0 && (
                     <tr>
-                      <td colSpan={5} style={{ textAlign: 'center', color: 'var(--text-secondary)' }}>
-                        Mostrando los primeros 100 resultados... Usa los filtros superiores para refinar.
-                      </td>
-                    </tr>
-                  )}
-                  {detailedData.length === 0 && (
-                    <tr>
-                      <td colSpan={5} style={{ textAlign: 'center', padding: '1rem', color: 'var(--text-secondary)' }}>
-                        No hay registros para la selección actual.
+                      <td colSpan={4} style={{ textAlign: 'center', color: 'var(--text-secondary)', padding: '1rem' }}>
+                        No hay capacitaciones programadas en los filtros seleccionados
                       </td>
                     </tr>
                   )}
                 </tbody>
+                {pacData.length > 0 && (
+                  <tfoot style={{ position: 'sticky', bottom: 0, background: '#f1f5f9', fontWeight: 'bold' }}>
+                    <tr>
+                      <td>Total</td>
+                      <td style={{ textAlign: 'center' }}>
+                        <span style={{ color: pacTotals.cumPct >= 80 ? '#00CC6A' : '#D83B01' }}>
+                          {pacTotals.cumPct}%
+                        </span>
+                        <span style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', marginLeft: '0.25rem' }}>
+                          ({pacTotals.realizadas}/{pacTotals.programadas})
+                        </span>
+                      </td>
+                      <td style={{ textAlign: 'center' }}>
+                        <span style={{ color: pacTotals.eficPct >= 80 ? '#00CC6A' : '#D83B01' }}>
+                          {pacTotals.eficPct}%
+                        </span>
+                        <span style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', marginLeft: '0.25rem' }}>
+                          ({pacTotals.eficaces}/{pacTotals.realizadas})
+                        </span>
+                      </td>
+                      <td style={{ textAlign: 'right' }}>{pacTotals.programadas}</td>
+                    </tr>
+                  </tfoot>
+                )}
               </table>
             </div>
           </div>
 
+          {/* Collapsible Details Table */}
+          <details style={{ background: 'white', borderRadius: '8px', border: '1px solid #e2e8f0', padding: '0.5rem 1rem' }}>
+            <summary style={{ cursor: 'pointer', fontWeight: 'bold', color: 'var(--primary-color)' }}>
+              Ver Detalle de Registros ({detailedData.length})
+            </summary>
+            <div style={{ maxHeight: '300px', overflowY: 'auto', marginTop: '0.5rem' }}>
+              <table className="data-table" style={{ margin: 0 }}>
+                <thead>
+                  <tr>
+                    <th>Empleado</th>
+                    <th>Sector</th>
+                    <th>Sitio / Base</th>
+                    <th>Puesto</th>
+                    <th>Capacitación</th>
+                    <th>Estado</th>
+                    <th>Fecha</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {detailedData.map(d => (
+                    <tr key={d.id}>
+                      <td>{d.employeeName}</td>
+                      <td>{d.sectorName}</td>
+                      <td>{d.baseOperativa || '-'}</td>
+                      <td>{d.profileTitle}</td>
+                      <td>{d.trainingName}</td>
+                      <td>
+                        <span className={`badge ${
+                          d.status === 'COMPLETED' ? 'badge-success' : 
+                          d.status === 'IN_PLAN' ? (d.isRescheduled ? 'badge-warning' : 'badge-primary') : 'badge-danger'
+                        }`}>
+                          {d.status === 'COMPLETED' ? 'Realizada' : 
+                           d.status === 'IN_PLAN' ? (d.isRescheduled ? 'Reprogramada' : 'Programada') : 'Brecha'}
+                        </span>
+                      </td>
+                      <td>{d.date ? new Date(d.date).toLocaleDateString('es-AR') : '-'}</td>
+                    </tr>
+                  ))}
+                  {detailedData.length === 0 && (
+                    <tr><td colSpan={7} style={{ textAlign: 'center' }}>No se encontraron registros.</td></tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </details>
+
         </div>
 
       </div>
+
     </div>
   );
 }

@@ -4,6 +4,7 @@ import DashboardClient from "@/components/DashboardClient";
 
 import { getUniqueActiveProfiles } from "@/lib/profileUtils";
 import { buildSectorRecordSourceFilter } from "@/lib/sectorTrainings";
+import { getCanonicalTrainingName } from "@/lib/canonicalTrainings";
 
 export default async function Home() {
   const role = await getCurrentRole();
@@ -53,6 +54,7 @@ export default async function Home() {
         select: {
           id: true,
           name: true,
+          baseOperativa: true,
           sector: {
             select: {
               id: true,
@@ -70,15 +72,17 @@ export default async function Home() {
     }
   });
 
-  // Flatten the records for the client component
+  // Flatten the records for the client component, con nombre de tema canónico y baseOperativa
   const dashboardData = rawRecords.map(record => {
     let dateToUse = record.completedAt || record.rescheduledDate || record.scheduledDate;
+    const canonicalTopic = getCanonicalTrainingName(record.trainingName);
     
     return {
       id: record.id,
       status: record.status, // "COMPLETED", "IN_PLAN", "GAP"
       effectiveness: record.effectiveness, // "PENDING", "EFFECTIVE", "INEFFECTIVE"
-      trainingName: record.trainingName,
+      trainingName: canonicalTopic,
+      rawTrainingName: record.trainingName,
       date: dateToUse ? dateToUse.toISOString().split('T')[0] : null,
       scheduledDate: record.scheduledDate ? record.scheduledDate.toISOString().split('T')[0] : null,
       rescheduledDate: record.rescheduledDate ? record.rescheduledDate.toISOString().split('T')[0] : null,
@@ -86,6 +90,7 @@ export default async function Home() {
       isRescheduled: Boolean(record.rescheduledDate),
       employeeName: record.employee.name,
       employeeId: record.employee.id,
+      baseOperativa: record.employee.baseOperativa || null,
       sectorId: record.employee.sector.id,
       sectorName: record.employee.sector.name,
       profileId: record.employee.jobProfile?.id || null,
