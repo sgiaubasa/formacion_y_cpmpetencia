@@ -42,7 +42,7 @@ export function PlanAnualFilters({
   allSectors: SectorItem[];
   allJobProfiles: JobProfileItem[];
   allEmployees: EmployeeItem[];
-  allTrainings: { id: number; title: string }[];
+  allTrainings: { id: number; title: string; allSectors?: boolean; sectors?: string[] }[];
   isSector: boolean;
   initialSectorId?: string;
   initialBaseOperativa?: string;
@@ -134,9 +134,21 @@ export function PlanAnualFilters({
 
   // 4. Lista de temas de capacitación unificados (canónicos, sin repetidos)
   const canonicalTrainings = useMemo(() => {
-    const rawTitles = allTrainings.map((t) => t.title);
+    let filteredList = allTrainings;
+
+    // Si es admin y seleccionó un sector en el filtro, filtramos los temas correspondientes a ese sector + globales
+    if (!isSector && selectedSectorId) {
+      const chosenSector = allSectors.find((s) => String(s.id) === selectedSectorId);
+      if (chosenSector) {
+        filteredList = allTrainings.filter(
+          (t) => t.allSectors || !t.sectors || t.sectors.length === 0 || t.sectors.includes(chosenSector.name)
+        );
+      }
+    }
+
+    const rawTitles = filteredList.map((t) => t.title);
     return getUniqueCanonicalTopics(rawTitles);
-  }, [allTrainings]);
+  }, [allTrainings, isSector, selectedSectorId, allSectors]);
 
   const handleSectorChange = (newSectorId: string) => {
     setSelectedSectorId(newSectorId);

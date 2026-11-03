@@ -18,7 +18,7 @@ export function AssignTrainingForm({
   allSectors: { id: number; name: string }[];
   isSector: boolean;
   sectorRoleId?: number;
-  allTrainings: { id: number; title: string }[];
+  allTrainings: { id: number; title: string; allSectors?: boolean; sectors?: string[] }[];
   addAdHocNeed: (formData: FormData) => Promise<{ instructorToken?: string } | void>;
 }) {
   const [isOpen, setIsOpen] = useState(false);
@@ -70,6 +70,21 @@ export function AssignTrainingForm({
     if (!secObj) return allJobProfiles;
     return allJobProfiles.filter((p) => matchesSectorAndGerencia(secObj.name, p.gerencia));
   }, [allJobProfiles, allSectors, isSector, sectorRoleId, filterSectorForAssign]);
+
+  const availableTrainingsForForm = useMemo(() => {
+    if (isSector) return allTrainings;
+
+    // Si el admin eligió filtrar por un sector en el formulario
+    const activeSectorId = filterSectorForAssign;
+    if (!activeSectorId) return allTrainings;
+
+    const chosenSector = allSectors.find((s) => String(s.id) === activeSectorId);
+    if (!chosenSector) return allTrainings;
+
+    return allTrainings.filter(
+      (t) => t.allSectors || !t.sectors || t.sectors.length === 0 || t.sectors.includes(chosenSector.name)
+    );
+  }, [allTrainings, isSector, filterSectorForAssign, allSectors]);
 
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
@@ -316,7 +331,7 @@ export function AssignTrainingForm({
               <label className="form-label">Tema de Capacitación *</label>
               <select name="trainingName" className="form-input" required style={{ borderRadius: "10px" }}>
                 <option value="">Seleccione un tema...</option>
-                {allTrainings.map((t) => (
+                {availableTrainingsForForm.map((t) => (
                   <option key={t.id} value={t.title}>
                     {t.title}
                   </option>

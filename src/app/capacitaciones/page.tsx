@@ -1,8 +1,8 @@
 import { prisma } from "@/lib/prisma";
 import { getCurrentRole, isSectorRole, getSectorIdFromRole, getAllowedSectorNames } from "@/lib/auth";
-import { addTopic } from "./actions";
 import { TopicsTableClient } from "./TopicsTableClient";
 import { getTrainingsForSectors } from "@/lib/sectorTrainings";
+import { NewTopicCard } from "./NewTopicCard";
 
 export default async function CapacitacionesPage() {
   const role = await getCurrentRole();
@@ -19,11 +19,15 @@ export default async function CapacitacionesPage() {
     }
   }
 
-  const capacitaciones = await getTrainingsForSectors(allowedSectors);
+  const [capacitaciones, allSectors] = await Promise.all([
+    getTrainingsForSectors(allowedSectors),
+    prisma.sector.findMany({
+      select: { id: true, name: true },
+      orderBy: { name: "asc" }
+    })
+  ]);
+
   const isSgi = role === "SGI";
-  const isOperaciones =
-    isSector && mySectorName.toLowerCase().includes("operaciones");
-  const canAddTopic = !isSector || isOperaciones;
 
   return (
     <div>
@@ -33,29 +37,28 @@ export default async function CapacitacionesPage() {
             {isSector && mySectorName ? `Temas a Capacitar — ${mySectorName}` : "Gestión de Temas a Capacitar"}
           </h1>
           <p style={{ color: "var(--text-secondary)" }}>
-            Catálogo completo de temas de capacitación disponibles en el sistema para programar en el Plan Anual.
-            {isSgi && " Como usuario SGI, al editar el nombre de un tema se actualizarán automáticamente todas las capacitaciones y perfiles vinculados."}
+            {isSector
+              ? `Temas asignados y disponibles para la programación del Plan Anual de ${mySectorName}. Puedes agregar nuevos temas específicos para tu sector.`
+              : "Catálogo completo de temas de capacitación de AUBASA. Puedes definir a qué sectores aplica cada tema (o si es transversal para toda la empresa)."}
           </p>
         </div>
       </div>
 
-      {canAddTopic && (
-        <div className="card" style={{ marginBottom: "2rem" }}>
-          <h3 style={{ marginBottom: "1rem", color: "var(--primary-color)" }}>Nuevo Tema</h3>
-          <form action={addTopic} style={{ display: "flex", gap: "1rem", alignItems: "flex-end", flexWrap: "wrap" }}>
-            <div style={{ flex: "1 1 300px" }}>
-              <label className="form-label">Nombre del Tema</label>
-              <input type="text" name="title" className="form-input" placeholder="Ej: Seguridad Industrial" required />
-            </div>
-            <button type="submit" className="btn btn-primary" style={{ padding: "0.5rem 1.5rem", height: "38px" }}>
-              Agregar Tema
-            </button>
-          </form>
-        </div>
-      )}
+      {/* TARJETA DE ALTA DE NUEVO TEMA (HABILITADA PARA SECTORES Y ADMINISTRADORES) */}
+      <NewTopicCard
+        allSectors={allSectors}
+        isSector={isSector}
+        mySectorName={mySectorName}
+      />
 
       <div className="card" style={{ padding: 0, overflow: "hidden" }}>
-        <TopicsTableClient topics={capacitaciones} isSgi={isSgi} />
+        <TopicsTableClient
+          topics={capacitaciones}
+          isSgi={isSgi}
+          isSector={isSector}
+          mySectorName={mySectorName}
+          allSectors={allSectors}
+        />
       </div>
     </div>
   );
