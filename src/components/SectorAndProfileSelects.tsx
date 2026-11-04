@@ -35,14 +35,21 @@ export function matchesSectorAndGerencia(sectorName: string, profileGerencia?: s
   if (sNorm === gNorm) return true;
   if (sNorm.includes(gNorm) || gNorm.includes(sNorm)) return true;
 
-  // Agrupación de Prevención y Seguridad Integral con sus subsectores (Asistencia Vial, CCM, SVIA, etc.)
-  const isPrevSector = /prevencion|seguridad|asistencia|svia|monitoreo|ccm/i.test(sectorName);
-  const isPrevGerencia = /prevencion|seguridad|asistencia|svia|monitoreo|ccm/i.test(profileGerencia);
+  // Sector SVIA (comprende puestos de Operaciones/Peaje y de Asistencia Vial/Prevención en el Corredor del Atlántico)
+  if (/svia/i.test(sectorName)) {
+    if (/operacion|prevencion|seguridad|asistencia|svia|peaje/i.test(profileGerencia)) {
+      return true;
+    }
+  }
+
+  // Agrupación de Prevención y Seguridad Integral con sus subsectores (Asistencia Vial, CCM, Seguridad Patrimonial)
+  const isPrevSector = /prevencion|seguridad|asistencia|monitoreo|ccm/i.test(sectorName);
+  const isPrevGerencia = /prevencion|seguridad|asistencia|monitoreo|ccm/i.test(profileGerencia);
   if (isPrevSector && isPrevGerencia) return true;
 
-  // Agrupación de Operaciones (Operaciones, SVIA Operaciones, etc.)
-  const isOpSector = /operacion/i.test(sectorName);
-  const isOpGerencia = /operacion/i.test(profileGerencia);
+  // Agrupación de Operaciones (Operaciones, Peaje, etc.)
+  const isOpSector = /operacion|peaje/i.test(sectorName);
+  const isOpGerencia = /operacion|peaje/i.test(profileGerencia);
   if (isOpSector && isOpGerencia) return true;
 
   return false;
