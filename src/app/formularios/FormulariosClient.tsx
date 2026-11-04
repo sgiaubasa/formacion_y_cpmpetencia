@@ -51,6 +51,24 @@ export function FormulariosClient({
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const [copiedInstructorId, setCopiedInstructorId] = useState<string | null>(null);
 
+  // Acordeón / Desplegable de formularios creados (para evitar vista larga)
+  const [openFormIds, setOpenFormIds] = useState<string[]>([]);
+  const [formSearchFilter, setFormSearchFilter] = useState("");
+
+  const toggleFormOpen = (formId: string) => {
+    setOpenFormIds((prev) =>
+      prev.includes(formId) ? prev.filter((id) => id !== formId) : [...prev, formId]
+    );
+  };
+
+  const handleExpandAllForms = () => {
+    setOpenFormIds(forms.map((f) => f.id));
+  };
+
+  const handleCollapseAllForms = () => {
+    setOpenFormIds([]);
+  };
+
   const defaultInst = getDefaultInstructorForSector(mySectorName);
   const initialInstructor = mySectorName
     ? `${defaultInst.name}${defaultInst.legajo ? ` (Leg. ${defaultInst.legajo})` : ""}`
@@ -1087,300 +1105,512 @@ export function FormulariosClient({
         </form>
       )}
 
-      {/* LISTADO DE FORMULARIOS ACTIVOS */}
-      <div style={{ display: "flex", flexDirection: "column", gap: "1.25rem" }}>
-        {forms.map((form) => {
-          const formResponses = completedResponses.filter(
-            (r) =>
-              r.matchedFormId === form.id ||
-              isOnlineTrainingMatch(r.trainingName, form.trainingName)
-          );
-          const isShowingResponses = selectedFormForResponses === form.id;
+      {/* BARRA DE BÚSQUEDA Y CONTROL DEL DESPLEGABLE */}
+      <div
+        className="card"
+        style={{
+          marginBottom: "1rem",
+          padding: "0.85rem 1.25rem",
+          display: "flex",
+          justifyContent: "space-between",
+          alignItems: "center",
+          flexWrap: "wrap",
+          gap: "1rem",
+          background: "#f8fafc",
+          border: "1px solid #cbd5e1",
+          borderRadius: "10px"
+        }}
+      >
+        <div style={{ flex: "1 1 300px", maxWidth: "420px" }}>
+          <input
+            type="text"
+            className="form-input"
+            placeholder="🔍 Buscar formulario por título o tema..."
+            value={formSearchFilter}
+            onChange={(e) => setFormSearchFilter(e.target.value)}
+            style={{ borderRadius: "8px", backgroundColor: "#ffffff" }}
+          />
+        </div>
 
-          return (
-            <div
-              key={form.id}
-              className="card"
-              style={{
-                borderLeft: form.id === "manual-uso-sgcysv" ? "6px solid #1b365d" : "6px solid #0d8383",
-                boxShadow: "0 2px 8px rgba(0,0,0,0.04)"
-              }}
+        <div style={{ display: "flex", alignItems: "center", gap: "1rem", flexWrap: "wrap" }}>
+          <span style={{ fontSize: "0.85rem", color: "#64748b", fontWeight: 600 }}>
+            {forms.filter((f) => {
+              if (!formSearchFilter.trim()) return true;
+              const q = formSearchFilter.trim().toLowerCase();
+              return (
+                f.title.toLowerCase().includes(q) ||
+                f.trainingName.toLowerCase().includes(q) ||
+                (f.ownerSectorName && f.ownerSectorName.toLowerCase().includes(q))
+              );
+            }).length} formularios ({openFormIds.length} desplegados)
+          </span>
+          <div style={{ display: "flex", gap: "0.5rem" }}>
+            <button
+              type="button"
+              onClick={handleExpandAllForms}
+              className="btn btn-secondary"
+              style={{ fontSize: "0.8rem", padding: "0.35rem 0.75rem", borderRadius: "6px" }}
             >
+              ▾ Desplegar Todos
+            </button>
+            <button
+              type="button"
+              onClick={handleCollapseAllForms}
+              className="btn btn-secondary"
+              style={{ fontSize: "0.8rem", padding: "0.35rem 0.75rem", borderRadius: "6px" }}
+            >
+              ▴ Colapsar Todos
+            </button>
+          </div>
+        </div>
+      </div>
+
+      {/* LISTADO DE FORMULARIOS ACTIVOS EN FORMATO DESPLEGABLE / ACORDEÓN */}
+      <div style={{ display: "flex", flexDirection: "column", gap: "0.75rem" }}>
+        {forms
+          .filter((f) => {
+            if (!formSearchFilter.trim()) return true;
+            const q = formSearchFilter.trim().toLowerCase();
+            return (
+              f.title.toLowerCase().includes(q) ||
+              f.trainingName.toLowerCase().includes(q) ||
+              (f.ownerSectorName && f.ownerSectorName.toLowerCase().includes(q))
+            );
+          })
+          .map((form) => {
+            const formResponses = completedResponses.filter(
+              (r) =>
+                r.matchedFormId === form.id ||
+                isOnlineTrainingMatch(r.trainingName, form.trainingName)
+            );
+            const isOpen = openFormIds.includes(form.id);
+
+            return (
               <div
+                key={form.id}
+                className="card"
                 style={{
-                  display: "flex",
-                  justifyContent: "space-between",
-                  alignItems: "flex-start",
-                  flexWrap: "wrap",
-                  gap: "1rem"
+                  borderLeft: form.id === "manual-uso-sgcysv" ? "6px solid #1b365d" : "6px solid #0d8383",
+                  boxShadow: "0 2px 8px rgba(0,0,0,0.04)",
+                  padding: 0,
+                  overflow: "hidden",
+                  transition: "all 0.2s ease"
                 }}
               >
-                <div style={{ flex: "1 1 420px" }}>
-                  <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", flexWrap: "wrap", marginBottom: "0.35rem" }}>
-                    <span
-                      style={{
-                        backgroundColor: form.id === "manual-uso-sgcysv" ? "#e0f2fe" : "#f0fdfa",
-                        color: form.id === "manual-uso-sgcysv" ? "#0369a1" : "#0f766e",
-                        fontSize: "0.74rem",
-                        fontWeight: 700,
-                        padding: "0.2rem 0.6rem",
-                        borderRadius: "999px"
-                      }}
-                    >
-                      {form.ownerSectorName ? `Sector: ${form.ownerSectorName}` : "Institucional AUBASA (SGI / RRHH)"}
-                    </span>
-
-                    {form.videoUrl ? (
-                      <span
-                        style={{
-                          backgroundColor: "#fef3c7",
-                          color: "#92400e",
-                          fontSize: "0.72rem",
-                          fontWeight: 700,
-                          padding: "0.18rem 0.55rem",
-                          borderRadius: "999px"
-                        }}
-                      >
-                        🎬 Video Activo
-                      </span>
-                    ) : null}
-
-                    {form.pdfUrl ? (
-                      <span
-                        style={{
-                          backgroundColor: "#dbeafe",
-                          color: "#1e40af",
-                          fontSize: "0.72rem",
-                          fontWeight: 700,
-                          padding: "0.18rem 0.55rem",
-                          borderRadius: "999px"
-                        }}
-                      >
-                        📄 PDF Activo
-                      </span>
-                    ) : null}
-
-                    <span
-                      style={{
-                        backgroundColor: form.instructorSignature ? "#dcfce7" : "#f1f5f9",
-                        color: form.instructorSignature ? "#166534" : "#334155",
-                        fontSize: "0.72rem",
-                        fontWeight: 700,
-                        padding: "0.18rem 0.55rem",
-                        borderRadius: "999px"
-                      }}
-                    >
-                      {form.instructorSignature
-                        ? "✍️ Firma Manuscrita Instructor Guardada"
-                        : "🖥️ Firma Digital Instructor"}
-                    </span>
-
-                    <span style={{ fontSize: "0.8rem", color: "#64748b" }}>
-                      • {form.questions.length} preguntas • Instructor: <strong>{form.instructorName}</strong>
-                    </span>
-                  </div>
-
-                  <h3 style={{ margin: "0 0 0.3rem 0", color: "#1b365d", fontSize: "1.15rem" }}>
-                    {form.title}
-                  </h3>
-                  <div style={{ fontSize: "0.86rem", color: "#0d8383", fontWeight: 600, marginBottom: "0.35rem" }}>
-                    🎓 Tema vinculado: {form.trainingName}
-                  </div>
-                  <p style={{ margin: 0, fontSize: "0.86rem", color: "#475569" }}>
-                    <strong>Objetivo:</strong> {form.objective}
-                  </p>
-                </div>
-
-                <div style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap", alignItems: "center" }}>
-                  <button
-                    type="button"
-                    onClick={() => openEditFormBuilder(form)}
-                    className="btn"
-                    style={{
-                      backgroundColor: "#fef3c7",
-                      color: "#92400e",
-                      border: "1px solid #fcd34d",
-                      fontWeight: 700,
-                      fontSize: "0.82rem",
-                      padding: "0.45rem 0.85rem",
-                      borderRadius: "8px",
-                      cursor: "pointer"
-                    }}
-                  >
-                    ✏️ Subir Video / PDF / Puntajes
-                  </button>
-
-                  <Link
-                    href={`/responder/${form.id}`}
-                    target="_blank"
-                    className="btn"
-                    style={{
-                      backgroundColor: "#0d8383",
-                      color: "#ffffff",
-                      fontWeight: 600,
-                      fontSize: "0.82rem",
-                      padding: "0.45rem 0.85rem",
-                      borderRadius: "8px",
-                      textDecoration: "none"
-                    }}
-                  >
-                    👁️ Abrir Formulario
-                  </Link>
-
-                  <button
-                    type="button"
-                    onClick={() => handleCopyLink(form.id)}
-                    className="btn"
-                    style={{
-                      backgroundColor: copiedId === form.id ? "#dcfce7" : "#eff6ff",
-                      color: copiedId === form.id ? "#166534" : "#1b365d",
-                      border: "1px solid #bfdbfe",
-                      fontWeight: 600,
-                      fontSize: "0.82rem",
-                      padding: "0.45rem 0.85rem",
-                      borderRadius: "8px",
-                      cursor: "pointer"
-                    }}
-                  >
-                    {copiedId === form.id ? "✓ ¡Link Participante Copiado!" : "🔗 Link Participantes"}
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={() => handleCopyInstructorLink(form.id)}
-                    className="btn"
-                    style={{
-                      backgroundColor: copiedInstructorId === form.id ? "#dcfce7" : "#f8fafc",
-                      color: copiedInstructorId === form.id ? "#166534" : "#0f766e",
-                      border: "1px solid #0d8383",
-                      fontWeight: 700,
-                      fontSize: "0.82rem",
-                      padding: "0.45rem 0.85rem",
-                      borderRadius: "8px",
-                      cursor: "pointer"
-                    }}
-                    title="Copiar enlace para que el Instructor firme a mano y aparezca en todas las planillas de esta capacitación"
-                  >
-                    {copiedInstructorId === form.id
-                      ? "✓ ¡Link Instructor Copiado!"
-                      : "✍️ Link Firma Instructor"}
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={() =>
-                      setSelectedFormForResponses(isShowingResponses ? null : form.id)
-                    }
-                    className="btn btn-secondary"
-                    style={{ fontSize: "0.82rem", padding: "0.45rem 0.85rem", fontWeight: 700 }}
-                  >
-                    📊 Respuestas ({formResponses.length})
-                  </button>
-
-                  {form.id !== "manual-uso-sgcysv" && (isAdmin || form.ownerSectorName === mySectorName) && (
-                    <button
-                      type="button"
-                      onClick={() => handleDelete(form.id)}
-                      className="btn"
-                      style={{
-                        backgroundColor: "#fee2e2",
-                        color: "#dc2626",
-                        fontSize: "0.82rem",
-                        padding: "0.45rem 0.75rem",
-                        borderRadius: "8px"
-                      }}
-                    >
-                      🗑️
-                    </button>
-                  )}
-                </div>
-              </div>
-
-              {isShowingResponses && (
+                {/* CABECERA COMPACTA CLICKEABLE / TILDABLE */}
                 <div
                   style={{
-                    marginTop: "1.1rem",
-                    paddingTop: "1rem",
-                    borderTop: "1px solid #e2e8f0"
+                    padding: "0.85rem 1.25rem",
+                    background: isOpen ? "#f0fdfa" : "#ffffff",
+                    borderBottom: isOpen ? "1px solid #99f6e4" : "none",
+                    display: "flex",
+                    justifyContent: "space-between",
+                    alignItems: "center",
+                    flexWrap: "wrap",
+                    gap: "0.75rem",
+                    cursor: "pointer",
+                    userSelect: "none"
                   }}
+                  onClick={() => toggleFormOpen(form.id)}
                 >
-                  <h4 style={{ margin: "0 0 0.65rem 0", color: "#1b365d", fontSize: "0.95rem" }}>
-                    Personal {isSector ? `de ${mySectorName}` : ""} con esta capacitación realizada y firmada ({formResponses.length})
-                  </h4>
-                  {formResponses.length === 0 ? (
-                    <p style={{ margin: 0, fontSize: "0.85rem", color: "#64748b" }}>
-                      Aún no se registran respuestas completadas para este tema en tu vista.
-                    </p>
-                  ) : (
-                    <div style={{ overflowX: "auto" }}>
-                      <table className="data-table" style={{ fontSize: "0.85rem", width: "100%" }}>
-                        <thead>
-                          <tr>
-                            <th>Legajo</th>
-                            <th>Colaborador</th>
-                            <th>Sector</th>
-                            <th>Fecha</th>
-                            <th>Nota</th>
-                            <th>Instructor</th>
-                            <th>Registro de Asistencia (PAU/05 - A9.3)</th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {formResponses.slice(0, 100).map((r) => (
-                            <tr key={r.id}>
-                              <td>{r.legajo}</td>
-                              <td style={{ fontWeight: 600 }}>
-                                {r.employeeName}
-                                {r.email && (
-                                  <div style={{ fontSize: "0.75rem", color: "#64748b", fontWeight: 400 }}>
-                                    {r.email}
-                                  </div>
-                                )}
-                              </td>
-                              <td>{r.sectorName}</td>
-                              <td>
-                                {r.completedAt
-                                  ? new Date(r.completedAt).toLocaleDateString("es-AR")
-                                  : "-"}
-                              </td>
-                              <td>
-                                <strong>{r.score || "10"}</strong> / 10
-                              </td>
-                              <td style={{ fontSize: "0.8rem", color: "#334155" }}>
-                                {r.instructorName || form.instructorName}
-                              </td>
-                              <td>
-                                <Link
-                                  href={`/plan-anual/planilla/${r.id}`}
-                                  target="_blank"
-                                  style={{
-                                    display: "inline-flex",
-                                    alignItems: "center",
-                                    gap: "0.35rem",
-                                    backgroundColor: "#f0fdfa",
-                                    color: "#0f766e",
-                                    border: "1px solid #99f6e4",
-                                    padding: "0.3rem 0.65rem",
-                                    borderRadius: "6px",
-                                    fontSize: "0.78rem",
-                                    fontWeight: 700,
-                                    textDecoration: "none"
-                                  }}
-                                >
-                                  📄 Ver Planilla Firmada
-                                </Link>
-                              </td>
-                            </tr>
-                          ))}
-                        </tbody>
-                      </table>
+                  <div style={{ display: "flex", alignItems: "center", gap: "0.75rem", flexWrap: "wrap", flex: "1 1 380px" }}>
+                    <input
+                      type="checkbox"
+                      checked={isOpen}
+                      onChange={(e) => {
+                        e.stopPropagation();
+                        toggleFormOpen(form.id);
+                      }}
+                      style={{
+                        width: "19px",
+                        height: "19px",
+                        cursor: "pointer",
+                        accentColor: "#0d8383"
+                      }}
+                      title="Tildar para desplegar o colapsar este formulario"
+                    />
+
+                    <div>
+                      <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", flexWrap: "wrap", marginBottom: "0.2rem" }}>
+                        <span
+                          style={{
+                            backgroundColor: form.id === "manual-uso-sgcysv" ? "#e0f2fe" : "#f0fdfa",
+                            color: form.id === "manual-uso-sgcysv" ? "#0369a1" : "#0f766e",
+                            fontSize: "0.72rem",
+                            fontWeight: 700,
+                            padding: "0.15rem 0.55rem",
+                            borderRadius: "999px",
+                            border: "1px solid #ccfbf1"
+                          }}
+                        >
+                          {form.ownerSectorName ? `Sector: ${form.ownerSectorName}` : "Institucional AUBASA"}
+                        </span>
+
+                        {form.videoUrl && (
+                          <span
+                            style={{
+                              backgroundColor: "#fef3c7",
+                              color: "#92400e",
+                              fontSize: "0.7rem",
+                              fontWeight: 700,
+                              padding: "0.15rem 0.5rem",
+                              borderRadius: "999px"
+                            }}
+                          >
+                            🎬 Video
+                          </span>
+                        )}
+
+                        {form.pdfUrl && (
+                          <span
+                            style={{
+                              backgroundColor: "#dbeafe",
+                              color: "#1e40af",
+                              fontSize: "0.7rem",
+                              fontWeight: 700,
+                              padding: "0.15rem 0.5rem",
+                              borderRadius: "999px"
+                            }}
+                          >
+                            📄 PDF
+                          </span>
+                        )}
+
+                        <span
+                          style={{
+                            backgroundColor: "#f1f5f9",
+                            color: "#334155",
+                            fontSize: "0.7rem",
+                            fontWeight: 600,
+                            padding: "0.15rem 0.5rem",
+                            borderRadius: "999px"
+                          }}
+                        >
+                          📝 {form.questions.length} preguntas
+                        </span>
+
+                        <span
+                          style={{
+                            backgroundColor: formResponses.length > 0 ? "#dcfce7" : "#f8fafc",
+                            color: formResponses.length > 0 ? "#166534" : "#64748b",
+                            fontSize: "0.72rem",
+                            fontWeight: 700,
+                            padding: "0.15rem 0.55rem",
+                            borderRadius: "999px",
+                            border: formResponses.length > 0 ? "1px solid #bbf7d0" : "1px solid #e2e8f0"
+                          }}
+                        >
+                          📊 {formResponses.length} respuestas
+                        </span>
+                      </div>
+
+                      <h3 style={{ margin: 0, color: "#1b365d", fontSize: "1.08rem", fontWeight: 700 }}>
+                        {form.title}
+                      </h3>
+                      <span style={{ fontSize: "0.82rem", color: "#0d8383", fontWeight: 600 }}>
+                        Tema: {form.trainingName}
+                      </span>
                     </div>
-                  )}
+                  </div>
+
+                  {/* BOTONES RÁPIDOS Y BOTÓN DESPLEGABLE */}
+                  <div
+                    style={{ display: "flex", gap: "0.5rem", alignItems: "center" }}
+                    onClick={(e) => e.stopPropagation()}
+                  >
+                    <Link
+                      href={`/responder/${form.id}`}
+                      target="_blank"
+                      className="btn"
+                      style={{
+                        backgroundColor: "#0d8383",
+                        color: "#ffffff",
+                        fontWeight: 600,
+                        fontSize: "0.78rem",
+                        padding: "0.35rem 0.75rem",
+                        borderRadius: "6px",
+                        textDecoration: "none"
+                      }}
+                    >
+                      👁️ Abrir
+                    </Link>
+
+                    <button
+                      type="button"
+                      onClick={() => handleCopyLink(form.id)}
+                      className="btn"
+                      style={{
+                        backgroundColor: copiedId === form.id ? "#dcfce7" : "#eff6ff",
+                        color: copiedId === form.id ? "#166534" : "#1b365d",
+                        border: "1px solid #bfdbfe",
+                        fontWeight: 600,
+                        fontSize: "0.78rem",
+                        padding: "0.35rem 0.75rem",
+                        borderRadius: "6px",
+                        cursor: "pointer"
+                      }}
+                    >
+                      {copiedId === form.id ? "✓ Copiado" : "🔗 Link"}
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => toggleFormOpen(form.id)}
+                      className="btn"
+                      style={{
+                        backgroundColor: isOpen ? "#e0f2fe" : "#f1f5f9",
+                        color: isOpen ? "#0369a1" : "#1e293b",
+                        border: "1px solid #cbd5e1",
+                        fontWeight: 700,
+                        fontSize: "0.78rem",
+                        padding: "0.35rem 0.85rem",
+                        borderRadius: "6px",
+                        cursor: "pointer"
+                      }}
+                    >
+                      {isOpen ? "▲ Ocultar Datos" : "▼ Ver Datos"}
+                    </button>
+                  </div>
+                </div>
+
+                {/* CUERPO COMPLETO DEL FORMULARIO (DESPLEGABLE) */}
+                {isOpen && (
+                  <div style={{ padding: "1.25rem 1.5rem", background: "#ffffff" }}>
+                    <div
+                      style={{
+                        display: "flex",
+                        justifyContent: "space-between",
+                        alignItems: "flex-start",
+                        flexWrap: "wrap",
+                        gap: "1rem",
+                        marginBottom: "1rem",
+                        paddingBottom: "1rem",
+                        borderBottom: "1px solid #f1f5f9"
+                      }}
+                    >
+                      <div style={{ flex: "1 1 420px" }}>
+                        <p style={{ margin: "0 0 0.35rem 0", fontSize: "0.88rem", color: "#334155" }}>
+                          <strong>Objetivo:</strong> {form.objective}
+                        </p>
+                        {form.description && (
+                          <p style={{ margin: "0 0 0.35rem 0", fontSize: "0.85rem", color: "#64748b" }}>
+                            <strong>Descripción:</strong> {form.description}
+                          </p>
+                        )}
+                        <p style={{ margin: 0, fontSize: "0.84rem", color: "#475569" }}>
+                          Instructor: <strong>{form.instructorName}</strong> ({form.instructorSignature ? "✍️ Firma manuscrita guardada" : "🖥️ Firma digital validada"})
+                        </p>
+                      </div>
+
+                      <div style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap", alignItems: "center" }}>
+                        <button
+                          type="button"
+                          onClick={() => openEditFormBuilder(form)}
+                          className="btn"
+                          style={{
+                            backgroundColor: "#fef3c7",
+                            color: "#92400e",
+                            border: "1px solid #fcd34d",
+                            fontWeight: 700,
+                            fontSize: "0.82rem",
+                            padding: "0.45rem 0.85rem",
+                            borderRadius: "8px",
+                            cursor: "pointer"
+                          }}
+                        >
+                          ✏️ Subir Video / PDF / Puntajes
+                        </button>
+
+                        <button
+                          type="button"
+                          onClick={() => handleCopyInstructorLink(form.id)}
+                          className="btn"
+                          style={{
+                            backgroundColor: copiedInstructorId === form.id ? "#dcfce7" : "#f8fafc",
+                            color: copiedInstructorId === form.id ? "#166534" : "#0f766e",
+                            border: "1px solid #0d8383",
+                            fontWeight: 700,
+                            fontSize: "0.82rem",
+                            padding: "0.45rem 0.85rem",
+                            borderRadius: "8px",
+                            cursor: "pointer"
+                          }}
+                          title="Copiar enlace para que el Instructor firme y aparezca en todas las planillas de esta capacitación"
+                        >
+                          {copiedInstructorId === form.id
+                            ? "✓ ¡Link Instructor Copiado!"
+                            : "✍️ Link Firma Instructor"}
+                        </button>
+
+                        {form.id !== "manual-uso-sgcysv" && (isAdmin || form.ownerSectorName === mySectorName) && (
+                          <button
+                            type="button"
+                            onClick={() => handleDelete(form.id)}
+                            className="btn"
+                            style={{
+                              backgroundColor: "#fee2e2",
+                              color: "#dc2626",
+                              fontSize: "0.82rem",
+                              padding: "0.45rem 0.75rem",
+                              borderRadius: "8px",
+                              border: "1px solid #fca5a5"
+                            }}
+                          >
+                            🗑️ Eliminar
+                          </button>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* PREVISUALIZACIÓN DE MATERIAL ADJUNTO (SI EXISTE) */}
+                    {(form.videoUrl || form.pdfUrl) && (
+                      <div
+                        style={{
+                          marginBottom: "1rem",
+                          padding: "0.75rem 1rem",
+                          backgroundColor: "#f8fafc",
+                          borderRadius: "8px",
+                          border: "1px solid #e2e8f0",
+                          display: "flex",
+                          gap: "1.25rem",
+                          flexWrap: "wrap",
+                          alignItems: "center"
+                        }}
+                      >
+                        <span style={{ fontSize: "0.82rem", fontWeight: 700, color: "#1b365d" }}>
+                          Material Interactivo Incorporado:
+                        </span>
+                        {form.videoUrl && (
+                          <a
+                            href={form.videoUrl}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            style={{ fontSize: "0.82rem", color: "#92400e", fontWeight: 600, display: "inline-flex", alignItems: "center", gap: "0.3rem" }}
+                          >
+                            🎬 Ver Video de la Capacitación ↗
+                          </a>
+                        )}
+                        {form.pdfUrl && (
+                          <a
+                            href={form.pdfUrl}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            style={{ fontSize: "0.82rem", color: "#1e40af", fontWeight: 600, display: "inline-flex", alignItems: "center", gap: "0.3rem" }}
+                          >
+                            📄 Abrir Documento PDF ({form.pdfName || "Material de Lectura"}) ↗
+                          </a>
+                        )}
+                      </div>
+                    )}
+
+                    {/* TABLA DE RESPUESTAS Y ASISTENCIAS */}
+                    <div
+                      style={{
+                        marginTop: "1rem",
+                        paddingTop: "1rem",
+                        borderTop: "1px solid #e2e8f0"
+                      }}
+                    >
+                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "0.65rem", flexWrap: "wrap", gap: "0.5rem" }}>
+                        <h4 style={{ margin: 0, color: "#1b365d", fontSize: "0.95rem" }}>
+                          Personal {isSector ? `de ${mySectorName}` : ""} con esta capacitación realizada y firmada ({formResponses.length})
+                        </h4>
+                        {formResponses.length > 0 && (
+                          <span style={{ fontSize: "0.78rem", color: "#166534", fontWeight: 600, backgroundColor: "#dcfce7", padding: "0.2rem 0.5rem", borderRadius: "6px" }}>
+                            ✓ Firmas impactadas en Planilla Oficial PAU/05
+                          </span>
+                        )}
+                      </div>
+
+                      {formResponses.length === 0 ? (
+                        <p style={{ margin: 0, fontSize: "0.85rem", color: "#64748b" }}>
+                          Aún no se registran respuestas completadas para este formulario en tu vista.
+                        </p>
+                      ) : (
+                        <div style={{ overflowX: "auto" }}>
+                          <table className="data-table" style={{ fontSize: "0.85rem", width: "100%" }}>
+                            <thead>
+                              <tr>
+                                <th>Legajo</th>
+                                <th>Colaborador</th>
+                                <th>Sector</th>
+                                <th>Fecha</th>
+                                <th>Nota</th>
+                                <th>Instructor</th>
+                                <th>Registro de Asistencia (PAU/05 - A9.3)</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {formResponses.slice(0, 100).map((r) => (
+                              <tr key={r.id}>
+                                <td>{r.legajo}</td>
+                                <td style={{ fontWeight: 600 }}>
+                                  {r.employeeName}
+                                  {r.email && (
+                                    <div style={{ fontSize: "0.75rem", color: "#64748b", fontWeight: 400 }}>
+                                      {r.email}
+                                    </div>
+                                  )}
+                                </td>
+                                <td>{r.sectorName}</td>
+                                <td>
+                                  {r.completedAt
+                                    ? new Date(r.completedAt).toLocaleDateString("es-AR")
+                                    : "-"}
+                                </td>
+                                <td>
+                                  <strong>{r.score || "10"}</strong> / 10
+                                </td>
+                                <td style={{ fontSize: "0.8rem", color: "#334155" }}>
+                                  {r.instructorName || form.instructorName}
+                                </td>
+                                <td>
+                                  <Link
+                                    href={`/plan-anual/planilla/${r.id}`}
+                                    target="_blank"
+                                    style={{
+                                      display: "inline-flex",
+                                      alignItems: "center",
+                                      gap: "0.35rem",
+                                      backgroundColor: "#f0fdfa",
+                                      color: "#0f766e",
+                                      border: "1px solid #99f6e4",
+                                      padding: "0.3rem 0.65rem",
+                                      borderRadius: "6px",
+                                      fontSize: "0.78rem",
+                                      fontWeight: 700,
+                                      textDecoration: "none"
+                                    }}
+                                  >
+                                    📄 Ver Planilla Firmada
+                                  </Link>
+                                </td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    )}
+                  </div>
                 </div>
               )}
             </div>
           );
         })}
+
+        {forms.filter((f) => {
+          if (!formSearchFilter.trim()) return true;
+          const q = formSearchFilter.trim().toLowerCase();
+          return (
+            f.title.toLowerCase().includes(q) ||
+            f.trainingName.toLowerCase().includes(q) ||
+            (f.ownerSectorName && f.ownerSectorName.toLowerCase().includes(q))
+          );
+        }).length === 0 && (
+          <div className="card" style={{ padding: "2rem", textAlign: "center", color: "#64748b" }}>
+            No se encontraron formularios creados que coincidan con la búsqueda.
+          </div>
+        )}
       </div>
     </div>
   );

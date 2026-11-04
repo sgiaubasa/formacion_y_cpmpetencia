@@ -23,6 +23,7 @@ export function AssignTrainingForm({
 }) {
   const [isOpen, setIsOpen] = useState(false);
   const [assignmentType, setAssignmentType] = useState<"empleado" | "puesto" | "sector">("empleado");
+  const [selectedEmployeeIds, setSelectedEmployeeIds] = useState<number[]>([]);
   const [filterSectorForAssign, setFilterSectorForAssign] = useState<string>(
     isSector && sectorRoleId ? String(sectorRoleId) : ""
   );
@@ -38,6 +39,21 @@ export function AssignTrainingForm({
 
   const [isUploading, setIsUploading] = useState(false);
   const formRef = useRef<HTMLFormElement>(null);
+
+  const handleToggleEmployee = (id: number) => {
+    setSelectedEmployeeIds((prev) =>
+      prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]
+    );
+  };
+
+  const handleSelectAllFiltered = () => {
+    const ids = filteredEmployees.map((e) => e.id);
+    setSelectedEmployeeIds((prev) => Array.from(new Set([...prev, ...ids])));
+  };
+
+  const handleClearSelectedEmployees = () => {
+    setSelectedEmployeeIds([]);
+  };
 
   const filteredSectors =
     isSector && sectorRoleId ? allSectors.filter((s) => s.id === sectorRoleId) : allSectors;
@@ -88,6 +104,12 @@ export function AssignTrainingForm({
 
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
+
+    if (assignmentType === "empleado" && selectedEmployeeIds.length === 0) {
+      alert("Por favor seleccioná al menos un empleado para programar la capacitación.");
+      return;
+    }
+
     setIsUploading(true);
     setGeneratedInstructorLink(null);
 
@@ -95,6 +117,15 @@ export function AssignTrainingForm({
       const formData = new FormData(e.currentTarget);
       formData.set("instructorName", instructorName.trim());
       formData.set("instructorSignatureMode", instructorSignatureMode);
+
+      if (assignmentType === "empleado") {
+        selectedEmployeeIds.forEach((id) => {
+          formData.append("employeeIds", String(id));
+        });
+        if (selectedEmployeeIds.length === 1) {
+          formData.set("employeeId", String(selectedEmployeeIds[0]));
+        }
+      }
 
       const materialFile = formData.get("materialFile") as File | null;
 
@@ -144,6 +175,7 @@ export function AssignTrainingForm({
         setGeneratedInstructorLink(`${window.location.origin}/firma/${res.instructorToken}`);
       }
       formRef.current?.reset();
+      setSelectedEmployeeIds([]);
       setEmpSearchAssign("");
       setMaterialLinkInput("");
     } finally {
@@ -246,7 +278,7 @@ export function AssignTrainingForm({
                 required
                 style={{ borderRadius: "10px" }}
               >
-                <option value="empleado">Un Empleado</option>
+                <option value="empleado">Uno o Varios Empleados (A elección)</option>
                 <option value="puesto">Un Perfil (Puesto)</option>
                 <option value="sector">Una Gerencia / Sector</option>
               </select>
@@ -272,60 +304,213 @@ export function AssignTrainingForm({
             )}
 
             {assignmentType === "empleado" && (
-              <div style={{ flex: "1 1 170px" }}>
+              <div style={{ flex: "1 1 220px" }}>
                 <label className="form-label">Buscar Nombre / Legajo</label>
                 <input
                   type="text"
                   value={empSearchAssign}
                   onChange={(e) => setEmpSearchAssign(e.target.value)}
-                  placeholder="Escribir para filtrar..."
+                  placeholder="Escribir para filtrar lista..."
                   className="form-input"
                   style={{ borderRadius: "10px" }}
                 />
               </div>
             )}
 
-            <div style={{ flex: "1.3 1 220px" }}>
-              {assignmentType === "empleado" && (
-                <>
-                  <label className="form-label">Empleado a Capacitar ({filteredEmployees.length}) *</label>
-                  <select name="employeeId" className="form-input" required style={{ borderRadius: "10px" }}>
-                    <option value="">Seleccione un empleado...</option>
-                    {filteredEmployees.map((e) => (
-                      <option key={e.id} value={e.id}>
-                        {e.name} ({e.legajo})
-                      </option>
-                    ))}
-                  </select>
-                </>
-              )}
-              {assignmentType === "puesto" && (
-                <>
-                  <label className="form-label">Perfil de Puesto ({filteredJobProfiles.length}) *</label>
-                  <select name="jobProfileId" className="form-input" required style={{ borderRadius: "10px" }}>
-                    <option value="">Seleccione un puesto...</option>
-                    {filteredJobProfiles.map((p) => (
-                      <option key={p.id} value={p.id}>
-                        {p.title}
-                      </option>
-                    ))}
-                  </select>
-                </>
-              )}
-              {assignmentType === "sector" && (
-                <>
-                  <label className="form-label">Gerencia / Sector *</label>
-                  <select name="targetSectorId" className="form-input" required style={{ borderRadius: "10px" }}>
-                    <option value="">Seleccione un sector...</option>
-                    {filteredSectors.map((s) => (
-                      <option key={s.id} value={s.id}>
-                        {s.name}
-                      </option>
-                    ))}
-                  </select>
-                </>
-              )}
-            </div>
+            {/* SELECCIÓN MÚLTIPLE DE EMPLEADOS A ELECCIÓN */}
+            {assignmentType === "empleado" && (
+              <div
+                style={{
+                  flex: "1 1 100%",
+                  background: "#f8fafc",
+                  border: "1px solid #cbd5e1",
+                  borderRadius: "10px",
+                  padding: "0.85rem 1rem",
+                  margin: "0.25rem 0"
+                }}
+              >
+                <div
+                  style={{
+                    display: "flex",
+                    justifyContent: "space-between",
+                    alignItems: "center",
+                    flexWrap: "wrap",
+                    gap: "0.5rem",
+                    marginBottom: "0.5rem"
+                  }}
+                >
+                  <label className="form-label" style={{ fontWeight: 700, margin: 0, color: "#1b365d" }}>
+                    👥 Empleados a Capacitar: {selectedEmployeeIds.length} seleccionados (de {filteredEmployees.length} encontrados) *
+                  </label>
+                  <div style={{ display: "flex", gap: "0.75rem", alignItems: "center" }}>
+                    <button
+                      type="button"
+                      onClick={handleSelectAllFiltered}
+                      style={{
+                        background: "none",
+                        border: "none",
+                        color: "var(--teal-color)",
+                        fontSize: "0.82rem",
+                        cursor: "pointer",
+                        fontWeight: 700,
+                        textDecoration: "underline"
+                      }}
+                    >
+                      ☑️ Seleccionar Todos los Filtrados ({filteredEmployees.length})
+                    </button>
+                    <span style={{ color: "#cbd5e1" }}>|</span>
+                    <button
+                      type="button"
+                      onClick={handleClearSelectedEmployees}
+                      style={{
+                        background: "none",
+                        border: "none",
+                        color: "#ef4444",
+                        fontSize: "0.82rem",
+                        cursor: "pointer",
+                        fontWeight: 700,
+                        textDecoration: "underline"
+                      }}
+                    >
+                      ✕ Desmarcar Todos
+                    </button>
+                  </div>
+                </div>
+
+                <div
+                  style={{
+                    display: "grid",
+                    gridTemplateColumns: "repeat(auto-fill, minmax(240px, 1fr))",
+                    gap: "0.4rem",
+                    maxHeight: "180px",
+                    overflowY: "auto",
+                    background: "#ffffff",
+                    padding: "0.5rem",
+                    borderRadius: "8px",
+                    border: "1px solid #cbd5e1"
+                  }}
+                >
+                  {filteredEmployees.map((e) => {
+                    const isChecked = selectedEmployeeIds.includes(e.id);
+                    return (
+                      <label
+                        key={e.id}
+                        style={{
+                          display: "flex",
+                          alignItems: "center",
+                          gap: "0.45rem",
+                          padding: "0.35rem 0.55rem",
+                          borderRadius: "6px",
+                          backgroundColor: isChecked ? "#f0fdfa" : "transparent",
+                          border: isChecked ? "1px solid #99f6e4" : "1px solid transparent",
+                          cursor: "pointer",
+                          fontSize: "0.84rem",
+                          fontWeight: isChecked ? 700 : 400,
+                          color: isChecked ? "#0f766e" : "#334155",
+                          userSelect: "none"
+                        }}
+                      >
+                        <input
+                          type="checkbox"
+                          checked={isChecked}
+                          onChange={() => handleToggleEmployee(e.id)}
+                        />
+                        <span>
+                          {e.name} <strong style={{ color: "#64748b" }}>({e.legajo})</strong>
+                        </span>
+                      </label>
+                    );
+                  })}
+                  {filteredEmployees.length === 0 && (
+                    <div style={{ gridColumn: "1 / -1", padding: "1rem", textAlign: "center", color: "#64748b", fontSize: "0.85rem" }}>
+                      No se encontraron empleados con los filtros aplicados.
+                    </div>
+                  )}
+                </div>
+
+                {selectedEmployeeIds.length > 0 && (
+                  <div style={{ marginTop: "0.6rem", display: "flex", flexWrap: "wrap", gap: "0.35rem", alignItems: "center" }}>
+                    <span style={{ fontSize: "0.78rem", fontWeight: 700, color: "#64748b", marginRight: "0.25rem" }}>
+                      Seleccionados:
+                    </span>
+                    {selectedEmployeeIds.slice(0, 10).map((id) => {
+                      const emp = allEmployees.find((e) => e.id === id);
+                      if (!emp) return null;
+                      return (
+                        <span
+                          key={id}
+                          style={{
+                            display: "inline-flex",
+                            alignItems: "center",
+                            gap: "0.25rem",
+                            backgroundColor: "#ccfbf1",
+                            color: "#0f766e",
+                            border: "1px solid #99f6e4",
+                            padding: "0.15rem 0.45rem",
+                            borderRadius: "6px",
+                            fontSize: "0.76rem",
+                            fontWeight: 600
+                          }}
+                        >
+                          {emp.name} ({emp.legajo})
+                          <button
+                            type="button"
+                            onClick={() => handleToggleEmployee(id)}
+                            style={{
+                              background: "none",
+                              border: "none",
+                              color: "#0f766e",
+                              cursor: "pointer",
+                              padding: 0,
+                              fontWeight: 700,
+                              marginLeft: "0.2rem"
+                            }}
+                          >
+                            ✕
+                          </button>
+                        </span>
+                      );
+                    })}
+                    {selectedEmployeeIds.length > 10 && (
+                      <span style={{ fontSize: "0.75rem", color: "#64748b", fontWeight: 600 }}>
+                        + {selectedEmployeeIds.length - 10} más
+                      </span>
+                    )}
+                  </div>
+                )}
+              </div>
+            )}
+
+            {assignmentType !== "empleado" && (
+              <div style={{ flex: "1.3 1 220px" }}>
+                {assignmentType === "puesto" && (
+                  <>
+                    <label className="form-label">Perfil de Puesto ({filteredJobProfiles.length}) *</label>
+                    <select name="jobProfileId" className="form-input" required style={{ borderRadius: "10px" }}>
+                      <option value="">Seleccione un puesto...</option>
+                      {filteredJobProfiles.map((p) => (
+                        <option key={p.id} value={p.id}>
+                          {p.title}
+                        </option>
+                      ))}
+                    </select>
+                  </>
+                )}
+                {assignmentType === "sector" && (
+                  <>
+                    <label className="form-label">Gerencia / Sector *</label>
+                    <select name="targetSectorId" className="form-input" required style={{ borderRadius: "10px" }}>
+                      <option value="">Seleccione un sector...</option>
+                      {filteredSectors.map((s) => (
+                        <option key={s.id} value={s.id}>
+                          {s.name}
+                        </option>
+                      ))}
+                    </select>
+                  </>
+                )}
+              </div>
+            )}
 
             <div style={{ flex: "1.2 1 200px" }}>
               <label className="form-label">Tema de Capacitación *</label>

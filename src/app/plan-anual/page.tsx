@@ -176,8 +176,17 @@ export default async function PlanAnualPage({ searchParams }: { searchParams: Pr
     const createdIds: number[] = [];
 
     if (assignmentType === "empleado") {
-      const empId = parseInt(formData.get("employeeId") as string);
-      if (empId) {
+      const rawEmpIds = formData
+        .getAll("employeeIds")
+        .map((v) => parseInt(v as string, 10))
+        .filter(Boolean);
+
+      const singleEmpId = parseInt(formData.get("employeeId") as string, 10);
+      if (singleEmpId && !rawEmpIds.includes(singleEmpId)) {
+        rawEmpIds.push(singleEmpId);
+      }
+
+      for (const empId of rawEmpIds) {
         const empObj = await prisma.employee.findUnique({ where: { id: empId }, select: { jobProfileId: true } });
         const created = await prisma.employeeTrainingRecord.create({
           data: {
