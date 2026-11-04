@@ -22,22 +22,28 @@ function normalizeStr(s: string): string {
     .trim();
 }
 
+function cleanGerenciaName(s: string): string {
+  return normalizeStr(s)
+    .replace(/^(gerencia\s+de\s+|subgerencia\s+de\s+|sector\s+de\s+|gerencia\s+|subgerencia\s+|sector\s+)/g, "")
+    .trim();
+}
+
 export function matchesSectorAndGerencia(sectorName: string, profileGerencia?: string | null): boolean {
   if (!sectorName || !profileGerencia) return false;
-  const sNorm = normalizeStr(sectorName);
-  const gNorm = normalizeStr(profileGerencia);
+  const sNorm = cleanGerenciaName(sectorName);
+  const gNorm = cleanGerenciaName(profileGerencia);
   if (sNorm === gNorm) return true;
+  if (sNorm.includes(gNorm) || gNorm.includes(sNorm)) return true;
 
-  // Agrupación de Prevención y Seguridad Integral con sus subsectores si aplica
-  const prevGroup = [
-    "gerencia de prevencion y seguridad integral",
-    "asistencia vial",
-    "ccm",
-    "seguridad patrimonial"
-  ];
-  if (prevGroup.includes(sNorm) && gNorm === "gerencia de prevencion y seguridad integral") {
-    return true;
-  }
+  // Agrupación de Prevención y Seguridad Integral con sus subsectores (Asistencia Vial, CCM, SVIA, etc.)
+  const isPrevSector = /prevencion|seguridad|asistencia|svia|monitoreo|ccm/i.test(sectorName);
+  const isPrevGerencia = /prevencion|seguridad|asistencia|svia|monitoreo|ccm/i.test(profileGerencia);
+  if (isPrevSector && isPrevGerencia) return true;
+
+  // Agrupación de Operaciones (Operaciones, SVIA Operaciones, etc.)
+  const isOpSector = /operacion/i.test(sectorName);
+  const isOpGerencia = /operacion/i.test(profileGerencia);
+  if (isOpSector && isOpGerencia) return true;
 
   return false;
 }
@@ -76,8 +82,18 @@ export function SectorAndProfileSelects({
 
   const filteredProfiles = useMemo(() => {
     if (!selectedSector) return [];
-    return perfiles.filter((p) => matchesSectorAndGerencia(selectedSector.name, p.gerencia));
-  }, [perfiles, selectedSector]);
+    const matched = perfiles.filter((p) => matchesSectorAndGerencia(selectedSector.name, p.gerencia));
+
+    // Si estamos editando y el empleado ya tiene un perfil asignado,
+    // garantizar que SIEMPRE aparezca en la lista para que el navegador jamás lo deseleccione al guardar otro campo (como Base Operativa).
+    if (defaultJobProfileId) {
+      const currentProf = perfiles.find((p) => String(p.id) === String(defaultJobProfileId));
+      if (currentProf && !matched.some((p) => String(p.id) === String(defaultJobProfileId))) {
+        return [currentProf, ...matched];
+      }
+    }
+    return matched;
+  }, [perfiles, selectedSector, defaultJobProfileId]);
 
   const handleSectorChange = (newSectorId: string) => {
     setSelectedSectorId(newSectorId);
