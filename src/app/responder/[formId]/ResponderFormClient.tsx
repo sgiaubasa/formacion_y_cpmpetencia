@@ -8,6 +8,7 @@ import {
   submitOnlineFormResponseAction,
   saveOnlineFormInstructorSignatureAction
 } from "@/app/formularios/actions";
+import { getEmbedPreviewUrl } from "@/lib/cloudStorage";
 
 function renderVideoPlayer(url: string) {
   if (!url) return null;
@@ -113,7 +114,73 @@ function renderVideoPlayer(url: string) {
     );
   }
 
-  // Video directo (MP4, WebM, Supabase Storage, etc.)
+  // OneDrive / SharePoint Corporativo
+  if (
+    trimmed.toLowerCase().includes("sharepoint.com") ||
+    trimmed.toLowerCase().includes("1drv.ms") ||
+    trimmed.toLowerCase().includes("onedrive.live.com")
+  ) {
+    const hasQuery = trimmed.includes("?");
+    const embedSrc = trimmed.includes("action=embedview")
+      ? trimmed
+      : trimmed.includes("sharepoint.com")
+      ? `${trimmed}${hasQuery ? "&" : "?"}action=embedview`
+      : trimmed;
+
+    return (
+      <div style={{ display: "flex", flexDirection: "column", gap: "0.6rem" }}>
+        <div
+          style={{
+            position: "relative",
+            paddingBottom: "56.25%",
+            height: 0,
+            overflow: "hidden",
+            borderRadius: "10px",
+            boxShadow: "0 4px 14px rgba(0,0,0,0.12)",
+            backgroundColor: "#0f172a"
+          }}
+        >
+          <iframe
+            src={embedSrc}
+            title="Video de Capacitación (OneDrive AUBASA)"
+            style={{
+              position: "absolute",
+              top: 0,
+              left: 0,
+              width: "100%",
+              height: "100%",
+              border: "none"
+            }}
+            allow="autoplay; fullscreen"
+            allowFullScreen
+          />
+        </div>
+        <div style={{ display: "flex", justifyContent: "flex-end" }}>
+          <a
+            href={trimmed}
+            target="_blank"
+            rel="noopener noreferrer"
+            style={{
+              display: "inline-flex",
+              alignItems: "center",
+              gap: "0.4rem",
+              backgroundColor: "#0284c7",
+              color: "#ffffff",
+              padding: "0.45rem 0.95rem",
+              borderRadius: "6px",
+              fontSize: "0.84rem",
+              fontWeight: 700,
+              textDecoration: "none"
+            }}
+          >
+            ☁️ Abrir Video en OneDrive Corporativo (Pantalla Completa) ↗
+          </a>
+        </div>
+      </div>
+    );
+  }
+
+  // Video directo (MP4, WebM, etc.)
   return (
     <div
       style={{
@@ -733,7 +800,12 @@ export function ResponderFormClient({
                   }}
                 >
                   <iframe
-                    src={`${form.pdfUrl}#toolbar=1&view=FitH`}
+                    src={
+                      getEmbedPreviewUrl(form.pdfUrl).isOneDrive ||
+                      getEmbedPreviewUrl(form.pdfUrl).isGoogleDrive
+                        ? getEmbedPreviewUrl(form.pdfUrl).embedUrl
+                        : `${form.pdfUrl}#toolbar=1&view=FitH`
+                    }
                     title={form.pdfName || "Documento PDF"}
                     style={{ width: "100%", height: "100%", border: "none" }}
                   />

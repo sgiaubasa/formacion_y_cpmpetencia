@@ -30,12 +30,19 @@ export async function updateSmtpSettingsAction(formData: FormData) {
     "smtp_user",
     "smtp_pass",
     "email_webhook_url",
+    "onedrive_upload_webhook_url",
+    "onedrive_folder_url",
   ];
 
   for (const key of keys) {
     const val = ((formData.get(key) as string) || "").trim();
-    // Si smtp_pass o email_webhook_url vienen vacíos, no pisar el valor protegido existente
-    if ((key === "smtp_pass" || key === "email_webhook_url") && !val) {
+    // Si smtp_pass, email_webhook_url o onedrive_upload_webhook_url vienen vacíos, no pisar el valor protegido existente
+    if (
+      (key === "smtp_pass" ||
+        key === "email_webhook_url" ||
+        key === "onedrive_upload_webhook_url") &&
+      !val
+    ) {
       continue;
     }
     await prisma.appSetting.upsert({

@@ -1,20 +1,31 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
 import Cookies from "js-cookie";
 import { useRouter, usePathname } from "next/navigation";
-import { supabase } from "@/lib/supabase";
-import { getRoleForEmail } from "@/app/auth-actions";
+import {
+  authenticateUserAction,
+  changeUserPasswordAction,
+  getRoleForEmail,
+  logoutUserAction
+} from "@/app/auth-actions";
+
+const SESSION_STORAGE_KEY = "sgc_auth_session_v1";
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
-  const [user, setUser] = useState<any>(null);
+  const [user, setUser] = useState<{ email: string; role?: string; sectorName?: string } | null>(null);
   const [loading, setLoading] = useState(true);
-  
+
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   const [msg, setMsg] = useState("");
   const [isLoggingIn, setIsLoggingIn] = useState(false);
+
+  const [showChangePassword, setShowChangePassword] = useState(false);
+  const [currentPassword, setCurrentPassword] = useState("");
+  const [newPassword, setNewPassword] = useState("");
+
   const router = useRouter();
   const pathname = usePathname();
   const isPublicFirmaRoute =
@@ -22,8 +33,18 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     pathname?.startsWith("/responder") ||
     pathname?.startsWith("/plan-anual/planilla");
 
-  const [isRecovery, setIsRecovery] = useState(false);
-  const [newPassword, setNewPassword] = useState("");
+  const performSignOut = useCallback(async () => {
+    try {
+      localStorage.removeItem(SESSION_STORAGE_KEY);
+    } catch {
+      // ignore
+    }
+    Cookies.remove("activeRole", { path: "/" });
+    Cookies.remove("userEmail", { path: "/" });
+    await logoutUserAction().catch(() => {});
+    setUser(null);
+    router.refresh();
+  }, [router]);
 
   useEffect(() => {
     if (
@@ -35,143 +56,135 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       setLoading(false);
       return;
     }
-    if (typeof window !== 'undefined') {
-      const hash = window.location.hash;
-      const href = window.location.href;
-      if (hash.includes("type=invite") || hash.includes("type=recovery") || href.includes("type=invite") || href.includes("type=recovery")) {
-        setIsRecovery(true);
+
+    const handleLogoutEvent = () => {
+      performSignOut();
+    };
+    window.addEventListener("sgc-logout", handleLogoutEvent);
+
+    // Restaurar sesión desde localStorage o cookie userEmail
+    let savedEmail = "";
+    try {
+      const raw = localStorage.getItem(SESSION_STORAGE_KEY);
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        if (parsed?.email) {
+          savedEmail = String(parsed.email).toLowerCase().trim();
+        }
       }
+    } catch {
+      // ignore
     }
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      if (session?.user) {
-        setUser(session.user);
-        Cookies.set("userEmail", session.user.email!.toLowerCase().trim());
-        updateUserRoleCookie(session.user.email!).catch(console.error);
-      } else {
-        Cookies.remove("activeRole");
-        Cookies.remove("userEmail");
-      }
-      setLoading(false);
-    }).catch((err) => {
-      console.error("Error getting session:", err);
-      setLoading(false);
-    });
+    if (!savedEmail) {
+      savedEmail = (Cookies.get("userEmail") || "").toLowerCase().trim();
+    }
 
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
-      if (
-        typeof window !== "undefined" &&
-        (window.location.pathname.startsWith("/firma") ||
-          window.location.pathname.startsWith("/responder") ||
-          window.location.pathname.startsWith("/plan-anual/planilla"))
-      ) {
-        return;
-      }
-      if (event === 'PASSWORD_RECOVERY') {
-        setIsRecovery(true);
-      }
-      
-      if (session?.user) {
-        setUser(session.user);
-        Cookies.set("userEmail", session.user.email!.toLowerCase().trim());
-        updateUserRoleCookie(session.user.email!);
-      } else {
-        setUser(null);
-        Cookies.remove("activeRole");
-        Cookies.remove("userEmail");
-        router.refresh();
-      }
-    });
+    if (savedEmail) {
+      setUser({ email: savedEmail });
+      setLoading(false);
+      getRoleForEmail(savedEmail)
+        .then(({ role, sectorName }) => {
+          if (role === "VIEWER") {
+            performSignOut();
+            alert("Tu acceso ha sido revocado o no tenés permisos para ingresar al sistema.");
+            return;
+          }
+          Cookies.set("activeRole", role, { path: "/" });
+          Cookies.set("userEmail", savedEmail, { path: "/" });
+          try {
+            localStorage.setItem(
+              SESSION_STORAGE_KEY,
+              JSON.stringify({ email: savedEmail, role, sectorName })
+            );
+          } catch {
+            // ignore
+          }
+        })
+        .catch((err) => {
+          console.error("Error verificando rol de sesión:", err);
+        });
+    } else {
+      Cookies.remove("activeRole", { path: "/" });
+      Cookies.remove("userEmail", { path: "/" });
+      setLoading(false);
+    }
 
-    return () => subscription.unsubscribe();
-  }, [router]);
+    return () => {
+      window.removeEventListener("sgc-logout", handleLogoutEvent);
+    };
+  }, [performSignOut]);
 
   useEffect(() => {
     let inactivityTimer: NodeJS.Timeout;
     const resetTimer = () => {
       clearTimeout(inactivityTimer);
-      if (user && !isRecovery) {
+      if (user) {
         inactivityTimer = setTimeout(() => {
-          supabase.auth.signOut();
+          performSignOut();
           alert("Tu sesión ha expirado por seguridad (2 horas de inactividad).");
         }, 7200000);
       }
     };
-    const events = ['mousedown', 'keydown', 'scroll', 'touchstart'];
-    events.forEach(event => document.addEventListener(event, resetTimer));
+    const events = ["mousedown", "keydown", "scroll", "touchstart"];
+    events.forEach((event) => document.addEventListener(event, resetTimer));
     resetTimer();
     return () => {
       clearTimeout(inactivityTimer);
-      events.forEach(event => document.removeEventListener(event, resetTimer));
+      events.forEach((event) => document.removeEventListener(event, resetTimer));
     };
-  }, [user, isRecovery]);
-
-  const updateUserRoleCookie = async (email: string) => {
-    const { role } = await getRoleForEmail(email);
-    if (role === "VIEWER") {
-      // El usuario no está en la base de datos o le quitaron el acceso
-      await supabase.auth.signOut();
-      Cookies.remove("activeRole");
-      Cookies.remove("userEmail");
-      setUser(null);
-      alert("Tu acceso ha sido revocado o no tienes permisos para ingresar al sistema.");
-      return;
-    }
-    Cookies.set("activeRole", role); // Session cookie (clears on browser close)
-    Cookies.set("userEmail", email.toLowerCase().trim());
-    router.refresh();
-  };
+  }, [user, performSignOut]);
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsLoggingIn(true);
     setError("");
     setMsg("");
-    
-    const { error } = await supabase.auth.signInWithPassword({ email, password });
-    if (error) {
-      if (error.message?.includes("exceed_egress_quota")) {
-        setError("El servidor de base de datos (Supabase) alcanzó el límite mensual de transferencia (Egress Quota). El administrador debe ampliar el plan o habilitar la cuota en el panel de Supabase para restablecer el servicio.");
+
+    try {
+      const res = await authenticateUserAction(email, password);
+      if (!res.ok || !res.user) {
+        setError(res.error || "Correo o contraseña incorrectos");
       } else {
-        setError("Correo o contraseña incorrectos");
+        Cookies.set("activeRole", res.user.role, { path: "/" });
+        Cookies.set("userEmail", res.user.email, { path: "/" });
+        try {
+          localStorage.setItem(SESSION_STORAGE_KEY, JSON.stringify(res.user));
+        } catch {
+          // ignore
+        }
+        setUser(res.user);
+        router.refresh();
       }
+    } catch (err) {
+      console.error("Error en login:", err);
+      setError("No se pudo conectar con el servidor. Intentá nuevamente.");
+    } finally {
+      setIsLoggingIn(false);
     }
-    setIsLoggingIn(false);
   };
 
-  const handleResetPassword = async () => {
-    if (!email) {
-      setError("Por favor ingresa tu correo para recuperar la contraseña");
-      return;
-    }
-    setIsLoggingIn(true);
-    const { error } = await supabase.auth.resetPasswordForEmail(email, {
-      redirectTo: window.location.origin,
-    });
-    if (error) {
-      setError(error.message);
-    } else {
-      setMsg("Revisa tu correo para el enlace de recuperación");
-    }
-    setIsLoggingIn(false);
-  };
-
-  const handleSetNewPassword = async (e: React.FormEvent) => {
+  const handleChangePassword = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (newPassword.length < 6) {
-      setError("La contraseña debe tener al menos 6 caracteres");
-      return;
-    }
     setIsLoggingIn(true);
     setError("");
-    const { error } = await supabase.auth.updateUser({ password: newPassword });
-    if (error) {
-      setError(error.message);
-    } else {
-      alert("Contraseña establecida con éxito. Ya puedes usar el sistema.");
-      setIsRecovery(false);
-      setMsg("");
+    setMsg("");
+
+    try {
+      const res = await changeUserPasswordAction(email, currentPassword, newPassword);
+      if (!res.ok) {
+        setError(res.error || "No se pudo actualizar la contraseña.");
+      } else {
+        setMsg(res.message || "Contraseña actualizada con éxito.");
+        setPassword(newPassword);
+        setShowChangePassword(false);
+        setCurrentPassword("");
+        setNewPassword("");
+      }
+    } catch {
+      setError("Error al actualizar la contraseña.");
+    } finally {
+      setIsLoggingIn(false);
     }
-    setIsLoggingIn(false);
   };
 
   if (isPublicFirmaRoute) {
@@ -180,38 +193,136 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   if (loading) {
     return (
-      <div style={{ display: 'flex', height: '100vh', justifyContent: 'center', alignItems: 'center', backgroundColor: '#f0f2f5' }}>
-        <h2 style={{ color: 'var(--teal-color)' }}>Cargando sistema...</h2>
+      <div
+        style={{
+          display: "flex",
+          height: "100vh",
+          justifyContent: "center",
+          alignItems: "center",
+          backgroundColor: "#f0f2f5"
+        }}
+      >
+        <h2 style={{ color: "var(--teal-color)" }}>Cargando sistema...</h2>
       </div>
     );
   }
 
-  if (isRecovery) {
+  if (showChangePassword) {
     return (
-      <div style={{ display: 'flex', height: '100vh', backgroundColor: '#f0f2f5', alignItems: 'center', justifyContent: 'center', margin: 0, padding: 0 }}>
-        <div style={{ background: 'white', padding: '3rem', borderRadius: '12px', boxShadow: '0 8px 24px rgba(0,0,0,0.1)', width: '100%', maxWidth: '400px' }}>
-          <div style={{ textAlign: 'center', marginBottom: '2rem' }}>
-            <img src="/logo.png" alt="AUBASA Logo" style={{ width: '100%', maxWidth: '200px', height: 'auto', objectFit: 'contain' }} />
-            <h2 style={{ marginTop: '1.5rem', color: 'var(--teal-color)', fontSize: '1.25rem' }}>Establecer Contraseña</h2>
-            <p style={{ fontSize: '0.875rem', color: '#6b7280', marginTop: '0.5rem' }}>Por favor, ingresa tu nueva contraseña para acceder al sistema.</p>
+      <div
+        style={{
+          display: "flex",
+          height: "100vh",
+          backgroundColor: "#f0f2f5",
+          alignItems: "center",
+          justifyContent: "center",
+          margin: 0,
+          padding: "1rem"
+        }}
+      >
+        <div
+          style={{
+            background: "white",
+            padding: "2.5rem",
+            borderRadius: "12px",
+            boxShadow: "0 8px 24px rgba(0,0,0,0.1)",
+            width: "100%",
+            maxWidth: "420px"
+          }}
+        >
+          <div style={{ textAlign: "center", marginBottom: "1.5rem" }}>
+            <img
+              src="/logo.png"
+              alt="AUBASA Logo"
+              style={{ width: "100%", maxWidth: "190px", height: "auto", objectFit: "contain" }}
+            />
+            <h2 style={{ marginTop: "1.25rem", color: "var(--teal-color)", fontSize: "1.2rem" }}>
+              Cambiar o Establecer Contraseña
+            </h2>
+            <p style={{ fontSize: "0.82rem", color: "#64748b", marginTop: "0.4rem" }}>
+              Si te blanquearon la clave desde SGI/RRHH, dejá en blanco la contraseña actual e ingresá directamente tu nueva clave.
+            </p>
           </div>
-          <form onSubmit={handleSetNewPassword}>
-            <div style={{ marginBottom: '1.5rem' }}>
-              <label style={{ display: 'block', marginBottom: '0.5rem', fontSize: '0.875rem', fontWeight: 600 }}>Nueva Contraseña</label>
-              <input 
-                type="password" 
-                value={newPassword} 
-                onChange={(e) => setNewPassword(e.target.value)} 
+
+          <form onSubmit={handleChangePassword}>
+            <div style={{ marginBottom: "1rem" }}>
+              <label style={{ display: "block", marginBottom: "0.4rem", fontSize: "0.85rem", fontWeight: 600 }}>
+                Correo Electrónico
+              </label>
+              <input
+                type="email"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
                 required
-                placeholder="••••••••"
-                style={{ width: '100%', padding: '0.75rem', border: '1px solid #d1d5db', borderRadius: '6px', fontSize: '1rem' }}
+                placeholder="usuario@aubasa.com.ar"
+                style={{ width: "100%", padding: "0.7rem", border: "1px solid #d1d5db", borderRadius: "6px" }}
               />
             </div>
-            {error && <div style={{ backgroundColor: '#fee2e2', color: '#dc2626', padding: '0.75rem', borderRadius: '6px', marginBottom: '1rem', fontSize: '0.875rem', textAlign: 'center' }}>{error}</div>}
-            
-            <button type="submit" disabled={isLoggingIn} className="btn btn-primary" style={{ padding: '0.875rem', width: '100%', fontSize: '1rem', fontWeight: 'bold', justifyContent: 'center' }}>
-              {isLoggingIn ? "Guardando..." : "Guardar Contraseña"}
+
+            <div style={{ marginBottom: "1rem" }}>
+              <label style={{ display: "block", marginBottom: "0.4rem", fontSize: "0.85rem", fontWeight: 600 }}>
+                Contraseña Actual (opcional si fue blanqueada)
+              </label>
+              <input
+                type="password"
+                value={currentPassword}
+                onChange={(e) => setCurrentPassword(e.target.value)}
+                placeholder="••••••••"
+                style={{ width: "100%", padding: "0.7rem", border: "1px solid #d1d5db", borderRadius: "6px" }}
+              />
+            </div>
+
+            <div style={{ marginBottom: "1.25rem" }}>
+              <label style={{ display: "block", marginBottom: "0.4rem", fontSize: "0.85rem", fontWeight: 600 }}>
+                Nueva Contraseña (mínimo 6 caracteres)
+              </label>
+              <input
+                type="password"
+                value={newPassword}
+                onChange={(e) => setNewPassword(e.target.value)}
+                required
+                placeholder="••••••••"
+                style={{ width: "100%", padding: "0.7rem", border: "1px solid #d1d5db", borderRadius: "6px" }}
+              />
+            </div>
+
+            {error && (
+              <div
+                style={{
+                  backgroundColor: "#fee2e2",
+                  color: "#dc2626",
+                  padding: "0.75rem",
+                  borderRadius: "6px",
+                  marginBottom: "1rem",
+                  fontSize: "0.85rem",
+                  textAlign: "center"
+                }}
+              >
+                {error}
+              </div>
+            )}
+
+            <button
+              type="submit"
+              disabled={isLoggingIn}
+              className="btn btn-primary"
+              style={{ padding: "0.85rem", width: "100%", fontSize: "0.95rem", fontWeight: "bold", justifyContent: "center" }}
+            >
+              {isLoggingIn ? "Guardando..." : "Guardar Nueva Contraseña"}
             </button>
+
+            <div style={{ textAlign: "center", marginTop: "1rem" }}>
+              <button
+                type="button"
+                onClick={() => {
+                  setShowChangePassword(false);
+                  setError("");
+                }}
+                style={{ background: "none", border: "none", color: "#64748b", fontSize: "0.85rem", cursor: "pointer" }}
+              >
+                ← Volver al inicio de sesión
+              </button>
+            </div>
           </form>
         </div>
       </div>
@@ -220,45 +331,140 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   if (!user) {
     return (
-      <div style={{ display: 'flex', height: '100vh', backgroundColor: '#f0f2f5', alignItems: 'center', justifyContent: 'center', margin: 0, padding: 0 }}>
-        <div style={{ background: 'white', padding: '3rem', borderRadius: '12px', boxShadow: '0 8px 24px rgba(0,0,0,0.1)', width: '100%', maxWidth: '400px' }}>
-          <div style={{ textAlign: 'center', marginBottom: '2rem' }}>
-            <img src="/logo.png" alt="AUBASA Logo" style={{ width: '100%', maxWidth: '200px', height: 'auto', objectFit: 'contain' }} />
-            <h2 style={{ marginTop: '1.5rem', color: 'var(--teal-color)', fontSize: '1.25rem' }}>Sistema de Gestión de Competencias</h2>
+      <div
+        style={{
+          display: "flex",
+          height: "100vh",
+          backgroundColor: "#f0f2f5",
+          alignItems: "center",
+          justifyContent: "center",
+          margin: 0,
+          padding: 0
+        }}
+      >
+        <div
+          style={{
+            background: "white",
+            padding: "3rem",
+            borderRadius: "12px",
+            boxShadow: "0 8px 24px rgba(0,0,0,0.1)",
+            width: "100%",
+            maxWidth: "400px"
+          }}
+        >
+          <div style={{ textAlign: "center", marginBottom: "2rem" }}>
+            <img
+              src="/logo.png"
+              alt="AUBASA Logo"
+              style={{ width: "100%", maxWidth: "200px", height: "auto", objectFit: "contain" }}
+            />
+            <h2 style={{ marginTop: "1.5rem", color: "var(--teal-color)", fontSize: "1.25rem" }}>
+              Sistema de Gestión de Competencias
+            </h2>
           </div>
           <form onSubmit={handleLogin}>
-            <div style={{ marginBottom: '1rem' }}>
-              <label style={{ display: 'block', marginBottom: '0.5rem', fontSize: '0.875rem', fontWeight: 600 }}>Correo Electrónico</label>
-              <input 
-                type="email" 
-                value={email} 
-                onChange={(e) => setEmail(e.target.value)} 
+            <div style={{ marginBottom: "1rem" }}>
+              <label style={{ display: "block", marginBottom: "0.5rem", fontSize: "0.875rem", fontWeight: 600 }}>
+                Correo Electrónico
+              </label>
+              <input
+                type="email"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
                 required
                 placeholder="usuario@aubasa.com.ar"
-                style={{ width: '100%', padding: '0.75rem', border: '1px solid #d1d5db', borderRadius: '6px', fontSize: '1rem' }}
+                style={{
+                  width: "100%",
+                  padding: "0.75rem",
+                  border: "1px solid #d1d5db",
+                  borderRadius: "6px",
+                  fontSize: "1rem"
+                }}
               />
             </div>
-            <div style={{ marginBottom: '1.5rem' }}>
-              <label style={{ display: 'block', marginBottom: '0.5rem', fontSize: '0.875rem', fontWeight: 600 }}>Contraseña</label>
-              <input 
-                type="password" 
-                value={password} 
-                onChange={(e) => setPassword(e.target.value)} 
+            <div style={{ marginBottom: "1.5rem" }}>
+              <label style={{ display: "block", marginBottom: "0.5rem", fontSize: "0.875rem", fontWeight: 600 }}>
+                Contraseña
+              </label>
+              <input
+                type="password"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
                 required
                 placeholder="••••••••"
-                style={{ width: '100%', padding: '0.75rem', border: '1px solid #d1d5db', borderRadius: '6px', fontSize: '1rem' }}
+                style={{
+                  width: "100%",
+                  padding: "0.75rem",
+                  border: "1px solid #d1d5db",
+                  borderRadius: "6px",
+                  fontSize: "1rem"
+                }}
               />
             </div>
-            
-            {error && <div style={{ backgroundColor: '#fee2e2', color: '#dc2626', padding: '0.75rem', borderRadius: '6px', marginBottom: '1rem', fontSize: '0.875rem', textAlign: 'center' }}>{error}</div>}
-            {msg && <div style={{ backgroundColor: '#dcfce3', color: '#16a34a', padding: '0.75rem', borderRadius: '6px', marginBottom: '1rem', fontSize: '0.875rem', textAlign: 'center' }}>{msg}</div>}
-            
-            <button type="submit" disabled={isLoggingIn} className="btn btn-primary" style={{ padding: '0.875rem', width: '100%', fontSize: '1rem', fontWeight: 'bold', justifyContent: 'center' }}>
+
+            {error && (
+              <div
+                style={{
+                  backgroundColor: "#fee2e2",
+                  color: "#dc2626",
+                  padding: "0.75rem",
+                  borderRadius: "6px",
+                  marginBottom: "1rem",
+                  fontSize: "0.875rem",
+                  textAlign: "center"
+                }}
+              >
+                {error}
+              </div>
+            )}
+            {msg && (
+              <div
+                style={{
+                  backgroundColor: "#dcfce3",
+                  color: "#16a34a",
+                  padding: "0.75rem",
+                  borderRadius: "6px",
+                  marginBottom: "1rem",
+                  fontSize: "0.875rem",
+                  textAlign: "center"
+                }}
+              >
+                {msg}
+              </div>
+            )}
+
+            <button
+              type="submit"
+              disabled={isLoggingIn}
+              className="btn btn-primary"
+              style={{
+                padding: "0.875rem",
+                width: "100%",
+                fontSize: "1rem",
+                fontWeight: "bold",
+                justifyContent: "center"
+              }}
+            >
               {isLoggingIn ? "Ingresando..." : "Ingresar"}
             </button>
-            <div style={{ textAlign: 'center', marginTop: '1rem' }}>
-              <button type="button" onClick={handleResetPassword} disabled={isLoggingIn} style={{ background: "none", border: "none", color: "var(--teal-color)", fontSize: "0.875rem", cursor: "pointer" }}>
-                ¿Olvidaste tu contraseña?
+            <div style={{ textAlign: "center", marginTop: "1rem" }}>
+              <button
+                type="button"
+                onClick={() => {
+                  setError("");
+                  setMsg("");
+                  setShowChangePassword(true);
+                }}
+                disabled={isLoggingIn}
+                style={{
+                  background: "none",
+                  border: "none",
+                  color: "var(--teal-color)",
+                  fontSize: "0.875rem",
+                  cursor: "pointer"
+                }}
+              >
+                ¿Olvidaste o querés cambiar tu contraseña?
               </button>
             </div>
           </form>

@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useRef, useMemo } from "react";
-import { supabase } from "@/lib/supabase";
+import { uploadFileZeroEgress, DEFAULT_ONEDRIVE_FOLDER_URL } from "@/lib/cloudStorage";
 import { matchesSectorAndGerencia } from "@/components/SectorAndProfileSelects";
 
 export function AssignTrainingForm({
@@ -129,36 +129,7 @@ export function AssignTrainingForm({
 
       const materialFile = formData.get("materialFile") as File | null;
 
-      if (materialChoice !== "none" && materialFile && materialFile.size > 0) {
-        try {
-          const cleanName = materialFile.name
-            .normalize("NFD")
-            .replace(/[\u0300-\u036f]/g, "")
-            .replace(/[^a-zA-Z0-9.-]/g, "_");
-          const filename = `material-${Date.now()}-${cleanName}`;
-
-          const { data: uploadData, error: uploadError } = await supabase.storage
-            .from("evidencias")
-            .upload(filename, materialFile, {
-              contentType: materialFile.type || "application/octet-stream",
-              upsert: true
-            });
-
-          if (!uploadError && uploadData) {
-            const { data: publicData } = supabase.storage
-              .from("evidencias")
-              .getPublicUrl(filename);
-            formData.set("materialUrl", publicData.publicUrl);
-            formData.set("materialName", materialFile.name);
-            formData.set("materialType", materialChoice);
-            formData.delete("materialFile");
-          } else {
-            console.warn("Direct material upload fallback:", uploadError);
-          }
-        } catch (uploadEx) {
-          console.warn("Client material upload exception:", uploadEx);
-        }
-      } else if (materialChoice !== "none" && materialLinkInput.trim()) {
+      if (materialChoice !== "none" && materialLinkInput.trim()) {
         formData.set("materialUrl", materialLinkInput.trim());
         formData.set(
           "materialName",
@@ -166,6 +137,24 @@ export function AssignTrainingForm({
         );
         formData.set("materialType", materialChoice);
         formData.delete("materialFile");
+      } else if (materialChoice !== "none" && materialFile && materialFile.size > 0) {
+        const uploaded = await uploadFileZeroEgress(
+          materialFile,
+          materialChoice === "video" ? "video" : "material"
+        );
+        if (uploaded.ok && uploaded.url) {
+          formData.set("materialUrl", uploaded.url);
+          formData.set("materialName", materialFile.name);
+          formData.set("materialType", materialChoice);
+          formData.delete("materialFile");
+        } else {
+          alert(
+            uploaded.error ||
+              "Para archivos pesados, subilo a tu OneDrive Corporativo AUBASA y pegá el link compartido."
+          );
+          setIsUploading(false);
+          return;
+        }
       } else {
         formData.delete("materialFile");
       }
@@ -595,29 +584,48 @@ export function AssignTrainingForm({
                   gap: "0.4rem"
                 }}
               >
-                <label style={{ fontSize: "0.78rem", fontWeight: 700, color: "#92400e" }}>
-                  {materialChoice === "pdf"
-                    ? "📄 Archivo PDF o Enlace para lectura interactiva:"
-                    : "🎬 Archivo de Video (.mp4) o Link (YouTube / Drive):"}
-                </label>
-                <input
-                  type="file"
-                  name="materialFile"
-                  accept={materialChoice === "pdf" ? ".pdf,application/pdf" : "video/*"}
-                  className="form-input"
-                  style={{ borderRadius: "8px", fontSize: "0.78rem", padding: "0.3rem", backgroundColor: "#ffffff" }}
-                />
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: "0.5rem", flexWrap: "wrap" }}>
+                  <label style={{ fontSize: "0.78rem", fontWeight: 700, color: "#92400e" }}>
+                    {materialChoice === "pdf"
+                      ? "📄 Link de OneDrive / SharePoint o Archivo PDF:"
+                      : "🎬 Link de OneDrive / YouTube / Drive (Recomendado 0 cuota):"}
+                  </label>
+                  <a
+                    href={DEFAULT_ONEDRIVE_FOLDER_URL}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    style={{
+                      fontSize: "0.72rem",
+                      fontWeight: 700,
+                      color: "#0284c7",
+                      backgroundColor: "#e0f2fe",
+                      padding: "0.2rem 0.55rem",
+                      borderRadius: "6px",
+                      textDecoration: "none",
+                      border: "1px solid #bae6fd"
+                    }}
+                  >
+                    ☁️ Abrir mi OneDrive AUBASA
+                  </a>
+                </div>
                 <input
                   type="url"
                   value={materialLinkInput}
                   onChange={(e) => setMaterialLinkInput(e.target.value)}
                   placeholder={
                     materialChoice === "pdf"
-                      ? "O pegá aquí el link directo al PDF..."
-                      : "O pegá aquí el link de YouTube / Drive / MP4..."
+                      ? "Pegá el link compartido de OneDrive / SharePoint / Drive al PDF..."
+                      : "Pegá el link compartido de OneDrive / SharePoint / YouTube / Drive..."
                   }
                   className="form-input"
                   style={{ borderRadius: "8px", fontSize: "0.78rem", padding: "0.35rem 0.6rem", backgroundColor: "#ffffff" }}
+                />
+                <input
+                  type="file"
+                  name="materialFile"
+                  accept={materialChoice === "pdf" ? ".pdf,application/pdf" : "video/*"}
+                  className="form-input"
+                  style={{ borderRadius: "8px", fontSize: "0.78rem", padding: "0.3rem", backgroundColor: "#ffffff" }}
                 />
               </div>
             )}

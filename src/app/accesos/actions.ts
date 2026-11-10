@@ -2,8 +2,8 @@
 
 import { prisma } from "@/lib/prisma";
 import { revalidatePath } from "next/cache";
-import { createClient } from "@supabase/supabase-js";
 import { setEfficacyEvaluatorConfig } from "@/lib/efficacyTraceability";
+import { adminResetUserPasswordAction } from "@/app/auth-actions";
 
 async function syncSectorMail(sectorId: number | null) {
   if (!sectorId) return;
@@ -31,6 +31,7 @@ export async function addAccess(formData: FormData) {
   const sectorId = sectorIdStr ? parseInt(sectorIdStr) : null;
   const isManager = formData.get("isManager") === "on";
   const canEvaluateEfficacy = formData.get("canEvaluateEfficacy") === "on";
+  const initialPassword = (formData.get("initialPassword") as string | null)?.trim() || "";
   const cleanEmail = email.toLowerCase().trim();
 
   try {
@@ -54,26 +55,19 @@ export async function addAccess(formData: FormData) {
       fullName
     });
 
+    if (initialPassword) {
+      const passForm = new FormData();
+      passForm.set("email", cleanEmail);
+      passForm.set("newPassword", initialPassword);
+      await adminResetUserPasswordAction(passForm);
+    }
+
     if (role === "SECTOR" && sectorId) {
       await syncSectorMail(sectorId);
     }
   } catch (error) {
     console.error("Error al guardar usuario en base de datos:", error);
     return;
-  }
-
-  // Enviar invitación oficial por correo vía Supabase Admin
-  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
-  const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!;
-
-  if (supabaseServiceKey) {
-    const supabaseAdmin = createClient(supabaseUrl, supabaseServiceKey);
-    const { error } = await supabaseAdmin.auth.admin.inviteUserByEmail(cleanEmail, {
-      redirectTo: "https://formacion-y-competencia.vercel.app/"
-    });
-    if (error) {
-      console.error("Error al enviar invitación por correo:", error);
-    }
   }
 
   revalidatePath("/accesos");

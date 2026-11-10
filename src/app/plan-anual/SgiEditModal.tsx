@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { sgiEditRecord } from "./actions";
-import { supabase } from "@/lib/supabase";
+import { uploadFileZeroEgress } from "@/lib/cloudStorage";
 
 export function SgiEditModal({
   recordId,
@@ -32,58 +32,20 @@ export function SgiEditModal({
     const formData = new FormData(e.currentTarget);
     const file = formData.get("evidence") as File | null;
     if (file && file.size > 0) {
-      try {
-        const cleanName = file.name
-          .normalize("NFD")
-          .replace(/[\u0300-\u036f]/g, "")
-          .replace(/[^a-zA-Z0-9.-]/g, "_");
-        const filename = `${recordId}-${Date.now()}-${cleanName}`;
-
-        const { data: uploadData, error: uploadError } = await supabase.storage
-          .from("evidencias")
-          .upload(filename, file, {
-            contentType: file.type || "application/octet-stream",
-            upsert: true
-          });
-
-        if (!uploadError && uploadData) {
-          const { data: publicData } = supabase.storage
-            .from("evidencias")
-            .getPublicUrl(filename);
-          formData.set("evidenceUrl", publicData.publicUrl);
-          formData.delete("evidence");
-        }
-      } catch (uploadEx) {
-        console.warn("Client upload exception in SGI edit:", uploadEx);
+      const uploaded = await uploadFileZeroEgress(file, "evidencia");
+      if (uploaded.ok && uploaded.url) {
+        formData.set("evidenceUrl", uploaded.url);
+        formData.delete("evidence");
       }
     }
 
     const materialFile = formData.get("materialFile") as File | null;
     if (materialFile && materialFile.size > 0) {
-      try {
-        const cleanName = materialFile.name
-          .normalize("NFD")
-          .replace(/[\u0300-\u036f]/g, "")
-          .replace(/[^a-zA-Z0-9.-]/g, "_");
-        const filename = `material-${recordId}-${Date.now()}-${cleanName}`;
-
-        const { data: uploadData, error: uploadError } = await supabase.storage
-          .from("evidencias")
-          .upload(filename, materialFile, {
-            contentType: materialFile.type || "application/octet-stream",
-            upsert: true
-          });
-
-        if (!uploadError && uploadData) {
-          const { data: publicData } = supabase.storage
-            .from("evidencias")
-            .getPublicUrl(filename);
-          formData.set("materialUrl", publicData.publicUrl);
-          formData.set("materialName", materialFile.name);
-          formData.delete("materialFile");
-        }
-      } catch (uploadEx) {
-        console.warn("Client material upload exception in SGI edit:", uploadEx);
+      const uploaded = await uploadFileZeroEgress(materialFile, "material");
+      if (uploaded.ok && uploaded.url) {
+        formData.set("materialUrl", uploaded.url);
+        formData.set("materialName", materialFile.name);
+        formData.delete("materialFile");
       }
     } else {
       formData.delete("materialFile");

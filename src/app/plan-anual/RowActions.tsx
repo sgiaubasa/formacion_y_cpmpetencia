@@ -4,7 +4,7 @@ import { useState, useRef, useEffect } from "react";
 import { programarFecha, borrarCapacitacion } from "./actions";
 import { ConfirmExecutionModal } from "./ConfirmExecutionModal";
 import { SgiEditModal } from "./SgiEditModal";
-import { supabase } from "@/lib/supabase";
+import { uploadFileZeroEgress, DEFAULT_ONEDRIVE_FOLDER_URL } from "@/lib/cloudStorage";
 
 export function RowActions({
   recordId,
@@ -64,34 +64,7 @@ export function RowActions({
 
       const materialFile = formData.get("materialFile") as File | null;
 
-      if (materialChoice !== "none" && materialFile && materialFile.size > 0) {
-        try {
-          const cleanName = materialFile.name
-            .normalize("NFD")
-            .replace(/[\u0300-\u036f]/g, "")
-            .replace(/[^a-zA-Z0-9.-]/g, "_");
-          const filename = `material-${recordId}-${Date.now()}-${cleanName}`;
-
-          const { data: uploadData, error: uploadError } = await supabase.storage
-            .from("evidencias")
-            .upload(filename, materialFile, {
-              contentType: materialFile.type || "application/octet-stream",
-              upsert: true
-            });
-
-          if (!uploadError && uploadData) {
-            const { data: publicData } = supabase.storage
-              .from("evidencias")
-              .getPublicUrl(filename);
-            formData.set("materialUrl", publicData.publicUrl);
-            formData.set("materialName", materialFile.name);
-            formData.set("materialType", materialChoice);
-            formData.delete("materialFile");
-          }
-        } catch (uploadEx) {
-          console.warn("Client material upload error in schedule:", uploadEx);
-        }
-      } else if (materialChoice !== "none" && materialLinkInput.trim()) {
+      if (materialChoice !== "none" && materialLinkInput.trim()) {
         formData.set("materialUrl", materialLinkInput.trim());
         formData.set(
           "materialName",
@@ -99,6 +72,24 @@ export function RowActions({
         );
         formData.set("materialType", materialChoice);
         formData.delete("materialFile");
+      } else if (materialChoice !== "none" && materialFile && materialFile.size > 0) {
+        const uploaded = await uploadFileZeroEgress(
+          materialFile,
+          materialChoice === "video" ? "video" : "material"
+        );
+        if (uploaded.ok && uploaded.url) {
+          formData.set("materialUrl", uploaded.url);
+          formData.set("materialName", materialFile.name);
+          formData.set("materialType", materialChoice);
+          formData.delete("materialFile");
+        } else {
+          alert(
+            uploaded.error ||
+              "Para archivos pesados, subilo a tu OneDrive Corporativo AUBASA y pegá el link compartido."
+          );
+          setIsSavingSchedule(false);
+          return;
+        }
       } else {
         formData.delete("materialFile");
       }

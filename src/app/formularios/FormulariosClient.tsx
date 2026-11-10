@@ -10,7 +10,7 @@ import {
 } from "@/lib/onlineForms";
 import { createOnlineFormAction, deleteOnlineFormAction } from "./actions";
 import { getDefaultInstructorForSector } from "@/lib/instructorDefaults";
-import { supabase } from "@/lib/supabase";
+import { uploadFileZeroEgress, DEFAULT_ONEDRIVE_FOLDER_URL } from "@/lib/cloudStorage";
 
 interface CompletedResponseItem {
   id: number;
@@ -197,24 +197,19 @@ export function FormulariosClient({
     setIsUploadingVideo(true);
     setVideoUploadError(null);
     try {
-      const cleanName = file.name
-        .normalize("NFD")
-        .replace(/[\u0300-\u036f]/g, "")
-        .replace(/[^a-zA-Z0-9.-]/g, "_");
-      const filename = `video-form-${Date.now()}-${cleanName}`;
-      const { error: uploadError } = await supabase.storage
-        .from("evidencias")
-        .upload(filename, file, {
-          contentType: file.type || "video/mp4",
-          upsert: true
-        });
-      if (uploadError) throw uploadError;
-      const { data: pubData } = supabase.storage.from("evidencias").getPublicUrl(filename);
-      setVideoUrl(pubData.publicUrl);
+      const res = await uploadFileZeroEgress(file, "video");
+      if (!res.ok || !res.url) {
+        setVideoUploadError(
+          res.error ||
+            "Para videos pesados, subilo a tu OneDrive Corporativo AUBASA, Google Drive o YouTube y pegá el enlace abajo."
+        );
+        return;
+      }
+      setVideoUrl(res.url);
     } catch (err: any) {
       console.error("Error al subir video:", err);
       setVideoUploadError(
-        "No se pudo subir el archivo de video. Podés pegar un enlace directo (ej: YouTube o Google Drive)."
+        "Para no consumir cuota de servidor, subí el video a tu OneDrive Corporativo AUBASA, YouTube o Google Drive y pegá el enlace abajo."
       );
     } finally {
       setIsUploadingVideo(false);
@@ -227,24 +222,19 @@ export function FormulariosClient({
     setIsUploadingPdf(true);
     setPdfUploadError(null);
     try {
-      const cleanName = file.name
-        .normalize("NFD")
-        .replace(/[\u0300-\u036f]/g, "")
-        .replace(/[^a-zA-Z0-9.-]/g, "_");
-      const filename = `pdf-form-${Date.now()}-${cleanName}`;
-      const { error: uploadError } = await supabase.storage
-        .from("evidencias")
-        .upload(filename, file, {
-          contentType: "application/pdf",
-          upsert: true
-        });
-      if (uploadError) throw uploadError;
-      const { data: pubData } = supabase.storage.from("evidencias").getPublicUrl(filename);
-      setPdfUrl(pubData.publicUrl);
+      const res = await uploadFileZeroEgress(file, "material");
+      if (!res.ok || !res.url) {
+        setPdfUploadError(
+          res.error ||
+            "No se pudo subir el PDF. Podés subirlo a tu OneDrive Corporativo AUBASA y pegar el enlace abajo."
+        );
+        return;
+      }
+      setPdfUrl(res.url);
       setPdfName(file.name);
     } catch (err: any) {
       console.error("Error al subir PDF:", err);
-      setPdfUploadError("No se pudo subir el archivo PDF. Podés pegar el enlace directamente.");
+      setPdfUploadError("No se pudo subir el archivo PDF. Podés pegar el enlace de OneDrive directamente.");
     } finally {
       setIsUploadingPdf(false);
     }
@@ -695,11 +685,30 @@ export function FormulariosClient({
                     border: "1px solid #fcd34d"
                   }}
                 >
-                  <div style={{ fontWeight: 700, color: "#1b365d", marginBottom: "0.35rem", fontSize: "0.95rem" }}>
-                    🎥 1. Video de la Capacitación
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: "0.5rem", flexWrap: "wrap", marginBottom: "0.35rem" }}>
+                    <div style={{ fontWeight: 700, color: "#1b365d", fontSize: "0.95rem" }}>
+                      🎥 1. Video de la Capacitación
+                    </div>
+                    <a
+                      href={DEFAULT_ONEDRIVE_FOLDER_URL}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      style={{
+                        fontSize: "0.75rem",
+                        fontWeight: 700,
+                        color: "#0284c7",
+                        backgroundColor: "#e0f2fe",
+                        padding: "0.25rem 0.6rem",
+                        borderRadius: "6px",
+                        textDecoration: "none",
+                        border: "1px solid #bae6fd"
+                      }}
+                    >
+                      ☁️ Abrir OneDrive AUBASA ↗
+                    </a>
                   </div>
                   <div style={{ fontSize: "0.8rem", color: "#64748b", marginBottom: "0.6rem" }}>
-                    Subí un archivo de video desde tu PC (<strong>.mp4</strong>) o pegá un enlace de YouTube, Vimeo o Google Drive:
+                    Pegá un enlace compartido de <strong>OneDrive Corporativo AUBASA</strong>, SharePoint, YouTube o Google Drive (100% gratuito y sin límites de cuota):
                   </div>
 
                   <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", flexWrap: "wrap", marginBottom: "0.6rem" }}>
@@ -778,11 +787,30 @@ export function FormulariosClient({
                     border: "1px solid #fcd34d"
                   }}
                 >
-                  <div style={{ fontWeight: 700, color: "#1b365d", marginBottom: "0.35rem", fontSize: "0.95rem" }}>
-                    📄 2. Documento PDF Interactivo (Manual / Presentación)
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: "0.5rem", flexWrap: "wrap", marginBottom: "0.35rem" }}>
+                    <div style={{ fontWeight: 700, color: "#1b365d", fontSize: "0.95rem" }}>
+                      📄 2. Documento PDF Interactivo (Manual / Presentación)
+                    </div>
+                    <a
+                      href={DEFAULT_ONEDRIVE_FOLDER_URL}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      style={{
+                        fontSize: "0.75rem",
+                        fontWeight: 700,
+                        color: "#0284c7",
+                        backgroundColor: "#e0f2fe",
+                        padding: "0.25rem 0.6rem",
+                        borderRadius: "6px",
+                        textDecoration: "none",
+                        border: "1px solid #bae6fd"
+                      }}
+                    >
+                      ☁️ Abrir OneDrive AUBASA ↗
+                    </a>
                   </div>
                   <div style={{ fontSize: "0.8rem", color: "#64748b", marginBottom: "0.6rem" }}>
-                    Subí un archivo <strong>.pdf</strong> desde tu computadora para que el empleado pueda leerlo e interactuar en el formulario:
+                    Subí un archivo <strong>.pdf</strong> o pegá el enlace compartido de <strong>OneDrive Corporativo AUBASA</strong> / SharePoint / Drive:
                   </div>
 
                   <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", flexWrap: "wrap", marginBottom: "0.6rem" }}>

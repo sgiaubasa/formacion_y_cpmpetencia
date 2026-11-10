@@ -2,6 +2,7 @@ import { prisma } from "@/lib/prisma";
 import { getCurrentRole } from "@/lib/auth";
 import { redirect } from "next/navigation";
 import { addAccess, removeAccess, updateUserEfficacyPermission } from "./actions";
+import { adminResetUserPasswordAction } from "@/app/auth-actions";
 import { getEfficacyEvaluatorsMap, formatNameFromEmail } from "@/lib/efficacyTraceability";
 
 export default async function AccesosPage() {
@@ -195,21 +196,41 @@ export default async function AccesosPage() {
                       </form>
                     </td>
                     <td>
-                      <form action={removeAccess}>
-                        <input type="hidden" name="id" value={u.id} />
-                        <button
-                          type="submit"
-                          className="btn btn-secondary"
-                          style={{
-                            padding: "0.4rem 0.8rem",
-                            color: "#dc2626",
-                            borderColor: "#fecaca",
-                            background: "#fef2f2"
-                          }}
-                        >
-                          Quitar Acceso
-                        </button>
-                      </form>
+                      <div style={{ display: "flex", gap: "0.4rem", flexWrap: "wrap" }}>
+                        <form action={adminResetUserPasswordAction}>
+                          <input type="hidden" name="email" value={cleanEmail} />
+                          <button
+                            type="submit"
+                            className="btn btn-secondary"
+                            style={{
+                              padding: "0.4rem 0.65rem",
+                              fontSize: "0.78rem",
+                              color: "#0f766e",
+                              borderColor: "#99f6e4",
+                              background: "#f0fdfa"
+                            }}
+                            title="Blanquea la contraseña para que el usuario defina una nueva en su próximo ingreso"
+                          >
+                            🔑 Blanquear Clave
+                          </button>
+                        </form>
+                        <form action={removeAccess}>
+                          <input type="hidden" name="id" value={u.id} />
+                          <button
+                            type="submit"
+                            className="btn btn-secondary"
+                            style={{
+                              padding: "0.4rem 0.65rem",
+                              fontSize: "0.78rem",
+                              color: "#dc2626",
+                              borderColor: "#fecaca",
+                              background: "#fef2f2"
+                            }}
+                          >
+                            Quitar Acceso
+                          </button>
+                        </form>
+                      </div>
                     </td>
                   </tr>
                 );

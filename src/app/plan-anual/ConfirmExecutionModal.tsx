@@ -3,7 +3,7 @@
 import { useState, useRef, useEffect } from "react";
 import SignatureCanvas from "react-signature-canvas";
 import { marcarEjecutada, generarLinkFirma } from "./actions";
-import { supabase } from "@/lib/supabase";
+import { uploadFileZeroEgress, DEFAULT_ONEDRIVE_FOLDER_URL } from "@/lib/cloudStorage";
 
 export function ConfirmExecutionModal({
   recordId,
@@ -70,34 +70,21 @@ export function ConfirmExecutionModal({
     }
 
     if (mode === "upload") {
+      const externalUrl = (formData.get("evidenceUrl") as string | null)?.trim();
       const file = formData.get("evidence") as File | null;
-      if (file && file.size > 0) {
-        try {
-          const cleanName = file.name
-            .normalize("NFD")
-            .replace(/[\u0300-\u036f]/g, "")
-            .replace(/[^a-zA-Z0-9.-]/g, "_");
-          const filename = `${recordId}-${Date.now()}-${cleanName}`;
-
-          const { data: uploadData, error: uploadError } = await supabase.storage
-            .from("evidencias")
-            .upload(filename, file, {
-              contentType: file.type || "application/octet-stream",
-              upsert: true
-            });
-
-          if (!uploadError && uploadData) {
-            const { data: publicData } = supabase.storage
-              .from("evidencias")
-              .getPublicUrl(filename);
-            formData.set("evidenceUrl", publicData.publicUrl);
-            formData.delete("evidence");
-          } else {
-            console.warn("Direct client storage upload fallback:", uploadError);
-          }
-        } catch (uploadEx) {
-          console.warn("Client upload exception, falling back to server action:", uploadEx);
+      if (externalUrl) {
+        formData.set("evidenceUrl", externalUrl);
+        formData.delete("evidence");
+      } else if (file && file.size > 0) {
+        const uploaded = await uploadFileZeroEgress(file, "evidencia");
+        if (uploaded.ok && uploaded.url) {
+          formData.set("evidenceUrl", uploaded.url);
+          formData.delete("evidence");
         }
+      } else {
+        setError("Seleccioná un archivo o pegá un enlace compartido de OneDrive.");
+        setIsSubmitting(false);
+        return;
       }
     }
 
@@ -250,9 +237,33 @@ export function ConfirmExecutionModal({
             </div>
 
             {mode === "upload" ? (
-              <div>
-                <label className="form-label">Evidencia (Planilla Firmada)</label>
-                <input type="file" name="evidence" className="form-input" accept=".pdf,image/*" required />
+              <div style={{ display: "flex", flexDirection: "column", gap: "0.6rem" }}>
+                <div>
+                  <label className="form-label">Evidencia (Planilla Firmada / Certificado PDF)</label>
+                  <input type="file" name="evidence" className="form-input" accept=".pdf,image/*" />
+                </div>
+                <div style={{ backgroundColor: "#f0f9ff", padding: "0.65rem 0.8rem", borderRadius: "8px", border: "1px solid #bae6fd" }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "0.35rem" }}>
+                    <span style={{ fontSize: "0.78rem", fontWeight: 700, color: "#0369a1" }}>
+                      ☁️ O pegar enlace de OneDrive / SharePoint Corporativo:
+                    </span>
+                    <a
+                      href={DEFAULT_ONEDRIVE_FOLDER_URL}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      style={{ fontSize: "0.75rem", fontWeight: 700, color: "#0284c7", textDecoration: "underline" }}
+                    >
+                      Abrir OneDrive AUBASA ↗
+                    </a>
+                  </div>
+                  <input
+                    type="url"
+                    name="evidenceUrl"
+                    className="form-input"
+                    placeholder="https://aubasa-my.sharepoint.com/..."
+                    style={{ fontSize: "0.82rem", backgroundColor: "#ffffff" }}
+                  />
+                </div>
               </div>
             ) : (
               <>

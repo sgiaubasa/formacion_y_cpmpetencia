@@ -88,6 +88,49 @@ export default async function ConfiguracionPage() {
             />
           </div>
 
+          <div
+            style={{
+              gridColumn: '1 / -1',
+              backgroundColor: '#f0f9ff',
+              border: '1px solid #bae6fd',
+              borderRadius: '10px',
+              padding: '1rem',
+              marginTop: '0.5rem'
+            }}
+          >
+            <h3 style={{ margin: '0 0 0.4rem 0', fontSize: '1.05rem', color: '#0369a1' }}>
+              ☁️ Conexión con OneDrive / SharePoint Corporativo AUBASA (100% Gratuito y Sin Límites de Cuota)
+            </h3>
+            <p style={{ margin: '0 0 0.85rem 0', fontSize: '0.85rem', color: '#334155' }}>
+              Para evitar consumir cuota de transferencia (Egress), el sistema utiliza almacenamiento propio y enlaces de OneDrive Corporativo. Si además pegás aquí un Webhook de Power Automate (<em>&ldquo;Cuando se recibe una solicitud HTTP &rarr; OneDrive for Business: Crear archivo &rarr; Crear vínculo para compartir &rarr; Respuesta&rdquo;</em>), cada archivo subido desde la app se guardará automáticamente en tu OneDrive de AUBASA.
+            </p>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
+              <div className="form-group" style={{ marginBottom: 0 }}>
+                <label className="form-label">Carpeta Compartida de OneDrive AUBASA (Acceso Rápido)</label>
+                <input
+                  type="url"
+                  name="onedrive_folder_url"
+                  className="form-input"
+                  defaultValue={map['onedrive_folder_url'] || 'https://aubasa-my.sharepoint.com/'}
+                  placeholder="https://aubasa-my.sharepoint.com/..."
+                />
+              </div>
+              <div className="form-group" style={{ marginBottom: 0 }}>
+                <label className="form-label">Webhook Power Automate de Subida a OneDrive (Opcional)</label>
+                <input
+                  type="password"
+                  name="onedrive_upload_webhook_url"
+                  className="form-input"
+                  placeholder={
+                    map['onedrive_upload_webhook_url']
+                      ? '•••••••••••••••••••••••••••• (Conectado con OneDrive)'
+                      : 'https://prod-xx.brazilsouth.logic.azure.com:443/workflows/...'
+                  }
+                />
+              </div>
+            </div>
+          </div>
+
           <div style={{ gridColumn: '1 / -1', display: 'flex', justifyContent: 'flex-end' }}>
             <button type="submit" className="btn btn-primary">Guardar Configuración de Envío</button>
           </div>

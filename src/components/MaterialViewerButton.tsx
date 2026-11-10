@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { getEmbedPreviewUrl } from "@/lib/cloudStorage";
 
 export interface MaterialInfo {
   url: string;
@@ -29,6 +30,8 @@ export function MaterialViewerButton({
     lower.endsWith(".mov") ||
     lower.endsWith(".ogg");
   const isPdf = material.type === "pdf" || lower.endsWith(".pdf");
+
+  const { embedUrl, isOneDrive, canDirectVideoTag } = getEmbedPreviewUrl(material.url);
 
   const label = isVideo
     ? "🎬 Ver Material (Video)"
@@ -107,7 +110,7 @@ export function MaterialViewerButton({
             >
               <div>
                 <div style={{ fontSize: "0.75rem", color: "#64748b", textTransform: "uppercase", fontWeight: 700 }}>
-                  Material de Capacitación
+                  Material de Capacitación {isOneDrive ? "— ☁️ OneDrive AUBASA" : ""}
                 </div>
                 <h3 style={{ margin: 0, fontSize: "1.05rem", color: "#0f172a" }}>{trainingName}</h3>
               </div>
@@ -122,10 +125,12 @@ export function MaterialViewerButton({
                     padding: "0.4rem 0.75rem",
                     fontSize: "0.8rem",
                     textDecoration: "none",
-                    backgroundColor: "white"
+                    backgroundColor: isOneDrive ? "#0284c7" : "white",
+                    color: isOneDrive ? "white" : undefined,
+                    fontWeight: isOneDrive ? 700 : 500
                   }}
                 >
-                  ↗️ Abrir en pestaña nueva
+                  {isOneDrive ? "☁️ Abrir en OneDrive / SharePoint" : "↗️ Abrir en pestaña nueva"}
                 </a>
                 <button
                   type="button"
@@ -144,8 +149,20 @@ export function MaterialViewerButton({
               </div>
             </div>
 
-            <div style={{ padding: "1rem", overflowY: "auto", flex: 1, backgroundColor: "#0f172a", display: "flex", justifyContent: "center", alignItems: "center" }}>
-              {isVideo ? (
+            <div
+              style={{
+                padding: "1rem",
+                overflowY: "auto",
+                flex: 1,
+                backgroundColor: "#0f172a",
+                display: "flex",
+                flexDirection: "column",
+                justifyContent: "center",
+                alignItems: "center",
+                gap: "0.75rem"
+              }}
+            >
+              {isVideo && canDirectVideoTag ? (
                 <video
                   src={material.url}
                   controls
@@ -156,9 +173,10 @@ export function MaterialViewerButton({
                 </video>
               ) : (
                 <iframe
-                  src={material.url}
+                  src={embedUrl}
                   title={trainingName}
                   style={{ width: "100%", height: "75vh", border: "none", borderRadius: "8px", backgroundColor: "white" }}
+                  allow="autoplay; fullscreen"
                 />
               )}
             </div>

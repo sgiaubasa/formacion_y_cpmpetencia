@@ -7,44 +7,86 @@ import { join } from "path";
 import fs from "fs";
 import { encryptRecordId } from "@/lib/crypto";
 import { syncRecordToPowerAutomate } from "@/lib/powerAutomate";
-import { createClient } from "@supabase/supabase-js";
+import crypto from "crypto";
 import { saveTrainingMaterialForRecords } from "@/lib/trainingMaterials";
 import { buildSvgSignatureDataUri } from "@/app/api/webhooks/microsoft-forms/route";
 
 async function saveEvidenceFile(file: File, recordId: number): Promise<string> {
-  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
-  const supabaseKey =
-    process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+  const cleanName = file.name
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^a-zA-Z0-9._-]/g, "_");
+  const bytes = await file.arrayBuffer();
+  const buffer = Buffer.from(bytes);
+  const base64Data = buffer.toString("base64");
+  const contentType = file.type || "application/octet-stream";
 
-  if (supabaseUrl && supabaseKey) {
-    try {
-      const supabaseAdmin = createClient(supabaseUrl, supabaseKey);
-      const cleanName = file.name
-        .normalize("NFD")
-        .replace(/[\u0300-\u036f]/g, "")
-        .replace(/[^a-zA-Z0-9.-]/g, "_");
-      const filename = `${recordId}-${Date.now()}-${cleanName}`;
-      const bytes = await file.arrayBuffer();
-      const buffer = Buffer.from(bytes);
+  // 1. Subir a OneDrive Corporativo vía Webhook de Power Automate si está configurado
+  try {
+    const setting = await prisma.appSetting.findUnique({
+      where: { id: "onedrive_upload_webhook_url" }
+    });
+    const oneDriveWebhookUrl =
+      setting?.value?.trim() || process.env.POWER_AUTOMATE_ONEDRIVE_WEBHOOK_URL || "";
 
-      const { data, error } = await supabaseAdmin.storage
-        .from("evidencias")
-        .upload(filename, buffer, {
-          contentType: file.type || "application/octet-stream",
-          upsert: true
-        });
+    if (oneDriveWebhookUrl) {
+      const webhookRes = await fetch(oneDriveWebhookUrl, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          fileName: `${recordId}-${Date.now()}-${cleanName}`,
+          originalName: file.name,
+          contentType,
+          category: "evidencia",
+          base64: base64Data
+        })
+      });
 
-      if (!error && data) {
-        const { data: publicData } = supabaseAdmin.storage
-          .from("evidencias")
-          .getPublicUrl(filename);
-        return publicData.publicUrl;
-      } else {
-        console.error("Supabase storage upload error:", error);
+      if (webhookRes.ok) {
+        const text = await webhookRes.text();
+        try {
+          const parsed = JSON.parse(text);
+          const returnedUrl = parsed.url || parsed.webUrl || parsed.shareUrl || parsed.link;
+          if (returnedUrl) return returnedUrl;
+        } catch {
+          if (text.trim().startsWith("http")) return text.trim();
+        }
       }
-    } catch (storageErr) {
-      console.error("Storage upload exception:", storageErr);
     }
+  } catch (webhookErr) {
+    console.warn("OneDrive webhook upload fallback:", webhookErr);
+  }
+
+  // 2. Guardar en almacenamiento interno con caché inmutable (0 bytes de Supabase Storage Egress)
+  try {
+    const fileId = `${recordId}_${Date.now()}_${crypto.randomBytes(3).toString("hex")}`;
+    await prisma.appSetting.upsert({
+      where: { id: `cloud_file_${fileId}` },
+      update: {
+        value: JSON.stringify({
+          name: file.name,
+          cleanName,
+          contentType,
+          category: "evidencia",
+          createdAt: new Date().toISOString(),
+          base64: base64Data
+        })
+      },
+      create: {
+        id: `cloud_file_${fileId}`,
+        value: JSON.stringify({
+          name: file.name,
+          cleanName,
+          contentType,
+          category: "evidencia",
+          createdAt: new Date().toISOString(),
+          base64: base64Data
+        })
+      }
+    });
+    return `/api/files/${fileId}`;
+  } catch (dbErr) {
+    console.warn("DB file save fallback:", dbErr);
   }
 
   try {
