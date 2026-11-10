@@ -17,9 +17,9 @@ export default async function TransferenciasPage() {
   const transferencias = await prisma.pendingTransfer.findMany({
     where: whereClause,
     include: {
-      employee: { include: { sector: true } },
-      targetProfile: true,
-      targetSector: true
+      employee: { select: { id: true, name: true, sector: { select: { name: true } } } },
+      targetProfile: { select: { id: true, title: true } },
+      targetSector: { select: { id: true, name: true } }
     },
     orderBy: { createdAt: 'desc' }
   });

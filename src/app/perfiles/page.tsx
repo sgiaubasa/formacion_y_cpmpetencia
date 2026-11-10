@@ -30,10 +30,12 @@ export default async function PerfilesPage({ searchParams }: { searchParams: Pro
 
   const perfiles = await prisma.jobProfile.findMany({
     where: whereClause,
-    include: {
-      requirements: {
-        include: { training: true }
-      }
+    select: {
+      id: true,
+      title: true,
+      gerencia: true,
+      status: true,
+      conocimientosEsp: true
     }
   });
 

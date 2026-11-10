@@ -128,7 +128,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setMsg("");
     
     const { error } = await supabase.auth.signInWithPassword({ email, password });
-    if (error) setError("Correo o contraseña incorrectos");
+    if (error) {
+      if (error.message?.includes("exceed_egress_quota")) {
+        setError("El servidor de base de datos (Supabase) alcanzó el límite mensual de transferencia (Egress Quota). El administrador debe ampliar el plan o habilitar la cuota en el panel de Supabase para restablecer el servicio.");
+      } else {
+        setError("Correo o contraseña incorrectos");
+      }
+    }
     setIsLoggingIn(false);
   };
 

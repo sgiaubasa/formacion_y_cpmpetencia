@@ -69,8 +69,8 @@ export default async function PersonalPage({
   const empleados = await prisma.employee.findMany({
     where: whereClause,
     include: {
-      sector: true,
-      jobProfile: true
+      sector: { select: { id: true, name: true } },
+      jobProfile: { select: { id: true, title: true } }
     },
     orderBy: { name: 'asc' }
   });

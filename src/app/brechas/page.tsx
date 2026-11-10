@@ -27,9 +27,9 @@ export default async function BrechasPage({ searchParams }: { searchParams: Prom
   const empleados = await prisma.employee.findMany({
     where: { isActive: true, ...whereClause },
     include: {
-      sector: true,
-      jobProfile: true,
-      trainingRecords: true
+      sector: { select: { id: true, name: true } },
+      jobProfile: { select: { id: true, title: true, conocimientosEsp: true } },
+      trainingRecords: { select: { status: true, trainingName: true } }
     },
     orderBy: { name: 'asc' }
   });
