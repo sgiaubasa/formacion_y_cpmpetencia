@@ -5,7 +5,7 @@ import { BajaButton } from "@/components/BajaButton";
 import { getUniqueActiveProfiles } from "@/lib/profileUtils";
 import { getCurrentRole, isSectorRole, getSectorIdFromRole, getAllowedSectorNames } from "@/lib/auth";
 import { BASES_OPERATIVAS } from "@/lib/constants";
-import { autoReconcileDuplicateTransferredEmployees } from "@/lib/employeeMerge";
+import { autoReconcileDuplicateTransferredEmployees, stripAccents } from "@/lib/employeeMerge";
 
 export default async function PersonalPage({
   searchParams
@@ -50,13 +50,18 @@ export default async function PersonalPage({
 
   const andConditions: any[] = [{ isActive: true }];
   if (q) {
-    andConditions.push({
-      OR: [
-        { name: { contains: q, mode: "insensitive" } },
-        { legajo: { contains: q, mode: "insensitive" } },
-        { dni: { contains: q, mode: "insensitive" } }
-      ]
+    const allForSearch = await prisma.employee.findMany({
+      where: { isActive: true },
+      select: { id: true, name: true, legajo: true, dni: true }
     });
+    const tokens = stripAccents(q).split(/\s+/).filter(Boolean);
+    const matchedIds = allForSearch
+      .filter((e) => {
+        const hay = `${stripAccents(e.name)} ${stripAccents(e.legajo)} ${stripAccents(e.dni || "")}`;
+        return tokens.every((t) => hay.includes(t));
+      })
+      .map((e) => e.id);
+    andConditions.push({ id: { in: matchedIds.length > 0 ? matchedIds : [-1] } });
   }
   if (jobFilter) {
     andConditions.push({ jobProfileId: jobFilter });

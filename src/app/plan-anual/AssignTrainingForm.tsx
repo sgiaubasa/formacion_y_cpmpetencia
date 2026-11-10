@@ -65,11 +65,22 @@ export function AssignTrainingForm({
         : filterSectorForAssign
         ? parseInt(filterSectorForAssign, 10)
         : null;
-    const q = empSearchAssign.trim().toLowerCase();
+    const qNorm = empSearchAssign
+      .trim()
+      .normalize("NFD")
+      .replace(/[\u0300-\u036f]/g, "")
+      .toLowerCase();
+    const qTokens = qNorm.split(/\s+/).filter(Boolean);
 
     return allEmployees.filter((e) => {
       if (secId && e.sectorId !== secId) return false;
-      if (q && !e.name.toLowerCase().includes(q) && !e.legajo.toLowerCase().includes(q)) return false;
+      if (qTokens.length > 0) {
+        const hay = `${e.name} ${e.legajo}`
+          .normalize("NFD")
+          .replace(/[\u0300-\u036f]/g, "")
+          .toLowerCase();
+        if (!qTokens.every((t) => hay.includes(t))) return false;
+      }
       return true;
     });
   }, [allEmployees, isSector, sectorRoleId, filterSectorForAssign, empSearchAssign]);

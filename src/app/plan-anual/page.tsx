@@ -18,7 +18,7 @@ import { getDefaultInstructorForSector } from "@/lib/instructorDefaults";
 import { encryptRecordId } from "@/lib/crypto";
 import { buildSvgSignatureDataUri } from "@/app/api/webhooks/microsoft-forms/route";
 import { getCanonicalTrainingName } from "@/lib/canonicalTrainings";
-import { autoReconcileDuplicateTransferredEmployees } from "@/lib/employeeMerge";
+import { autoReconcileDuplicateTransferredEmployees, stripAccents } from "@/lib/employeeMerge";
 
 export default async function PlanAnualPage({ searchParams }: { searchParams: Promise<{ tab?: string, q?: string, employeeId?: string, empName?: string, sectorId?: string, baseOperativa?: string, jobProfileId?: string, statusFilter?: string }> }) {
   await autoReconcileDuplicateTransferredEmployees();
@@ -75,11 +75,20 @@ export default async function PlanAnualPage({ searchParams }: { searchParams: Pr
   if (jobProfileId) employeeAndConditions.push({ jobProfileId });
   if (baseOperativa) employeeAndConditions.push({ baseOperativa });
   if (empName) {
+    // Búsqueda insensible a tildes/acentos (ej. "gutierrez" encuentra tanto "Gutierrez" como "Gutiérrez")
+    const allForSearch = await prisma.employee.findMany({
+      select: { id: true, name: true, legajo: true, dni: true }
+    });
+    const searchTokens = stripAccents(empName).split(/\s+/).filter(Boolean);
+    const matchedIds = allForSearch
+      .filter((e) => {
+        const haystack = `${stripAccents(e.name)} ${stripAccents(e.legajo)} ${stripAccents(e.dni || "")}`;
+        return searchTokens.every((tok) => haystack.includes(tok));
+      })
+      .map((e) => e.id);
+
     employeeAndConditions.push({
-      OR: [
-        { name: { contains: empName, mode: 'insensitive' } },
-        { legajo: { contains: empName, mode: 'insensitive' } }
-      ]
+      id: { in: matchedIds.length > 0 ? matchedIds : [-1] }
     });
   }
   const employeeFilters: any =
@@ -160,6 +169,13 @@ export default async function PlanAnualPage({ searchParams }: { searchParams: Pr
         instructorName: true,
         evidencePath: true,
         effectiveness: true,
+        sourceProfile: {
+          select: {
+            id: true,
+            title: true,
+            gerencia: true
+          }
+        },
         employee: {
           select: {
             id: true,
@@ -506,8 +522,19 @@ export default async function PlanAnualPage({ searchParams }: { searchParams: Pr
                 const displayTopic = getCanonicalTrainingName(r.trainingName);
                 return (
                   <tr key={r.id}>
-                    <td style={{ fontWeight: 500 }}>{r.employee.name}</td>
-                    <td>{r.employee.sector.name}</td>
+                    <td style={{ fontWeight: 500 }}>
+                      <div>{r.employee.name}</div>
+                      <div style={{ fontSize: '0.75rem', color: '#64748b' }}>Leg. {r.employee.legajo}</div>
+                    </td>
+                    <td>
+                      <div>{r.employee.sector.name}</div>
+                      {r.sourceProfile?.gerencia &&
+                        r.sourceProfile.gerencia.toLowerCase().trim() !== r.employee.sector.name.toLowerCase().trim() && (
+                          <div style={{ fontSize: '0.72rem', color: '#0369a1', fontWeight: 600, marginTop: '0.15rem' }}>
+                            (Historial: {r.sourceProfile.gerencia})
+                          </div>
+                        )}
+                    </td>
                     <td style={{ fontSize: '0.82rem', color: '#475569' }}>{r.employee.baseOperativa || '-'}</td>
                     <td style={{ maxWidth: '250px' }}>
                       <div title={r.trainingName}>{displayTopic}</div>

@@ -115,18 +115,25 @@ export function PlanAnualFilters({
   const filteredEmployees = useMemo(() => {
     const secIdNum = selectedSectorId ? parseInt(selectedSectorId, 10) : null;
     const profIdNum = selectedJobProfileId ? parseInt(selectedJobProfileId, 10) : null;
-    const searchLower = empSearch.trim().toLowerCase();
+    const searchNorm = empSearch
+      .trim()
+      .normalize("NFD")
+      .replace(/[\u0300-\u036f]/g, "")
+      .toLowerCase();
+    const searchTokens = searchNorm.split(/\s+/).filter(Boolean);
 
     return allEmployees.filter((e) => {
       if (secIdNum && e.sectorId !== secIdNum) return false;
       if (selectedBase && e.baseOperativa !== selectedBase) return false;
       if (profIdNum && e.jobProfileId !== profIdNum) return false;
-      if (
-        searchLower &&
-        !e.name.toLowerCase().includes(searchLower) &&
-        !e.legajo.toLowerCase().includes(searchLower)
-      ) {
-        return false;
+      if (searchTokens.length > 0) {
+        const hay = `${e.name} ${e.legajo}`
+          .normalize("NFD")
+          .replace(/[\u0300-\u036f]/g, "")
+          .toLowerCase();
+        if (!searchTokens.every((tok) => hay.includes(tok))) {
+          return false;
+        }
       }
       return true;
     });
