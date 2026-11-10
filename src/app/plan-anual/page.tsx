@@ -18,17 +18,27 @@ import { getDefaultInstructorForSector } from "@/lib/instructorDefaults";
 import { encryptRecordId } from "@/lib/crypto";
 import { buildSvgSignatureDataUri } from "@/app/api/webhooks/microsoft-forms/route";
 import { getCanonicalTrainingName } from "@/lib/canonicalTrainings";
+import { autoReconcileDuplicateTransferredEmployees } from "@/lib/employeeMerge";
 
 export default async function PlanAnualPage({ searchParams }: { searchParams: Promise<{ tab?: string, q?: string, employeeId?: string, empName?: string, sectorId?: string, baseOperativa?: string, jobProfileId?: string, statusFilter?: string }> }) {
+  await autoReconcileDuplicateTransferredEmployees();
   const role = await getCurrentRole();
   const isSector = await isSectorRole(role);
   const sectorRoleId = await getSectorIdFromRole(role);
 
   let allowedSectors: string[] | null = null;
+  let allowedSectorIds: number[] | null = null;
   if (isSector && sectorRoleId) {
     const mySector = await prisma.sector.findUnique({ where: { id: sectorRoleId } });
     if (mySector) {
       allowedSectors = await getAllowedSectorNames(role, mySector.name);
+      const secObjs = await prisma.sector.findMany({
+        where: { name: { in: allowedSectors } },
+        select: { id: true }
+      });
+      allowedSectorIds = secObjs.map((s) => s.id);
+    } else {
+      allowedSectorIds = [sectorRoleId];
     }
   }
 
@@ -43,16 +53,37 @@ export default async function PlanAnualPage({ searchParams }: { searchParams: Pr
   const jobProfileId = sp.jobProfileId ? parseInt(sp.jobProfileId) : undefined;
   const statusFilter = sp.statusFilter || undefined;
 
-  const employeeFilters: any = {};
-  if (sectorId) employeeFilters.sectorId = sectorId;
-  if (jobProfileId) employeeFilters.jobProfileId = jobProfileId;
-  if (baseOperativa) employeeFilters.baseOperativa = baseOperativa;
-  if (empName) {
-    employeeFilters.OR = [
-      { name: { contains: empName, mode: 'insensitive' } },
-      { legajo: { contains: empName, mode: 'insensitive' } }
-    ];
+  const employeeAndConditions: any[] = [];
+  if (isSector && sectorId) {
+    const targetIds = allowedSectorIds && allowedSectorIds.length > 0 ? allowedSectorIds : [sectorId];
+    // El sector ve tanto a sus empleados actuales como a los empleados que están en proceso de transferencia hacia su sector
+    employeeAndConditions.push({
+      OR: [
+        { sectorId: { in: targetIds } },
+        {
+          pendingTransfers: {
+            some: {
+              targetSectorId: { in: targetIds }
+            }
+          }
+        }
+      ]
+    });
+  } else if (sectorId) {
+    employeeAndConditions.push({ sectorId });
   }
+  if (jobProfileId) employeeAndConditions.push({ jobProfileId });
+  if (baseOperativa) employeeAndConditions.push({ baseOperativa });
+  if (empName) {
+    employeeAndConditions.push({
+      OR: [
+        { name: { contains: empName, mode: 'insensitive' } },
+        { legajo: { contains: empName, mode: 'insensitive' } }
+      ]
+    });
+  }
+  const employeeFilters: any =
+    employeeAndConditions.length > 0 ? { AND: employeeAndConditions } : {};
 
   let statusWhere: any = {};
   if (statusFilter === 'REPROGRAMADA') {
@@ -322,10 +353,36 @@ export default async function PlanAnualPage({ searchParams }: { searchParams: Pr
     );
   }
 
-  const allEmployees = await prisma.employee.findMany({ 
+  const rawEmployees = await prisma.employee.findMany({ 
     where: { isActive: true },
-    select: { id: true, name: true, legajo: true, baseOperativa: true, sectorId: true, jobProfileId: true },
+    select: {
+      id: true,
+      name: true,
+      legajo: true,
+      baseOperativa: true,
+      sectorId: true,
+      jobProfileId: true,
+      pendingTransfers: {
+        where: { status: 'PENDING' },
+        select: { targetSectorId: true }
+      }
+    },
     orderBy: { name: 'asc' } 
+  });
+  const allEmployees = rawEmployees.map((emp) => {
+    const isBeingTransferredToMySector =
+      isSector &&
+      sectorRoleId &&
+      emp.sectorId !== sectorRoleId &&
+      emp.pendingTransfers.some((pt) => pt.targetSectorId === sectorRoleId);
+    return {
+      id: emp.id,
+      name: isBeingTransferredToMySector ? `${emp.name} (En Transferencia)` : emp.name,
+      legajo: emp.legajo,
+      baseOperativa: emp.baseOperativa,
+      sectorId: isBeingTransferredToMySector ? sectorRoleId! : emp.sectorId,
+      jobProfileId: emp.jobProfileId
+    };
   });
   const allSectors = await prisma.sector.findMany({
     select: { id: true, name: true },

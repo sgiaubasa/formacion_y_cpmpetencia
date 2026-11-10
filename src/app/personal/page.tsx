@@ -5,33 +5,35 @@ import { BajaButton } from "@/components/BajaButton";
 import { getUniqueActiveProfiles } from "@/lib/profileUtils";
 import { getCurrentRole, isSectorRole, getSectorIdFromRole, getAllowedSectorNames } from "@/lib/auth";
 import { BASES_OPERATIVAS } from "@/lib/constants";
+import { autoReconcileDuplicateTransferredEmployees } from "@/lib/employeeMerge";
 
-export default async function PersonalPage({ 
-  searchParams 
-}: { 
-  searchParams: Promise<{ q?: string, sectorId?: string, jobProfileId?: string, baseOperativa?: string }> 
+export default async function PersonalPage({
+  searchParams
+}: {
+  searchParams: Promise<{ q?: string; sectorId?: string; jobProfileId?: string; baseOperativa?: string }>;
 }) {
+  await autoReconcileDuplicateTransferredEmployees();
   const sp = await searchParams;
   const role = await getCurrentRole();
   const isSector = await isSectorRole(role);
   const mySectorId = await getSectorIdFromRole(role);
 
-  let mySectorName = '';
+  let mySectorName = "";
   if (isSector && mySectorId) {
     const mySector = await prisma.sector.findUnique({ where: { id: mySectorId } });
-    mySectorName = mySector?.name || '';
+    mySectorName = mySector?.name || "";
   }
-  const isComercialSector = isSector && mySectorName.toLowerCase().includes('comercial');
-  const isAdminOrRRHH = ['ADMIN', 'SGI', 'RRHH'].includes(role);
+  const isComercialSector = isSector && mySectorName.toLowerCase().includes("comercial");
+  const isAdminOrRRHH = ["ADMIN", "SGI", "RRHH"].includes(role);
 
   // Permiso para dar de alta nuevo personal: Administradores/RRHH o referente de Comercial
   const canAddEmployee = isAdminOrRRHH || isComercialSector;
 
-  const q = sp.q || '';
+  const q = sp.q || "";
   const jobFilter = sp.jobProfileId ? parseInt(sp.jobProfileId) : undefined;
   const baseFilter = sp.baseOperativa || undefined;
-  let userSelectedSectorFilter = sp.sectorId ? parseInt(sp.sectorId) : undefined;
-  
+  const userSelectedSectorFilter = sp.sectorId ? parseInt(sp.sectorId) : undefined;
+
   let allowedSectorIds: number[] | undefined = undefined;
   let allowedSectors: string[] | null = null;
 
@@ -40,52 +42,77 @@ export default async function PersonalPage({
     if (mySector) {
       allowedSectors = await getAllowedSectorNames(role, mySector.name);
       const allowedObjs = await prisma.sector.findMany({ where: { name: { in: allowedSectors } } });
-      allowedSectorIds = allowedObjs.map(s => s.id);
+      allowedSectorIds = allowedObjs.map((s) => s.id);
     } else {
       allowedSectorIds = [mySectorId];
     }
   }
 
-  const whereClause: any = { isActive: true };
+  const andConditions: any[] = [{ isActive: true }];
   if (q) {
-    whereClause.OR = [
-      { name: { contains: q, mode: 'insensitive' } },
-      { legajo: { contains: q, mode: 'insensitive' } },
-      { dni: { contains: q, mode: 'insensitive' } }
-    ];
+    andConditions.push({
+      OR: [
+        { name: { contains: q, mode: "insensitive" } },
+        { legajo: { contains: q, mode: "insensitive" } },
+        { dni: { contains: q, mode: "insensitive" } }
+      ]
+    });
   }
   if (jobFilter) {
-    whereClause.jobProfileId = jobFilter;
+    andConditions.push({ jobProfileId: jobFilter });
   }
   if (baseFilter) {
-    whereClause.baseOperativa = baseFilter;
+    andConditions.push({ baseOperativa: baseFilter });
   }
   if (allowedSectorIds) {
-    whereClause.sectorId = { in: allowedSectorIds };
+    // El sector ve a su propio personal Y a las personas que están en proceso de transferencia hacia su sector
+    andConditions.push({
+      OR: [
+        { sectorId: { in: allowedSectorIds } },
+        {
+          pendingTransfers: {
+            some: {
+              targetSectorId: { in: allowedSectorIds }
+            }
+          }
+        }
+      ]
+    });
   } else if (userSelectedSectorFilter) {
-    whereClause.sectorId = userSelectedSectorFilter;
+    andConditions.push({ sectorId: userSelectedSectorFilter });
   }
 
   const empleados = await prisma.employee.findMany({
-    where: whereClause,
+    where: { AND: andConditions },
     include: {
       sector: { select: { id: true, name: true } },
-      jobProfile: { select: { id: true, title: true } }
+      jobProfile: { select: { id: true, title: true } },
+      pendingTransfers: {
+        where: { status: "PENDING" },
+        select: {
+          id: true,
+          targetSector: { select: { name: true } },
+          targetProfile: { select: { title: true } }
+        }
+      }
     },
-    orderBy: { name: 'asc' }
+    orderBy: { name: "asc" }
   });
 
-  const sectores = await prisma.sector.findMany({ orderBy: { name: 'asc' } });
+  const sectores = await prisma.sector.findMany({ orderBy: { name: "asc" } });
   const perfiles = await getUniqueActiveProfiles(allowedSectors);
 
-  // Comprobar si se está visualizando Comercial para mostrar la columna DNI
-  const comercialSector = await prisma.sector.findFirst({ where: { name: { contains: 'Comercial', mode: 'insensitive' } } });
-  const isComercialView = isComercialSector || (userSelectedSectorFilter && comercialSector && userSelectedSectorFilter === comercialSector.id);
+  const comercialSector = await prisma.sector.findFirst({
+    where: { name: { contains: "Comercial", mode: "insensitive" } }
+  });
+  const isComercialView =
+    isComercialSector ||
+    (userSelectedSectorFilter && comercialSector && userSelectedSectorFilter === comercialSector.id);
 
   async function darDeBaja(formData: FormData) {
-    "use server"
+    "use server";
     const id = parseInt(formData.get("id") as string);
-    const empToBaja = await prisma.employee.findUnique({ 
+    const empToBaja = await prisma.employee.findUnique({
       where: { id },
       include: { sector: true }
     });
@@ -95,9 +122,11 @@ export default async function PersonalPage({
     const isSectorRoleActive = await isSectorRole(currentRole);
     const currentSectorId = await getSectorIdFromRole(currentRole);
 
-    // Si es usuario sectorial de Comercial, solo puede dar de baja a empleados de Comercial
     if (isSectorRoleActive) {
-      if (!empToBaja.sector.name.toLowerCase().includes('comercial') || empToBaja.sectorId !== currentSectorId) {
+      if (
+        !empToBaja.sector.name.toLowerCase().includes("comercial") ||
+        empToBaja.sectorId !== currentSectorId
+      ) {
         return;
       }
     }
@@ -106,7 +135,7 @@ export default async function PersonalPage({
       where: { id },
       data: { isActive: false }
     });
-    revalidatePath('/personal');
+    revalidatePath("/personal");
   }
 
   return (
@@ -120,53 +149,76 @@ export default async function PersonalPage({
         )}
       </div>
 
-      <div className="card" style={{ marginBottom: '1rem', padding: '1rem' }}>
-        <form method="get" style={{ display: 'flex', gap: '1rem', alignItems: 'flex-end', flexWrap: 'wrap' }}>
-          
+      <div className="card" style={{ marginBottom: "1rem", padding: "1rem" }}>
+        <form method="get" style={{ display: "flex", gap: "1rem", alignItems: "flex-end", flexWrap: "wrap" }}>
           {!isSector && (
-            <div style={{ flex: '1 1 180px' }}>
-              <label className="form-label" style={{ fontSize: '0.75rem', marginBottom: '0.25rem' }}>Sector</label>
-              <select name="sectorId" className="form-input" defaultValue={sp.sectorId || ''}>
+            <div style={{ flex: "1 1 180px" }}>
+              <label className="form-label" style={{ fontSize: "0.75rem", marginBottom: "0.25rem" }}>
+                Sector
+              </label>
+              <select name="sectorId" className="form-input" defaultValue={sp.sectorId || ""}>
                 <option value="">Todos los sectores</option>
-                {sectores.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
+                {sectores.map((s) => (
+                  <option key={s.id} value={s.id}>
+                    {s.name}
+                  </option>
+                ))}
               </select>
             </div>
           )}
 
-          <div style={{ flex: '1 1 180px' }}>
-            <label className="form-label" style={{ fontSize: '0.75rem', marginBottom: '0.25rem' }}>Base Operativa</label>
-            <select name="baseOperativa" className="form-input" defaultValue={sp.baseOperativa || ''}>
+          <div style={{ flex: "1 1 180px" }}>
+            <label className="form-label" style={{ fontSize: "0.75rem", marginBottom: "0.25rem" }}>
+              Base Operativa
+            </label>
+            <select name="baseOperativa" className="form-input" defaultValue={sp.baseOperativa || ""}>
               <option value="">Todas las bases</option>
-              {BASES_OPERATIVAS.map(b => <option key={b} value={b}>{b}</option>)}
+              {BASES_OPERATIVAS.map((b) => (
+                <option key={b} value={b}>
+                  {b}
+                </option>
+              ))}
             </select>
           </div>
 
-          <div style={{ flex: '1 1 180px' }}>
-            <label className="form-label" style={{ fontSize: '0.75rem', marginBottom: '0.25rem' }}>Perfil de Puesto</label>
-            <select name="jobProfileId" className="form-input" defaultValue={sp.jobProfileId || ''}>
+          <div style={{ flex: "1 1 180px" }}>
+            <label className="form-label" style={{ fontSize: "0.75rem", marginBottom: "0.25rem" }}>
+              Perfil de Puesto
+            </label>
+            <select name="jobProfileId" className="form-input" defaultValue={sp.jobProfileId || ""}>
               <option value="">Todos los puestos</option>
-              {perfiles.map(j => <option key={j.id} value={j.id}>{j.title}</option>)}
+              {perfiles.map((j) => (
+                <option key={j.id} value={j.id}>
+                  {j.title}
+                </option>
+              ))}
             </select>
           </div>
 
-          <div style={{ flex: '2 1 250px' }}>
-            <label className="form-label" style={{ fontSize: '0.75rem', marginBottom: '0.25rem' }}>
-              {isComercialView ? 'Buscador (Nombre/Legajo/DNI)' : 'Buscador (Nombre/Legajo)'}
+          <div style={{ flex: "2 1 250px" }}>
+            <label className="form-label" style={{ fontSize: "0.75rem", marginBottom: "0.25rem" }}>
+              {isComercialView ? "Buscador (Nombre/Legajo/DNI)" : "Buscador (Nombre/Legajo)"}
             </label>
             <input type="text" name="q" className="form-input" placeholder="Buscar empleado..." defaultValue={q} />
           </div>
 
-          <button type="submit" className="btn btn-primary" style={{ padding: '0.5rem 1rem' }}>Filtrar</button>
-          
+          <button type="submit" className="btn btn-primary" style={{ padding: "0.5rem 1rem" }}>
+            Filtrar
+          </button>
+
           {(sp.sectorId || sp.jobProfileId || sp.baseOperativa || q) && (
-            <Link href={`/personal`} className="btn btn-secondary" style={{ padding: '0.5rem 1rem', textDecoration: 'none', display: 'flex', alignItems: 'center' }}>
+            <Link
+              href={`/personal`}
+              className="btn btn-secondary"
+              style={{ padding: "0.5rem 1rem", textDecoration: "none", display: "flex", alignItems: "center" }}
+            >
               Limpiar
             </Link>
           )}
         </form>
       </div>
 
-      <div className="card" style={{ padding: 0, overflow: 'hidden' }}>
+      <div className="card" style={{ padding: 0, overflow: "hidden" }}>
         <table className="data-table">
           <thead>
             <tr>
@@ -182,13 +234,13 @@ export default async function PersonalPage({
           <tbody>
             {empleados.length === 0 ? (
               <tr>
-                <td colSpan={isComercialView ? 7 : 6} style={{ textAlign: 'center', color: 'var(--text-secondary)' }}>
+                <td colSpan={isComercialView ? 7 : 6} style={{ textAlign: "center", color: "var(--text-secondary)" }}>
                   No hay personal activo que coincida con la búsqueda.
                 </td>
               </tr>
             ) : (
-              empleados.map(emp => {
-                const isEmpComercial = emp.sector.name.toLowerCase().includes('comercial');
+              empleados.map((emp) => {
+                const isEmpComercial = emp.sector.name.toLowerCase().includes("comercial");
                 const canModifyThisEmp = isAdminOrRRHH || (isComercialSector && isEmpComercial);
 
                 return (
@@ -196,35 +248,83 @@ export default async function PersonalPage({
                     <td style={{ fontWeight: 600 }}>{emp.legajo}</td>
                     <td>{emp.name}</td>
                     {isComercialView && (
-                      <td style={{ fontWeight: 500, color: '#0369a1' }}>
-                        {emp.dni || <span style={{ color: 'var(--text-secondary)' }}>-</span>}
+                      <td style={{ fontWeight: 500, color: "#0369a1" }}>
+                        {emp.dni || <span style={{ color: "var(--text-secondary)" }}>-</span>}
                       </td>
                     )}
-                    <td>{emp.sector.name}</td>
+                    <td>
+                      <div>{emp.sector.name}</div>
+                      {emp.pendingTransfers && emp.pendingTransfers.length > 0 && (
+                        <span
+                          style={{
+                            display: "inline-block",
+                            marginTop: "0.2rem",
+                            fontSize: "0.72rem",
+                            fontWeight: 700,
+                            padding: "0.15rem 0.45rem",
+                            borderRadius: "999px",
+                            backgroundColor: "#fef3c7",
+                            color: "#92400e",
+                            border: "1px solid #fde68a"
+                          }}
+                        >
+                          🔄 En Transferencia a {emp.pendingTransfers[0].targetSector.name}
+                        </span>
+                      )}
+                    </td>
                     <td>
                       {emp.baseOperativa ? (
-                        <span style={{ fontWeight: 500, color: '#334155' }}>📍 {emp.baseOperativa}</span>
+                        <span style={{ fontWeight: 500, color: "#334155" }}>📍 {emp.baseOperativa}</span>
                       ) : (
-                        <span style={{ color: 'var(--text-secondary)', fontSize: '0.85rem' }}>-</span>
+                        <span style={{ color: "var(--text-secondary)", fontSize: "0.85rem" }}>-</span>
                       )}
                     </td>
                     <td>
                       {emp.jobProfile?.title ? (
                         <span className="badge badge-success">{emp.jobProfile.title}</span>
                       ) : (
-                        <span style={{ color: 'var(--text-secondary)', fontSize: '0.875rem' }}>Sin asignar</span>
+                        <span style={{ color: "var(--text-secondary)", fontSize: "0.875rem" }}>Sin asignar</span>
                       )}
                     </td>
                     <td>
-                      <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
-                        {isAdminOrRRHH && (
-                          <Link href={`/personal/${emp.id}/historial`} className="btn btn-secondary" style={{ padding: '0.4rem 0.8rem', fontSize: '0.85rem', borderRadius: '6px', background: '#f1f5f9', color: '#334155', border: '1px solid #cbd5e1', display: 'flex', alignItems: 'center', gap: '0.4rem', fontWeight: 500, boxShadow: '0 1px 2px rgba(0,0,0,0.05)' }} title="Ver Historial de Puestos">
-                            📜 Historial
-                          </Link>
-                        )}
+                      <div style={{ display: "flex", gap: "0.5rem", alignItems: "center", flexWrap: "wrap" }}>
+                        <Link
+                          href={`/personal/${emp.id}/historial`}
+                          className="btn btn-secondary"
+                          style={{
+                            padding: "0.4rem 0.8rem",
+                            fontSize: "0.82rem",
+                            borderRadius: "6px",
+                            background: "#f1f5f9",
+                            color: "#1b365d",
+                            border: "1px solid #cbd5e1",
+                            display: "flex",
+                            alignItems: "center",
+                            gap: "0.35rem",
+                            fontWeight: 600
+                          }}
+                          title="Ver Historial de Capacitaciones (todos los sectores) y Cambios de Puesto"
+                        >
+                          📜 Historial y Capacitaciones
+                        </Link>
                         {canModifyThisEmp && (
                           <>
-                            <Link href={`/personal/${emp.id}/editar`} className="btn btn-primary" style={{ padding: '0.4rem 0.8rem', fontSize: '0.85rem', borderRadius: '6px', background: '#0d8383', color: 'white', display: 'flex', alignItems: 'center', gap: '0.4rem', fontWeight: 500, boxShadow: '0 1px 2px rgba(0,0,0,0.05)' }} title="Modificar Empleado">
+                            <Link
+                              href={`/personal/${emp.id}/editar`}
+                              className="btn btn-primary"
+                              style={{
+                                padding: "0.4rem 0.8rem",
+                                fontSize: "0.82rem",
+                                borderRadius: "6px",
+                                background: "#0d8383",
+                                color: "white",
+                                display: "flex",
+                                alignItems: "center",
+                                gap: "0.35rem",
+                                fontWeight: 500
+                              }}
+                              title="Modificar Empleado"
+                            >
                               ✏️ Modificar
                             </Link>
                             <form action={darDeBaja}>

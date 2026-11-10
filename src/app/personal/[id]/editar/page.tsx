@@ -6,6 +6,7 @@ import { getCurrentRole, isSectorRole, getSectorIdFromRole, getAllowedSectorName
 import { DeleteEmployeeButton } from "./DeleteEmployeeButton";
 import { BASES_OPERATIVAS, formatEmployeeName } from "@/lib/constants";
 import { SectorAndProfileSelects } from "@/components/SectorAndProfileSelects";
+import { mergeTwoEmployees } from "@/lib/employeeMerge";
 
 export default async function EditarPersonalPage({ 
   params, 
@@ -94,15 +95,10 @@ export default async function EditarPersonalPage({
       });
     } catch (e: any) {
       if (e?.code === 'P2002') {
-        // Verificar si el legajo pertenece a un empleado inactivo
         const existing = await prisma.employee.findUnique({ where: { legajo } });
-        if (existing && !existing.isActive && existing.id !== empId) {
-          // Liberar el legajo del empleado inactivo
-          await prisma.employee.update({
-            where: { id: existing.id },
-            data: { legajo: `${legajo}_inactivo_${existing.id}` }
-          });
-          // Reintentar la actualización
+        if (existing && existing.id !== empId) {
+          // Unificar automáticamente ambos registros conservando todo el historial de capacitaciones del otro sector
+          await mergeTwoEmployees(empId, existing.id, legajo);
           await prisma.employee.update({
             where: { id: empId },
             data: {

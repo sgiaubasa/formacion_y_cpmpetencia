@@ -21,21 +21,12 @@ export interface SectorTrainingItem {
 }
 
 /**
- * Devuelve la condición Prisma para filtrar registros de capacitación (`EmployeeTrainingRecord`)
- * de modo que un sector solo vea las capacitaciones pertenecientes a su sector (excluyendo
- * capacitaciones históricas que el empleado haya realizado en otro sector previo antes de un traslado),
- * mientras que RRHH, SGI y ADMIN ven absolutamente todo.
+ * Devuelve la condición Prisma para filtrar registros de capacitación (`EmployeeTrainingRecord`).
+ * Permite que el sector actual (o el sector destino de una transferencia) vea SIEMPRE todo el historial
+ * de capacitaciones que tuvo el empleado, incluyendo las realizadas en su sector de origen previo (ej. Operaciones).
  */
-export function buildSectorRecordSourceFilter(allowedSectors: string[] | null) {
-  if (!allowedSectors || allowedSectors.length === 0) {
-    return {};
-  }
-  return {
-    OR: [
-      { sourceProfileId: null },
-      { sourceProfile: { gerencia: { in: allowedSectors } } }
-    ]
-  };
+export function buildSectorRecordSourceFilter(_allowedSectors: string[] | null) {
+  return {};
 }
 
 /**
