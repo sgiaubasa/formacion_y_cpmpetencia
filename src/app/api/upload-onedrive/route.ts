@@ -2,6 +2,33 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import crypto from "crypto";
 
+async function sendCopyToOneDriveWebhook(params: {
+  fileName: string;
+  originalName: string;
+  contentType: string;
+  category: string;
+  base64: string;
+}) {
+  try {
+    let oneDriveWebhookUrl = process.env.POWER_AUTOMATE_ONEDRIVE_WEBHOOK_URL || "";
+    const setting = await prisma.appSetting.findUnique({
+      where: { id: "onedrive_upload_webhook_url" }
+    });
+    if (setting?.value?.trim()) {
+      oneDriveWebhookUrl = setting.value.trim();
+    }
+    if (!oneDriveWebhookUrl) return;
+
+    await fetch(oneDriveWebhookUrl, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(params)
+    });
+  } catch (err) {
+    console.warn("No se pudo enviar copia automática al Webhook de OneDrive:", err);
+  }
+}
+
 export async function POST(req: NextRequest) {
   try {
     const formData = await req.formData();
@@ -34,7 +61,7 @@ export async function POST(req: NextRequest) {
         create: { id: partKey, value: base64Part }
       });
 
-      // Si es el último fragmento, guardamos el manifiesto principal del archivo
+      // Si es el último fragmento, guardamos el manifiesto principal y enviamos copia a OneDrive
       if (chunkIndex === totalChunks - 1) {
         const manifest = JSON.stringify({
           isChunked: true,
@@ -51,6 +78,36 @@ export async function POST(req: NextRequest) {
           update: { value: manifest },
           create: { id: `cloud_file_${fileId}`, value: manifest }
         });
+
+        // Reconstruir archivo completo para enviarlo a OneDrive si el webhook está activo (hasta 25 MB)
+        if (totalChunks <= 12) {
+          try {
+            const partIds = Array.from(
+              { length: totalChunks },
+              (_, idx) => `cloud_file_${fileId}_part_${idx}`
+            );
+            const partRows = await prisma.appSetting.findMany({
+              where: { id: { in: partIds } }
+            });
+            const partMap = new Map<string, string>();
+            for (const r of partRows) partMap.set(r.id, r.value);
+            const buffers: Buffer[] = [];
+            for (let idx = 0; idx < totalChunks; idx++) {
+              const b64 = partMap.get(`cloud_file_${fileId}_part_${idx}`);
+              if (b64) buffers.push(Buffer.from(b64, "base64"));
+            }
+            const fullBase64 = Buffer.concat(buffers).toString("base64");
+            await sendCopyToOneDriveWebhook({
+              fileName: `${category.toUpperCase()}_${Date.now()}_${cleanName}`,
+              originalName,
+              contentType,
+              category,
+              base64: fullBase64
+            });
+          } catch {
+            // ignore
+          }
+        }
       }
 
       return NextResponse.json({
@@ -80,60 +137,7 @@ export async function POST(req: NextRequest) {
     const base64Data = buffer.toString("base64");
     const contentType = file.type || "application/octet-stream";
 
-    // Verificar si además hay un Webhook de Power Automate hacia OneDrive Corporativo
-    let oneDriveWebhookUrl = process.env.POWER_AUTOMATE_ONEDRIVE_WEBHOOK_URL || "";
-    try {
-      const setting = await prisma.appSetting.findUnique({
-        where: { id: "onedrive_upload_webhook_url" }
-      });
-      if (setting?.value?.trim()) {
-        oneDriveWebhookUrl = setting.value.trim();
-      }
-    } catch {
-      // ignore
-    }
-
-    if (oneDriveWebhookUrl) {
-      try {
-        const webhookRes = await fetch(oneDriveWebhookUrl, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            fileName: `${Date.now()}-${cleanName}`,
-            originalName: file.name,
-            contentType,
-            category,
-            base64: base64Data
-          })
-        });
-
-        if (webhookRes.ok) {
-          const text = await webhookRes.text();
-          let returnedUrl = "";
-          try {
-            const parsed = JSON.parse(text);
-            returnedUrl =
-              parsed.url || parsed.webUrl || parsed.shareUrl || parsed.link || "";
-          } catch {
-            if (text.trim().startsWith("http")) {
-              returnedUrl = text.trim();
-            }
-          }
-
-          if (returnedUrl) {
-            return NextResponse.json({
-              ok: true,
-              url: returnedUrl,
-              name: file.name,
-              provider: "onedrive"
-            });
-          }
-        }
-      } catch (err) {
-        console.warn("Error al enviar copia al Webhook de OneDrive:", err);
-      }
-    }
-
+    // 1. Guardar siempre con URL interna (/api/files/...) cacheada en Vercel CDN para verse dentro de la App sin login
     const payload = JSON.stringify({
       isChunked: false,
       name: file.name,
@@ -148,6 +152,15 @@ export async function POST(req: NextRequest) {
       where: { id: `cloud_file_${fileId}` },
       update: { value: payload },
       create: { id: `cloud_file_${fileId}`, value: payload }
+    });
+
+    // 2. Enviar automáticamente una copia física del archivo a tu OneDrive Corporativo vía Power Automate
+    await sendCopyToOneDriveWebhook({
+      fileName: `${category.toUpperCase()}_${Date.now()}_${cleanName}`,
+      originalName: file.name,
+      contentType,
+      category,
+      base64: base64Data
     });
 
     return NextResponse.json({

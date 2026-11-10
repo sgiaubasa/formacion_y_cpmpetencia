@@ -99,11 +99,31 @@ export default async function ConfiguracionPage() {
             }}
           >
             <h3 style={{ margin: '0 0 0.4rem 0', fontSize: '1.05rem', color: '#0369a1' }}>
-              ☁️ Conexión con OneDrive / SharePoint Corporativo AUBASA (100% Gratuito y Sin Límites de Cuota)
+              ☁️ Conexión Automática con tu OneDrive Corporativo AUBASA (100% Gratuito)
             </h3>
-            <p style={{ margin: '0 0 0.85rem 0', fontSize: '0.85rem', color: '#334155' }}>
-              Para evitar consumir cuota de transferencia (Egress), el sistema utiliza almacenamiento propio y enlaces de OneDrive Corporativo. Si además pegás aquí un Webhook de Power Automate (<em>&ldquo;Cuando se recibe una solicitud HTTP &rarr; OneDrive for Business: Crear archivo &rarr; Crear vínculo para compartir &rarr; Respuesta&rdquo;</em>), cada archivo subido desde la app se guardará automáticamente en tu OneDrive de AUBASA.
+            <p style={{ margin: '0 0 0.65rem 0', fontSize: '0.85rem', color: '#334155' }}>
+              <strong>¿Cómo funciona?</strong> Cada vez que alguien sube un Material (PDF / Video) o una Planilla Firmada desde la App:
+              <br />1. La App genera automáticamente su enlace interno (<code>/api/files/...</code>) cacheado en el <strong>CDN de Vercel</strong> para que todos lo vean y reproduzcan directo adentro de la App sin iniciar sesión en Microsoft ni gastar cuota de Supabase.
+              <br />2. Si pegás abajo la URL de un flujo de <strong>Power Automate</strong>, el sistema <strong>envía automáticamente una copia física del archivo (PDF o Video) a tu carpeta de OneDrive de AUBASA</strong>.
             </p>
+            <details style={{ marginBottom: '0.85rem', backgroundColor: '#ffffff', padding: '0.6rem 0.85rem', borderRadius: '8px', border: '1px solid #bae6fd', fontSize: '0.82rem', color: '#1e293b' }}>
+              <summary style={{ cursor: 'pointer', fontWeight: 700, color: '#0284c7' }}>
+                📖 Ver los 2 pasos para crear el flujo en Power Automate y guardar todo en tu OneDrive
+              </summary>
+              <div style={{ marginTop: '0.6rem', lineHeight: 1.5 }}>
+                <div><strong>Paso 1:</strong> En Power Automate creá un flujo instantáneo con el disparador <em>&ldquo;Cuando se recibe una solicitud HTTP (When an HTTP request is received)&rdquo;</em> y en &ldquo;Usar carga útil de muestra&rdquo; pegá este JSON:</div>
+                <pre style={{ backgroundColor: '#f8fafc', padding: '0.5rem', borderRadius: '6px', border: '1px solid #cbd5e1', margin: '0.4rem 0', overflowX: 'auto' }}>
+{`{"fileName":"archivo.pdf","originalName":"archivo.pdf","contentType":"application/pdf","category":"evidencia","base64":"JVBERi0="}`}
+                </pre>
+                <div><strong>Paso 2:</strong> Agregá la acción <strong>OneDrive para la Empresa &rarr; Crear archivo (Create file)</strong>:</div>
+                <ul style={{ margin: '0.3rem 0 0 1.2rem' }}>
+                  <li><strong>Ruta de la carpeta:</strong> Elegí tu carpeta de OneDrive (ej. <code>/Capacitaciones_SGI_App</code>).</li>
+                  <li><strong>Nombre del archivo:</strong> Seleccioná la variable dinámica <code>fileName</code>.</li>
+                  <li><strong>Contenido del archivo:</strong> En Expresión (<code>fx</code>) escribí: <code>base64ToBinary(triggerBody()?[&apos;base64&apos;])</code></li>
+                </ul>
+                <div style={{ marginTop: '0.35rem' }}>Guardá el flujo, copiá la <strong>URL de HTTP POST</strong> que te da el Paso 1 y pegala acá abajo:</div>
+              </div>
+            </details>
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
               <div className="form-group" style={{ marginBottom: 0 }}>
                 <label className="form-label">Carpeta Compartida de OneDrive AUBASA (Acceso Rápido)</label>
