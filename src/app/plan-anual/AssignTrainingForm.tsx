@@ -587,45 +587,28 @@ export function AssignTrainingForm({
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: "0.5rem", flexWrap: "wrap" }}>
                   <label style={{ fontSize: "0.78rem", fontWeight: 700, color: "#92400e" }}>
                     {materialChoice === "pdf"
-                      ? "📄 Link de OneDrive / SharePoint o Archivo PDF:"
-                      : "🎬 Link de OneDrive / YouTube / Drive (Recomendado 0 cuota):"}
+                      ? "📄 Subí el PDF desde tu PC (se genera la URL sola y se ve en la App):"
+                      : "🎬 Subí el Video (.mp4) desde tu PC (se genera la URL sola y se ve en la App):"}
                   </label>
-                  <a
-                    href={DEFAULT_ONEDRIVE_FOLDER_URL}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    style={{
-                      fontSize: "0.72rem",
-                      fontWeight: 700,
-                      color: "#0284c7",
-                      backgroundColor: "#e0f2fe",
-                      padding: "0.2rem 0.55rem",
-                      borderRadius: "6px",
-                      textDecoration: "none",
-                      border: "1px solid #bae6fd"
-                    }}
-                  >
-                    ☁️ Abrir mi OneDrive AUBASA
-                  </a>
                 </div>
-                <input
-                  type="url"
-                  value={materialLinkInput}
-                  onChange={(e) => setMaterialLinkInput(e.target.value)}
-                  placeholder={
-                    materialChoice === "pdf"
-                      ? "Pegá el link compartido de OneDrive / SharePoint / Drive al PDF..."
-                      : "Pegá el link compartido de OneDrive / SharePoint / YouTube / Drive..."
-                  }
-                  className="form-input"
-                  style={{ borderRadius: "8px", fontSize: "0.78rem", padding: "0.35rem 0.6rem", backgroundColor: "#ffffff" }}
-                />
                 <input
                   type="file"
                   name="materialFile"
                   accept={materialChoice === "pdf" ? ".pdf,application/pdf" : "video/*"}
                   className="form-input"
                   style={{ borderRadius: "8px", fontSize: "0.78rem", padding: "0.3rem", backgroundColor: "#ffffff" }}
+                />
+                <input
+                  type="url"
+                  value={materialLinkInput}
+                  onChange={(e) => setMaterialLinkInput(e.target.value)}
+                  placeholder={
+                    materialChoice === "pdf"
+                      ? "Opcional: o pegá un link externo si ya lo tenías en la web..."
+                      : "Opcional: o pegá un link de YouTube / Drive / OneDrive..."
+                  }
+                  className="form-input"
+                  style={{ borderRadius: "8px", fontSize: "0.78rem", padding: "0.35rem 0.6rem", backgroundColor: "#ffffff" }}
                 />
               </div>
             )}

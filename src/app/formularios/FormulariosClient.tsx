@@ -708,7 +708,7 @@ export function FormulariosClient({
                     </a>
                   </div>
                   <div style={{ fontSize: "0.8rem", color: "#64748b", marginBottom: "0.6rem" }}>
-                    Pegá un enlace compartido de <strong>OneDrive Corporativo AUBASA</strong>, SharePoint, YouTube o Google Drive (100% gratuito y sin límites de cuota):
+                    Subí el video (<strong>.mp4</strong>) desde tu PC y el sistema <strong>genera la URL automáticamente</strong> para reproducirlo directo en la App (con caché CDN gratuito):
                   </div>
 
                   <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", flexWrap: "wrap", marginBottom: "0.6rem" }}>
@@ -810,7 +810,7 @@ export function FormulariosClient({
                     </a>
                   </div>
                   <div style={{ fontSize: "0.8rem", color: "#64748b", marginBottom: "0.6rem" }}>
-                    Subí un archivo <strong>.pdf</strong> o pegá el enlace compartido de <strong>OneDrive Corporativo AUBASA</strong> / SharePoint / Drive:
+                    Subí el archivo <strong>.pdf</strong> desde tu PC y el sistema <strong>genera la URL automáticamente</strong> para que todos lo lean dentro de la App:
                   </div>
 
                   <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", flexWrap: "wrap", marginBottom: "0.6rem" }}>
