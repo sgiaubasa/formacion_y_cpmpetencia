@@ -4,6 +4,8 @@ import { getCurrentRole, isSectorRole, getSectorIdFromRole } from "@/lib/auth";
 import { eliminarTransferenciaAction } from "./actions";
 import { autoReconcileDuplicateTransferredEmployees } from "@/lib/employeeMerge";
 
+export const dynamic = "force-dynamic";
+
 export default async function TransferenciasPage() {
   await autoReconcileDuplicateTransferredEmployees();
   const role = await getCurrentRole();

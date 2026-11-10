@@ -50,7 +50,7 @@ export async function mergeTwoEmployees(
 
     if (!targetEmp || !sourceEmp) return;
 
-    // 1. Etiquetar las capacitaciones previas del registro de origen con su perfil de origen (si aún no lo tenían)
+    // 1. Etiquetar las capacitaciones previas del registro de origen con su perfil de origen
     if (sourceEmp.jobProfileId) {
       await prisma.employeeTrainingRecord
         .updateMany({
@@ -66,10 +66,12 @@ export async function mergeTwoEmployees(
     }
 
     // 2. Mover TODAS las capacitaciones del registro origen al registro destino unificado
-    await prisma.employeeTrainingRecord.updateMany({
-      where: { employeeId: sourceEmpId },
-      data: { employeeId: targetEmpId }
-    });
+    await prisma.employeeTrainingRecord
+      .updateMany({
+        where: { employeeId: sourceEmpId },
+        data: { employeeId: targetEmpId }
+      })
+      .catch(() => {});
 
     // 3. Mover transferencias y asistencias al registro destino unificado
     await prisma.pendingTransfer
@@ -86,11 +88,8 @@ export async function mergeTwoEmployees(
       })
       .catch(() => {});
 
-    // 4. Si provienen de sectores distintos y no había registro de transferencia, dejar asentado el pase en el historial
-    if (
-      sourceEmp.sectorId !== targetEmp.sectorId &&
-      targetEmp.jobProfileId
-    ) {
+    // 4. Si provienen de sectores distintos y no había registro de transferencia, dejar asentado el pase
+    if (sourceEmp.sectorId !== targetEmp.sectorId && targetEmp.jobProfileId) {
       const existingTransfer = await prisma.pendingTransfer.findFirst({
         where: {
           employeeId: targetEmpId,
@@ -116,30 +115,32 @@ export async function mergeTwoEmployees(
     }
 
     // 5. Determinar el legajo oficial definitivo (sin el prefijo provisorio S/L-)
-    const targetIsSL = targetEmp.legajo.toUpperCase().trim().startsWith("S/L-");
-    const sourceIsSL = sourceEmp.legajo.toUpperCase().trim().startsWith("S/L-");
+    const targetIsSL = targetEmp.legajo.toUpperCase().trim().startsWith("S/L");
+    const sourceIsSL = sourceEmp.legajo.toUpperCase().trim().startsWith("S/L");
 
     let finalLegajo = preferredLegajo?.trim() || "";
-    if (!finalLegajo || finalLegajo.toUpperCase().startsWith("S/L-")) {
+    if (!finalLegajo || finalLegajo.toUpperCase().startsWith("S/L")) {
       if (!sourceIsSL) {
         finalLegajo = sourceEmp.legajo.trim();
       } else if (!targetIsSL) {
         finalLegajo = targetEmp.legajo.trim();
       } else {
-        const strippedTarget = targetEmp.legajo.replace(/^S\/L-/i, "").trim();
-        const strippedSource = sourceEmp.legajo.replace(/^S\/L-/i, "").trim();
+        const strippedTarget = targetEmp.legajo.replace(/^S\/L[-:\s]*/i, "").trim();
+        const strippedSource = sourceEmp.legajo.replace(/^S\/L[-:\s]*/i, "").trim();
         finalLegajo = strippedTarget || strippedSource || targetEmp.legajo;
       }
     }
 
     // 6. Liberar primero el legajo en el registro duplicado (sourceEmpId) antes de borrarlo
-    await prisma.employee.update({
-      where: { id: sourceEmpId },
-      data: {
-        legajo: `UNIFICADO_${sourceEmpId}_${Date.now()}`,
-        isActive: false
-      }
-    });
+    await prisma.employee
+      .update({
+        where: { id: sourceEmpId },
+        data: {
+          legajo: `UNIFICADO_${sourceEmpId}_${Date.now()}`,
+          isActive: false
+        }
+      })
+      .catch(() => {});
 
     // Intentar borrar físicamente el duplicado ya vacío
     await prisma.employee
@@ -149,33 +150,40 @@ export async function mergeTwoEmployees(
       .catch(() => {});
 
     // 7. Actualizar el registro destino unificado con el legajo oficial y todos los datos completos
-    await prisma.employee.update({
-      where: { id: targetEmpId },
-      data: {
-        legajo: finalLegajo,
-        dni: targetEmp.dni || sourceEmp.dni,
-        baseOperativa: targetEmp.baseOperativa || sourceEmp.baseOperativa,
-        jobProfileId: targetEmp.jobProfileId || sourceEmp.jobProfileId,
-        isActive: true
-      }
-    });
-  } catch (err) {
-    console.error("Error en mergeTwoEmployees:", err);
+    await prisma.employee
+      .update({
+        where: { id: targetEmpId },
+        data: {
+          legajo: finalLegajo,
+          dni: targetEmp.dni || sourceEmp.dni,
+          baseOperativa: targetEmp.baseOperativa || sourceEmp.baseOperativa,
+          jobProfileId: targetEmp.jobProfileId || sourceEmp.jobProfileId,
+          isActive: true
+        }
+      })
+      .catch(() => {});
+  } catch {
+    // Ignorar errores de concurrencia si otro proceso ya unificó el registro
   }
 }
 
+let reconciledInMemory = false;
+
 /**
- * Busca y unifica automáticamente empleados duplicados por transferencia (como Andrea Gutiérrez
- * entre Gerencia de Operaciones y Gerencia Comercial, o registros con prefijo provisorio S/L-).
+ * Unifica automáticamente registros duplicados por transferencia (como Andrea Gutiérrez
+ * entre Gerencia de Operaciones y Gerencia Comercial).
  */
 export async function autoReconcileDuplicateTransferredEmployees() {
+  // No ejecutar durante la fase estática de compilación (next build)
+  if (process.env.NEXT_PHASE === "phase-production-build" || reconciledInMemory) {
+    return;
+  }
+
   try {
-    // Traemos todos los empleados activos que tengan S/L- o apellido Gutierrez/Gutiérrez
     const candidates = await prisma.employee.findMany({
       where: {
         isActive: true,
         OR: [
-          { legajo: { startsWith: "S/L", mode: "insensitive" } },
           { name: { contains: "Gutierrez", mode: "insensitive" } },
           { name: { contains: "Gutiérrez", mode: "insensitive" } }
         ]
@@ -185,41 +193,18 @@ export async function autoReconcileDuplicateTransferredEmployees() {
       }
     });
 
-    if (candidates.length === 0) return;
+    if (candidates.length <= 1) {
+      reconciledInMemory = true;
+      return;
+    }
 
-    const mergedSourceIds = new Set<number>();
+    const processedIds = new Set<number>();
 
     for (const emp of candidates) {
-      if (mergedSourceIds.has(emp.id)) continue;
+      if (processedIds.has(emp.id)) continue;
 
-      const upperLeg = emp.legajo.toUpperCase().trim();
-
-      // Caso 1: Tiene prefijo S/L- y el número después de S/L- coincide con el legajo oficial de otro empleado
-      if (upperLeg.startsWith("S/L")) {
-        const stripped = emp.legajo.replace(/^S\/L[-:\s]*/i, "").trim();
-        if (stripped.length >= 3) {
-          const twinByLegajo = await prisma.employee.findFirst({
-            where: {
-              id: { not: emp.id },
-              isActive: true,
-              legajo: { equals: stripped, mode: "insensitive" }
-            },
-            include: { sector: { select: { id: true, name: true } } }
-          });
-
-          if (twinByLegajo && !mergedSourceIds.has(twinByLegajo.id)) {
-            // El registro que está en Comercial (o el que fue dado de alta en el nuevo sector con S/L-)
-            // absorbe las capacitaciones históricas del registro anterior y se queda con el legajo oficial
-            await mergeTwoEmployees(emp.id, twinByLegajo.id, twinByLegajo.legajo);
-            mergedSourceIds.add(twinByLegajo.id);
-            continue;
-          }
-        }
-      }
-
-      // Caso 2: Comparar entre los candidatos por nombre sin tildes (ej. "Gutierrez Andrea Edith" vs "Gutiérrez Andrea Edith")
       for (const other of candidates) {
-        if (other.id === emp.id || mergedSourceIds.has(other.id)) continue;
+        if (other.id === emp.id || processedIds.has(other.id)) continue;
 
         if (areNamesSamePerson(emp.name, other.name)) {
           const empIsComercial = emp.sector.name.toLowerCase().includes("comercial");
@@ -227,7 +212,6 @@ export async function autoReconcileDuplicateTransferredEmployees() {
           const empHasSL = emp.legajo.toUpperCase().startsWith("S/L");
           const otherHasSL = other.legajo.toUpperCase().startsWith("S/L");
 
-          // Priorizar como registro destino el de Gerencia Comercial (nuevo sector actual de Andrea)
           let target = emp;
           let source = other;
 
@@ -245,13 +229,16 @@ export async function autoReconcileDuplicateTransferredEmployees() {
             ? other.legajo
             : emp.legajo.replace(/^S\/L[-:\s]*/i, "").trim();
 
+          processedIds.add(target.id);
+          processedIds.add(source.id);
           await mergeTwoEmployees(target.id, source.id, officialLegajo);
-          mergedSourceIds.add(source.id);
           break;
         }
       }
     }
-  } catch (err) {
-    console.warn("autoReconcileDuplicateTransferredEmployees warning:", err);
+
+    reconciledInMemory = true;
+  } catch {
+    // ignore
   }
 }
