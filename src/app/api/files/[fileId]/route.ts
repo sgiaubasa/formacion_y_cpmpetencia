@@ -72,7 +72,7 @@ export async function GET(
 
       if (!isNaN(start) && !isNaN(end) && start >= 0 && end < totalLength && start <= end) {
         const chunk = fullBuffer.subarray(start, end + 1);
-        return new NextResponse(chunk, {
+        return new NextResponse(new Uint8Array(chunk), {
           status: 206,
           headers: {
             ...commonCacheHeaders,
@@ -83,7 +83,7 @@ export async function GET(
       }
     }
 
-    return new NextResponse(fullBuffer, {
+    return new NextResponse(new Uint8Array(fullBuffer), {
       status: 200,
       headers: {
         ...commonCacheHeaders,
