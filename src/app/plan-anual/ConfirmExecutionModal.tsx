@@ -237,33 +237,9 @@ export function ConfirmExecutionModal({
             </div>
 
             {mode === "upload" ? (
-              <div style={{ display: "flex", flexDirection: "column", gap: "0.6rem" }}>
-                <div>
-                  <label className="form-label">Evidencia (Planilla Firmada / Certificado PDF)</label>
-                  <input type="file" name="evidence" className="form-input" accept=".pdf,image/*" />
-                </div>
-                <div style={{ backgroundColor: "#f0f9ff", padding: "0.65rem 0.8rem", borderRadius: "8px", border: "1px solid #bae6fd" }}>
-                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "0.35rem" }}>
-                    <span style={{ fontSize: "0.78rem", fontWeight: 700, color: "#0369a1" }}>
-                      ☁️ O pegar enlace de OneDrive / SharePoint Corporativo:
-                    </span>
-                    <a
-                      href={DEFAULT_ONEDRIVE_FOLDER_URL}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      style={{ fontSize: "0.75rem", fontWeight: 700, color: "#0284c7", textDecoration: "underline" }}
-                    >
-                      Abrir OneDrive AUBASA ↗
-                    </a>
-                  </div>
-                  <input
-                    type="url"
-                    name="evidenceUrl"
-                    className="form-input"
-                    placeholder="https://aubasa-my.sharepoint.com/..."
-                    style={{ fontSize: "0.82rem", backgroundColor: "#ffffff" }}
-                  />
-                </div>
+              <div>
+                <label className="form-label">Evidencia (Planilla Firmada / Certificado PDF)</label>
+                <input type="file" name="evidence" className="form-input" accept=".pdf,image/*" required />
               </div>
             ) : (
               <>

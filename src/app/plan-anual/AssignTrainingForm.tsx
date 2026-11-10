@@ -577,8 +577,8 @@ export function AssignTrainingForm({
                 style={{ borderRadius: "10px" }}
               >
                 <option value="none">Sin material adjunto</option>
-                <option value="pdf">📄 Subir / Vincular Documento PDF</option>
-                <option value="video">🎬 Subir / Vincular Video</option>
+                <option value="pdf">📄 Subir Documento PDF</option>
+                <option value="video">🎬 Subir Video (.mp4)</option>
               </select>
             </div>
 
@@ -598,8 +598,8 @@ export function AssignTrainingForm({
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: "0.5rem", flexWrap: "wrap" }}>
                   <label style={{ fontSize: "0.78rem", fontWeight: 700, color: "#92400e" }}>
                     {materialChoice === "pdf"
-                      ? "📄 Subí el PDF desde tu PC (se genera la URL sola y se ve en la App):"
-                      : "🎬 Subí el Video (.mp4) desde tu PC (se genera la URL sola y se ve en la App):"}
+                      ? "📄 Subí el documento PDF desde tu PC:"
+                      : "🎬 Subí el video (.mp4) desde tu PC:"}
                   </label>
                 </div>
                 <input
@@ -608,18 +608,6 @@ export function AssignTrainingForm({
                   accept={materialChoice === "pdf" ? ".pdf,application/pdf" : "video/*"}
                   className="form-input"
                   style={{ borderRadius: "8px", fontSize: "0.78rem", padding: "0.3rem", backgroundColor: "#ffffff" }}
-                />
-                <input
-                  type="url"
-                  value={materialLinkInput}
-                  onChange={(e) => setMaterialLinkInput(e.target.value)}
-                  placeholder={
-                    materialChoice === "pdf"
-                      ? "Opcional: o pegá un link externo si ya lo tenías en la web..."
-                      : "Opcional: o pegá un link de YouTube / Drive / OneDrive..."
-                  }
-                  className="form-input"
-                  style={{ borderRadius: "8px", fontSize: "0.78rem", padding: "0.35rem 0.6rem", backgroundColor: "#ffffff" }}
                 />
               </div>
             )}

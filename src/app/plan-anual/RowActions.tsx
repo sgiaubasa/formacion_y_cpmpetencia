@@ -175,8 +175,8 @@ export function RowActions({
             style={{ width: "100%", padding: "0.3rem", fontSize: "0.78rem" }}
           >
             <option value="none">Sin material</option>
-            <option value="pdf">📄 Subir / Link Documento PDF</option>
-            <option value="video">🎬 Subir / Link Video</option>
+            <option value="pdf">📄 Subir Documento PDF</option>
+            <option value="video">🎬 Subir Video (.mp4)</option>
           </select>
         </div>
 
@@ -186,14 +186,6 @@ export function RowActions({
               type="file"
               name="materialFile"
               accept={materialChoice === "pdf" ? ".pdf,application/pdf" : "video/*"}
-              className="form-input"
-              style={{ width: "100%", padding: "0.25rem", fontSize: "0.74rem", backgroundColor: "#ffffff" }}
-            />
-            <input
-              type="url"
-              value={materialLinkInput}
-              onChange={(e) => setMaterialLinkInput(e.target.value)}
-              placeholder={materialChoice === "pdf" ? "O pegá link al PDF..." : "O pegá link a YouTube / Video..."}
               className="form-input"
               style={{ width: "100%", padding: "0.25rem", fontSize: "0.74rem", backgroundColor: "#ffffff" }}
             />

@@ -689,29 +689,12 @@ export function FormulariosClient({
                     <div style={{ fontWeight: 700, color: "#1b365d", fontSize: "0.95rem" }}>
                       🎥 1. Video de la Capacitación
                     </div>
-                    <a
-                      href={DEFAULT_ONEDRIVE_FOLDER_URL}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      style={{
-                        fontSize: "0.75rem",
-                        fontWeight: 700,
-                        color: "#0284c7",
-                        backgroundColor: "#e0f2fe",
-                        padding: "0.25rem 0.6rem",
-                        borderRadius: "6px",
-                        textDecoration: "none",
-                        border: "1px solid #bae6fd"
-                      }}
-                    >
-                      ☁️ Abrir OneDrive AUBASA ↗
-                    </a>
                   </div>
                   <div style={{ fontSize: "0.8rem", color: "#64748b", marginBottom: "0.6rem" }}>
-                    Subí el video (<strong>.mp4</strong>) desde tu PC y el sistema <strong>genera la URL automáticamente</strong> para reproducirlo directo en la App (con caché CDN gratuito):
+                    Seleccioná el video (<strong>.mp4</strong>) desde tu PC para reproducirlo directamente dentro del formulario:
                   </div>
 
-                  <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", flexWrap: "wrap", marginBottom: "0.6rem" }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", flexWrap: "wrap" }}>
                     <label
                       style={{
                         cursor: isUploadingVideo ? "not-allowed" : "pointer",
@@ -756,17 +739,9 @@ export function FormulariosClient({
                     )}
                   </div>
 
-                  <input
-                    type="url"
-                    className="form-input"
-                    placeholder="O pegá aquí el link de YouTube / Drive / MP4..."
-                    value={videoUrl}
-                    onChange={(e) => setVideoUrl(e.target.value)}
-                  />
-
                   {videoUrl && (
                     <div style={{ marginTop: "0.5rem", fontSize: "0.8rem", color: "#166534", fontWeight: 700 }}>
-                      ✓ Video listo para reproducirse en el formulario
+                      ✓ Video cargado y listo para reproducirse en el formulario
                     </div>
                   )}
                   {videoUploadError && (
@@ -791,29 +766,12 @@ export function FormulariosClient({
                     <div style={{ fontWeight: 700, color: "#1b365d", fontSize: "0.95rem" }}>
                       📄 2. Documento PDF Interactivo (Manual / Presentación)
                     </div>
-                    <a
-                      href={DEFAULT_ONEDRIVE_FOLDER_URL}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      style={{
-                        fontSize: "0.75rem",
-                        fontWeight: 700,
-                        color: "#0284c7",
-                        backgroundColor: "#e0f2fe",
-                        padding: "0.25rem 0.6rem",
-                        borderRadius: "6px",
-                        textDecoration: "none",
-                        border: "1px solid #bae6fd"
-                      }}
-                    >
-                      ☁️ Abrir OneDrive AUBASA ↗
-                    </a>
                   </div>
                   <div style={{ fontSize: "0.8rem", color: "#64748b", marginBottom: "0.6rem" }}>
-                    Subí el archivo <strong>.pdf</strong> desde tu PC y el sistema <strong>genera la URL automáticamente</strong> para que todos lo lean dentro de la App:
+                    Seleccioná el archivo <strong>.pdf</strong> desde tu PC para que se lea directamente dentro del formulario:
                   </div>
 
-                  <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", flexWrap: "wrap", marginBottom: "0.6rem" }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", flexWrap: "wrap" }}>
                     <label
                       style={{
                         cursor: isUploadingPdf ? "not-allowed" : "pointer",
@@ -860,17 +818,6 @@ export function FormulariosClient({
                       </button>
                     )}
                   </div>
-
-                  <input
-                    type="url"
-                    className="form-input"
-                    placeholder="O pegá aquí un link directo al archivo .pdf..."
-                    value={pdfUrl}
-                    onChange={(e) => {
-                      setPdfUrl(e.target.value);
-                      if (!pdfName) setPdfName("Documento PDF de Capacitación");
-                    }}
-                  />
 
                   {pdfUrl && (
                     <div style={{ marginTop: "0.5rem", fontSize: "0.8rem", color: "#166534", fontWeight: 700 }}>
