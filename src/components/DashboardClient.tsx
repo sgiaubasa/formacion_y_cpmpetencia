@@ -50,12 +50,30 @@ export default function DashboardClient({ data, sectors, profiles, isSector }: P
   const [selectedMonth, setSelectedMonth] = useState<string>('Todos');
   const [selectedStatus, setSelectedStatus] = useState<string>('Todos');
   const [selectedSector, setSelectedSector] = useState<string>('Todos');
-  const [selectedBase, setSelectedBase] = useState<string>('Todos');
+  const [selectedBases, setSelectedBases] = useState<string[]>([]);
+  const [isBaseDropdownOpen, setIsBaseDropdownOpen] = useState<boolean>(false);
+  const baseDropdownRef = React.useRef<HTMLDivElement>(null);
   const [selectedProfile, setSelectedProfile] = useState<string>('Todos');
   const [selectedEmployee, setSelectedEmployee] = useState<string>('Todos');
   const [selectedTopic, setSelectedTopic] = useState<string>('Todos');
 
   const [crossFilter, setCrossFilter] = useState<CrossFilter | null>(null);
+
+  React.useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (baseDropdownRef.current && !baseDropdownRef.current.contains(event.target as Node)) {
+        setIsBaseDropdownOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
+  const toggleBaseSelection = (base: string) => {
+    setSelectedBases(prev =>
+      prev.includes(base) ? prev.filter(b => b !== base) : [...prev, base]
+    );
+  };
 
   // Extract unique years for filters
   const availableYears = useMemo(() => {
@@ -95,10 +113,10 @@ export default function DashboardClient({ data, sectors, profiles, isSector }: P
   // Cascading logic for Profiles (depends on Sector and Base Operativa)
   const availableProfiles = useMemo(() => {
     if (selectedSector === 'Todos') {
-      if (selectedBase === 'Todos') return profiles;
+      if (selectedBases.length === 0) return profiles;
       const baseProfileIds = new Set<number>();
       data.forEach(d => {
-        if (d.baseOperativa === selectedBase && d.profileId) {
+        if (d.baseOperativa && selectedBases.includes(d.baseOperativa) && d.profileId) {
           baseProfileIds.add(d.profileId);
         }
       });
@@ -113,13 +131,13 @@ export default function DashboardClient({ data, sectors, profiles, isSector }: P
     const sectorDataProfileIds = new Set<number>();
     data.forEach(d => {
       if (d.sectorId.toString() === selectedSector) {
-        if (selectedBase === 'Todos' || d.baseOperativa === selectedBase) {
+        if (selectedBases.length === 0 || (d.baseOperativa && selectedBases.includes(d.baseOperativa))) {
           if (d.profileId) sectorDataProfileIds.add(d.profileId);
         }
       }
     });
 
-    if (selectedBase !== 'Todos') {
+    if (selectedBases.length > 0) {
       return profiles.filter(p => sectorDataProfileIds.has(p.id));
     }
 
@@ -127,7 +145,7 @@ export default function DashboardClient({ data, sectors, profiles, isSector }: P
     if (staticProfiles.length > 0) return staticProfiles;
     
     return profiles.filter(p => sectorDataProfileIds.has(p.id));
-  }, [profiles, data, selectedSector, selectedBase, sectors]);
+  }, [profiles, data, selectedSector, selectedBases, sectors]);
 
   // Cascading logic for Employees (depends on Sector, Base, and Profile)
   const availableEmployees = useMemo(() => {
@@ -135,12 +153,12 @@ export default function DashboardClient({ data, sectors, profiles, isSector }: P
     data.forEach(d => {
       let pass = true;
       if (selectedSector !== 'Todos' && d.sectorId.toString() !== selectedSector) pass = false;
-      if (selectedBase !== 'Todos' && d.baseOperativa !== selectedBase) pass = false;
+      if (selectedBases.length > 0 && (!d.baseOperativa || !selectedBases.includes(d.baseOperativa))) pass = false;
       if (selectedProfile !== 'Todos' && d.profileId?.toString() !== selectedProfile) pass = false;
       if (pass) emps.add(d.employeeName);
     });
     return Array.from(emps).sort((a, b) => a.localeCompare(b, 'es'));
-  }, [data, selectedSector, selectedBase, selectedProfile]);
+  }, [data, selectedSector, selectedBases, selectedProfile]);
 
   // Cascading logic for Topics (unificados y canónicos sin repetidos)
   const availableTopics = useMemo(() => {
@@ -148,20 +166,21 @@ export default function DashboardClient({ data, sectors, profiles, isSector }: P
     data.forEach(d => {
       let pass = true;
       if (selectedSector !== 'Todos' && d.sectorId.toString() !== selectedSector) pass = false;
-      if (selectedBase !== 'Todos' && d.baseOperativa !== selectedBase) pass = false;
+      if (selectedBases.length > 0 && (!d.baseOperativa || !selectedBases.includes(d.baseOperativa))) pass = false;
       if (selectedProfile !== 'Todos' && d.profileId?.toString() !== selectedProfile) pass = false;
       if (selectedEmployee !== 'Todos' && d.employeeName !== selectedEmployee) pass = false;
       if (pass && d.trainingName) rawTopics.push(d.trainingName);
     });
     return getUniqueCanonicalTopics(rawTopics);
-  }, [data, selectedSector, selectedBase, selectedProfile, selectedEmployee]);
+  }, [data, selectedSector, selectedBases, selectedProfile, selectedEmployee]);
 
   // Reset dependent filters if they become invalid
   React.useEffect(() => {
-    if (selectedBase !== 'Todos' && !availableBases.includes(selectedBase)) {
-      setSelectedBase('Todos');
-    }
-  }, [availableBases, selectedBase]);
+    setSelectedBases(prev => {
+      const valid = prev.filter(b => availableBases.includes(b));
+      return valid.length === prev.length ? prev : valid;
+    });
+  }, [availableBases]);
 
   React.useEffect(() => {
     if (selectedProfile !== 'Todos' && !availableProfiles.some(p => p.id.toString() === selectedProfile)) {
@@ -186,7 +205,7 @@ export default function DashboardClient({ data, sectors, profiles, isSector }: P
     return data.filter(d => {
       let pass = true;
       if (selectedSector !== 'Todos' && d.sectorId.toString() !== selectedSector) pass = false;
-      if (selectedBase !== 'Todos' && d.baseOperativa !== selectedBase) pass = false;
+      if (selectedBases.length > 0 && (!d.baseOperativa || !selectedBases.includes(d.baseOperativa))) pass = false;
       if (selectedProfile !== 'Todos' && d.profileId?.toString() !== selectedProfile) pass = false;
       if (selectedEmployee !== 'Todos' && d.employeeName !== selectedEmployee) pass = false;
 
@@ -205,7 +224,7 @@ export default function DashboardClient({ data, sectors, profiles, isSector }: P
       
       return pass;
     });
-  }, [data, selectedYear, selectedMonth, selectedStatus, selectedSector, selectedBase, selectedProfile, selectedEmployee]);
+  }, [data, selectedYear, selectedMonth, selectedStatus, selectedSector, selectedBases, selectedProfile, selectedEmployee]);
 
   // Apply GLOBAL filters INCLUDING topic (used for BarChart, detailedData, and KPIs)
   const filteredData = useMemo(() => {
@@ -400,20 +419,170 @@ export default function DashboardClient({ data, sectors, profiles, isSector }: P
             </div>
           )}
 
-          {/* Sitio / Base Operativa (Dock Sud, Berazategui, Quilmes, Hudson, etc.) */}
-          <div>
-            <label style={{ fontSize: '0.875rem', fontWeight: 'bold', color: 'var(--primary-color)' }}>
-              Sitio / Base Operativa {selectedSector !== 'Todos' ? `(${availableBases.length})` : ''}
-            </label>
-            <select value={selectedBase} onChange={e => setSelectedBase(e.target.value)} className="form-input">
-              <option value="Todos">Todos los sitios</option>
-              {availableBases.map(b => <option key={b} value={b}>{b}</option>)}
-            </select>
+          {/* Sitio / Base Operativa (Multi-selección: Dock Sud, Berazategui, Quilmes, Hudson, etc.) */}
+          <div ref={baseDropdownRef} style={{ position: 'relative' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.2rem' }}>
+              <label style={{ fontSize: '0.875rem', fontWeight: 'bold', color: 'var(--primary-color)' }}>
+                Sitio / Base {selectedSector !== 'Todos' ? `(${availableBases.length})` : ''}
+              </label>
+              {selectedBases.length > 0 && (
+                <button
+                  type="button"
+                  onClick={() => setSelectedBases([])}
+                  style={{ background: 'none', border: 'none', color: '#0078D4', fontSize: '0.72rem', cursor: 'pointer', textDecoration: 'underline', fontWeight: 600 }}
+                >
+                  Limpiar ({selectedBases.length})
+                </button>
+              )}
+            </div>
+
+            <button
+              type="button"
+              onClick={() => setIsBaseDropdownOpen(prev => !prev)}
+              className="form-input"
+              style={{
+                width: '100%',
+                textAlign: 'left',
+                display: 'flex',
+                justifyContent: 'space-between',
+                alignItems: 'center',
+                cursor: 'pointer',
+                backgroundColor: '#ffffff',
+                fontWeight: selectedBases.length > 0 ? 600 : 400,
+                color: selectedBases.length > 0 ? '#004B8B' : 'inherit'
+              }}
+            >
+              <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                {selectedBases.length === 0
+                  ? 'Todos los sitios'
+                  : selectedBases.length === 1
+                    ? selectedBases[0]
+                    : `${selectedBases.length} sitios seleccionados`}
+              </span>
+              <span style={{ fontSize: '0.75rem', marginLeft: '0.4rem', color: '#64748b' }}>
+                {isBaseDropdownOpen ? '▲' : '▼'}
+              </span>
+            </button>
+
+            {isBaseDropdownOpen && (
+              <div
+                style={{
+                  position: 'absolute',
+                  top: '100%',
+                  left: 0,
+                  right: 0,
+                  marginTop: '0.25rem',
+                  backgroundColor: '#ffffff',
+                  border: '1px solid #cbd5e1',
+                  borderRadius: '8px',
+                  boxShadow: '0 10px 25px rgba(0,0,0,0.15)',
+                  zIndex: 50,
+                  maxHeight: '280px',
+                  overflowY: 'auto',
+                  padding: '0.35rem'
+                }}
+              >
+                <label
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '0.5rem',
+                    padding: '0.4rem 0.5rem',
+                    cursor: 'pointer',
+                    borderRadius: '6px',
+                    fontSize: '0.84rem',
+                    fontWeight: selectedBases.length === 0 ? 700 : 500,
+                    backgroundColor: selectedBases.length === 0 ? '#eff6ff' : 'transparent',
+                    color: selectedBases.length === 0 ? '#004B8B' : '#1e293b',
+                    borderBottom: '1px solid #f1f5f9',
+                    marginBottom: '0.2rem'
+                  }}
+                >
+                  <input
+                    type="checkbox"
+                    checked={selectedBases.length === 0}
+                    onChange={() => setSelectedBases([])}
+                    style={{ cursor: 'pointer', accentColor: '#004B8B' }}
+                  />
+                  <span>Todos los sitios</span>
+                </label>
+
+                {availableBases.map(b => {
+                  const isChecked = selectedBases.includes(b);
+                  return (
+                    <label
+                      key={b}
+                      style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '0.5rem',
+                        padding: '0.4rem 0.5rem',
+                        cursor: 'pointer',
+                        borderRadius: '6px',
+                        fontSize: '0.84rem',
+                        fontWeight: isChecked ? 700 : 400,
+                        backgroundColor: isChecked ? '#f0f9ff' : 'transparent',
+                        color: isChecked ? '#004B8B' : '#1e293b'
+                      }}
+                    >
+                      <input
+                        type="checkbox"
+                        checked={isChecked}
+                        onChange={() => toggleBaseSelection(b)}
+                        style={{ cursor: 'pointer', accentColor: '#004B8B' }}
+                      />
+                      <span>{b}</span>
+                    </label>
+                  );
+                })}
+              </div>
+            )}
+
+            {selectedBases.length > 0 && (
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.3rem', marginTop: '0.4rem' }}>
+                {selectedBases.map(b => (
+                  <span
+                    key={b}
+                    style={{
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      gap: '0.25rem',
+                      backgroundColor: '#e0f2fe',
+                      color: '#0369a1',
+                      border: '1px solid #bae6fd',
+                      borderRadius: '999px',
+                      padding: '0.15rem 0.5rem',
+                      fontSize: '0.73rem',
+                      fontWeight: 700
+                    }}
+                  >
+                    {b}
+                    <button
+                      type="button"
+                      onClick={() => toggleBaseSelection(b)}
+                      style={{
+                        background: 'none',
+                        border: 'none',
+                        color: '#0369a1',
+                        cursor: 'pointer',
+                        padding: 0,
+                        fontSize: '0.75rem',
+                        fontWeight: 800,
+                        lineHeight: 1
+                      }}
+                      title={`Quitar ${b}`}
+                    >
+                      ✕
+                    </button>
+                  </span>
+                ))}
+              </div>
+            )}
           </div>
 
           <div>
             <label style={{ fontSize: '0.875rem', fontWeight: 'bold', color: 'var(--primary-color)' }}>
-              Perfil de Puesto {selectedSector !== 'Todos' || selectedBase !== 'Todos' ? `(${availableProfiles.length})` : ''}
+              Perfil de Puesto {selectedSector !== 'Todos' || selectedBases.length > 0 ? `(${availableProfiles.length})` : ''}
             </label>
             <select value={selectedProfile} onChange={e => setSelectedProfile(e.target.value)} className="form-input">
               <option value="Todos">Todos los puestos</option>
