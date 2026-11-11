@@ -2,8 +2,9 @@ import { prisma } from "@/lib/prisma";
 import { getCurrentRole } from "@/lib/auth";
 import { redirect } from "next/navigation";
 import { addAccess, removeAccess, updateUserEfficacyPermission } from "./actions";
-import { adminResetUserPasswordAction } from "@/app/auth-actions";
+import { getConfiguredCredentialEmails } from "@/app/auth-actions";
 import { getEfficacyEvaluatorsMap, formatNameFromEmail } from "@/lib/efficacyTraceability";
+import ResetPasswordButton from "./ResetPasswordButton";
 
 export default async function AccesosPage() {
   try {
@@ -12,7 +13,7 @@ export default async function AccesosPage() {
       redirect("/"); // Solo SGI puede ver esta página
     }
 
-    const [users, sectores, evaluatorsMap] = await Promise.all([
+    const [users, sectores, evaluatorsMap, configuredEmails] = await Promise.all([
       prisma.appUser.findMany({
         include: { sector: true },
         orderBy: { email: "asc" }
@@ -20,8 +21,11 @@ export default async function AccesosPage() {
       prisma.sector.findMany({
         orderBy: { name: "asc" }
       }),
-      getEfficacyEvaluatorsMap()
+      getEfficacyEvaluatorsMap(),
+      getConfiguredCredentialEmails()
     ]);
+
+    const configuredEmailsSet = new Set(configuredEmails.map((e) => e.toLowerCase().trim()));
 
     return (
       <div>
@@ -196,24 +200,11 @@ export default async function AccesosPage() {
                       </form>
                     </td>
                     <td>
-                      <div style={{ display: "flex", gap: "0.4rem", flexWrap: "wrap" }}>
-                        <form action={adminResetUserPasswordAction}>
-                          <input type="hidden" name="email" value={cleanEmail} />
-                          <button
-                            type="submit"
-                            className="btn btn-secondary"
-                            style={{
-                              padding: "0.4rem 0.65rem",
-                              fontSize: "0.78rem",
-                              color: "#0f766e",
-                              borderColor: "#99f6e4",
-                              background: "#f0fdfa"
-                            }}
-                            title="Blanquea la contraseña para que el usuario defina una nueva en su próximo ingreso"
-                          >
-                            🔑 Blanquear Clave
-                          </button>
-                        </form>
+                      <div style={{ display: "flex", gap: "0.4rem", flexWrap: "wrap", alignItems: "flex-start" }}>
+                        <ResetPasswordButton
+                          email={cleanEmail}
+                          initialHasPassword={configuredEmailsSet.has(cleanEmail)}
+                        />
                         <form action={removeAccess}>
                           <input type="hidden" name="id" value={u.id} />
                           <button

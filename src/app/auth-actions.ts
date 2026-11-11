@@ -209,23 +209,53 @@ export async function changeUserPasswordAction(
   }
 }
 
+export async function getConfiguredCredentialEmails(): Promise<string[]> {
+  const creds = await getCredentialsMap();
+  return Object.keys(creds);
+}
+
+export async function resetOrSetUserPasswordClientAction(
+  email: string,
+  newPassword?: string
+): Promise<{ ok: boolean; status: "blanqueada" | "asignada"; message: string }> {
+  const cleanEmail = (email || "").toLowerCase().trim();
+  if (!cleanEmail) {
+    return { ok: false, status: "blanqueada", message: "Correo inválido" };
+  }
+
+  const creds = await getCredentialsMap();
+  const cleanPass = (newPassword || "").trim();
+
+  if (cleanPass.length >= 4) {
+    creds[cleanEmail] = {
+      passwordHash: hashPassword(cleanEmail, cleanPass),
+      updatedAt: new Date().toISOString()
+    };
+    await saveCredentialsMap(creds);
+    revalidatePath("/accesos");
+    return {
+      ok: true,
+      status: "asignada",
+      message: `Se asignó la nueva clave para ${cleanEmail}.`
+    };
+  } else {
+    delete creds[cleanEmail];
+    await saveCredentialsMap(creds);
+    revalidatePath("/accesos");
+    return {
+      ok: true,
+      status: "blanqueada",
+      message: `Clave blanqueada para ${cleanEmail}. En su próximo ingreso podrá escribir su nueva contraseña directamente.`
+    };
+  }
+}
+
 export async function adminResetUserPasswordAction(formData: FormData) {
   const email = (formData.get("email") as string | null)?.toLowerCase().trim();
   const newPass = (formData.get("newPassword") as string | null)?.trim();
   if (!email) return;
 
-  const creds = await getCredentialsMap();
-  if (newPass && newPass.length >= 4) {
-    creds[email] = {
-      passwordHash: hashPassword(email, newPass),
-      updatedAt: new Date().toISOString()
-    };
-  } else {
-    // Blanqueo: el usuario podrá ingresar su nueva clave en su próximo inicio de sesión
-    delete creds[email];
-  }
-  await saveCredentialsMap(creds);
-  revalidatePath("/accesos");
+  await resetOrSetUserPasswordClientAction(email, newPass || undefined);
 }
 
 export async function logoutUserAction() {
